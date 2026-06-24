@@ -1,0 +1,5 @@
+node_modules/
+.env
+upm_session/
+desktop-app/local_settings.json
+desktop-app/schedule.json

@@ -1,21 +1,26 @@
 require('dotenv').config();
-const { app, BrowserWindow, Tray, Menu } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const path = require('path');
-const { initSupabase } = require('./supabase-client');
+const fs = require('fs');
+const { initSupabase, supabase } = require('./supabase-client');
+const scheduler = require('./scheduler');
 
 let mainWindow;
 let tray;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    show: false, // Start completely minimized/hidden
+    width: 1000,
+    height: 800,
+    show: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
+
+  mainWindow.loadFile('desktop-ui.html');
 
   // Intercept visual closure window event 'close'
   mainWindow.on('close', (event) => {
@@ -28,6 +33,31 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const settingsPath = path.join(__dirname, 'local_settings.json');
+  
+  ipcMain.handle('read-settings', () => {
+    if (fs.existsSync(settingsPath)) {
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+    return { targetUrl: 'https://perakamwaktu.upm.edu.my/', showBrowser: false };
+  });
+
+  ipcMain.handle('save-settings', (event, settings) => {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    return true;
+  });
+
+  ipcMain.handle('open-browser', async () => {
+    const { openDebugBrowser } = require('./automation');
+    try {
+      await openDebugBrowser();
+      return true;
+    } catch (err) {
+      console.error('Failed to open browser:', err);
+      throw err;
+    }
+  });
+
   // Native OS Auto-Launch on boot
   app.setLoginItemSettings({
     openAtLogin: true,
@@ -38,9 +68,9 @@ app.whenReady().then(() => {
 
   // Initialize Supabase handshake, heartbeat, and listeners
   initSupabase();
+  scheduler.init(supabase);
 
   // Setup System Tray
-  const fs = require('fs');
   const { nativeImage } = require('electron');
   const iconPath = path.join(__dirname, 'icon.png');
   // Simple 16x16 red square fallback

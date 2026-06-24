@@ -1,0 +1,339 @@
+// ==UserScript==
+// @name         UPM Clock with Telegram Full Features
+// @namespace    http://tampermonkey.net/
+// @version      1.5
+// @description  Auto clock in/out for UPM + Telegram + Skip/Undo + Retry + Log Panel + Refresh/Hardreset
+// @author       ChatGPT
+// @match        https://perakamwaktu.upm.edu.my/*
+// @grant        none
+// @run-at       document-end
+// ==/UserScript==
+
+(function () {
+  'use strict';
+
+  // === CONFIG ===
+  const TELEGRAM_BOT_TOKEN = "7714089870:AAEUR43UQi-sUUNn-X3kTKa87ZpaK5ryWPc";
+  const TELEGRAM_CHAT_ID = "109793829";
+
+  const DASHBOARD_URL = "https://perakamwaktu.upm.edu.my/";
+
+  const clockInId = "a50";
+  const clockOutId = "a51";
+  const keepAliveIds = ["a56", "a57"];
+  const keepAliveInterval = 60 * 1000; // keep alive page every 1 minute
+
+  const telegramPollInterval = 10 * 1000; // poll every 10 seconds
+
+  const minInTime = [7, 45];
+  const maxInTime = [7, 50];
+  const minOutTime = [17, 5];
+  const maxOutTime = [17, 10];
+
+  const gracePeriodMs = 5 * 60 * 1000;
+
+  // === UTILS ===
+  function randomTimeBetween(min, max) {
+    const minDate = new Date();
+    minDate.setHours(min[0], min[1], 0, 0);
+    const maxDate = new Date();
+    maxDate.setHours(max[0], max[1], 0, 0);
+    return new Date(minDate.getTime() + Math.random() * (maxDate - minDate));
+  }
+
+  function log(msg, type = "log") {
+    console[type](`[UPM Clock] ${msg}`);
+    const box = document.getElementById("clock-log-box");
+    if (box) {
+      const p = document.createElement("p");
+      p.textContent = `${new Date().toLocaleTimeString()} - ${msg}`;
+      box.appendChild(p);
+    }
+  }
+
+  function sendTelegram(msg) {
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg }),
+    }).then(() => log("📲 Telegram sent")).catch(e => log("❌ Telegram error: " + e, "error"));
+  }
+
+  function createFloatingPanel(inTime, outTime) {
+    const panel = document.createElement("div");
+    panel.style.cssText = "position:fixed;bottom:10px;right:10px;z-index:9999;background:#222;color:#fff;padding:10px;border-radius:8px;width:300px;font-family:sans-serif;";
+    panel.innerHTML = `
+      <div><b>UPM Clock</b></div>
+      <div>Clock In: ${inTime.toLocaleTimeString()}</div>
+      <div>Clock Out: ${outTime.toLocaleTimeString()}</div>
+      <button id="test-push" style="margin-top:8px;padding:5px;background:#28a745;color:white;border:none;border-radius:4px;">Send Test Notification</button>
+      <div id="clock-log-box" style="max-height: 150px; overflow-y: auto; margin-top: 5px; font-size:12px;"></div>
+    `;
+    document.body.appendChild(panel);
+    document.getElementById("test-push").onclick = () => {
+      sendTelegram("📲 Test push from UPM Clock");
+    };
+  }
+
+  // === Smart click helpers (handles duplicate IDs, hidden nodes, iframes) ===
+  function isClickable(el) {
+    if (!el) return false;
+    if (el.disabled) return false;
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    if (type === 'hidden') return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (el.offsetParent === null && style.position !== 'fixed') return false;
+    return true;
+  }
+
+  function findButtonSmart(targetId, labelRegex) {
+    const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
+    for (const doc of docs) {
+      let candidates = Array.from(doc.querySelectorAll(`#${CSS.escape(targetId)}`)).filter(isClickable);
+      if (candidates.length) return candidates[0];
+
+      candidates = Array.from(doc.querySelectorAll(`button[name="\ ${targetId}"], input[name="\ ${targetId}"], input[value="\ ${targetId}"]`)).filter(isClickable);
+      if (candidates.length) return candidates[0];
+
+      if (labelRegex) {
+        candidates = Array.from(doc.querySelectorAll('button, input[type="submit"], a, div[role="button"]'))
+          .filter(isClickable)
+          .filter(el => labelRegex.test((el.textContent || '').trim()) || labelRegex.test((el.value || '').trim()));
+        if (candidates.length) return candidates[0];
+      }
+    }
+    return null;
+  }
+
+  function clickButton(targetId, label) {
+    const el = findButtonSmart(targetId, label ? new RegExp(label.replace(/\s+/g,'\\s*'), 'i') : null);
+    if (el) {
+      el.click();
+      log(`✅ \ ${label || targetId} clicked`);
+      sendTelegram(`\ ${label || targetId} done at \ ${new Date().toLocaleTimeString()}`);
+    } else {
+      log(`❌ \ ${label || targetId} not found or not clickable`, "warn");
+    }
+  }
+
+  // === Keep-alive with side-menu expansion support ===
+  function ensureMenuExpandedFor(el) {
+    try {
+      let li = el.closest('li');
+      while (li && !li.closest('ul.nav.side-menu')) {
+        li = li.parentElement ? li.parentElement.closest('li') : null;
+      }
+      if (!li) return;
+
+      const cls = (li.getAttribute('class') || '').trim();
+      const anchor = li.querySelector(':scope > a, a');
+
+      const style = getComputedStyle(el);
+      const hidden = (el.offsetParent === null && style.position !== 'fixed') || style.display === 'none' || style.visibility === 'hidden';
+      if (hidden || cls === '' || cls.includes('vn') || !cls.includes('active')) {
+        if (anchor) {
+          anchor.click();
+          log("📂 Expanded side menu via anchor");
+        }
+        // Class fallback in case the site relies on classes
+        li.classList.remove('vn');
+        li.classList.add('nv', 'active');
+      }
+    } catch (e) {
+      console.warn('[UPM Clock] ensureMenuExpandedFor error', e);
+    }
+  }
+
+  function startKeepAlive() {
+    setInterval(() => {
+      const id = keepAliveIds[Math.floor(Math.random() * keepAliveIds.length)];
+      const btn = findButtonSmart(id, null) || document.getElementById(id);
+      if (!btn) {
+        log(`⚠️ Keepalive button \${id} not found`, "warn");
+        return;
+      }
+      ensureMenuExpandedFor(btn);
+
+      const tryClick = () => {
+        const style = getComputedStyle(btn);
+        const hidden = (btn.offsetParent === null && style.position !== 'fixed') || style.display === 'none' || style.visibility === 'hidden';
+        if (!hidden) {
+          btn.click();
+          log(`🔄 Keepalive clicked \ ${id}`);
+        } else {
+          log(`⏳ Keepalive \ ${id} still hidden after expand attempt`, 'warn');
+        }
+      };
+      tryClick();
+      setTimeout(tryClick, 300);
+    }, keepAliveInterval);
+  }
+
+  function scheduleAction(time, fn) {
+    const delay = time - new Date();
+    if (delay > 0) setTimeout(fn, delay);
+  }
+
+  function checkMissedActions(now, inTime, outTime) {
+    const skipKey = now.toDateString();
+    const skips = JSON.parse(localStorage.getItem("upmSkips") || "[]");
+    if (skips.includes(skipKey)) {
+      log("⏭️ Skipped today (manual override)");
+      return;
+    }
+    if (now >= inTime && now - inTime <= gracePeriodMs) {
+      log("⏰ Missed Clock In, retrying now");
+      clickButton(clockInId, "Clock IN");
+    }
+    if (now >= outTime && now - outTime <= gracePeriodMs) {
+      log("⏰ Missed Clock Out, retrying now");
+      clickButton(clockOutId, "Clock OUT");
+    }
+  }
+
+  function loadScheduleTimes() {
+    const todayKey = new Date().toDateString();
+    const savedKey = localStorage.getItem("upmClockDate");
+    const sIn = localStorage.getItem("upmClockInTime");
+    const sOut = localStorage.getItem("upmClockOutTime");
+
+    if (savedKey === todayKey && sIn && sOut) {
+      log("🔁 Loaded saved times for today");
+      return [new Date(sIn), new Date(sOut)];
+    }
+
+    const inTime = randomTimeBetween(minInTime, maxInTime);
+    const outTime = randomTimeBetween(minOutTime, maxOutTime);
+    localStorage.setItem("upmClockDate", todayKey);
+    localStorage.setItem("upmClockInTime", inTime.toISOString());
+    localStorage.setItem("upmClockOutTime", outTime.toISOString());
+    log("🎲 New clock in/out times generated");
+    return [inTime, outTime];
+  }
+
+  function telegramPolling() {
+    let lastUpdateId = parseInt(localStorage.getItem("lastTelegramUpdateId") || "0");
+    setInterval(async () => {
+      const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
+      const data = await res.json();
+      if (!data.ok) return;
+
+      for (const update of data.result) {
+        lastUpdateId = update.update_id;
+        localStorage.setItem("lastTelegramUpdateId", lastUpdateId);
+        const text = update.message?.text?.toLowerCase();
+        const chatId = update.message?.chat?.id;
+        if (chatId != TELEGRAM_CHAT_ID) continue;
+
+        const today = new Date().toDateString();
+        let skips = JSON.parse(localStorage.getItem("upmSkips") || "[]");
+
+        if (text === "/start" || text === "/help") {
+          fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: TELEGRAM_CHAT_ID,
+              text: "Available Commands:",
+              reply_markup: {
+                keyboard: [
+                  ["/clockin", "/clockout"],
+                  ["/status", "/skips"],
+                  ["/skip", "/unskip"],
+                  ["/skipnext", "/unskipnext"],
+                  ["/refresh", "/hardreset"]
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: false
+              }
+            })
+          }).then(() => log("🧾 Keyboard sent"));
+          continue;
+        }
+
+        if (text === "/clockin") clickButton(clockInId, "Clock IN");
+        else if (text === "/clockout") clickButton(clockOutId, "Clock OUT");
+        else if (text === "/status") {
+          const inT = localStorage.getItem("upmClockInTime");
+          const outT = localStorage.getItem("upmClockOutTime");
+          sendTelegram(`📆 Today: ${today}\n⏰ In: ${new Date(inT).toLocaleTimeString()}\n⏰ Out: ${new Date(outT).toLocaleTimeString()}`);
+        }
+        else if (text === "/skip") {
+          if (!skips.includes(today)) skips.push(today);
+          localStorage.setItem("upmSkips", JSON.stringify(skips));
+          sendTelegram("⏭️ Today has been skipped");
+        }
+        else if (text === "/unskip") {
+          skips = skips.filter(d => d !== today);
+          localStorage.setItem("upmSkips", JSON.stringify(skips));
+          sendTelegram("✅ Unskipped today");
+        }
+        else if (text === "/skipnext") {
+          const tmr = new Date(Date.now() + 86400000).toDateString();
+          if (!skips.includes(tmr)) skips.push(tmr);
+          localStorage.setItem("upmSkips", JSON.stringify(skips));
+          sendTelegram("⏭️ Tomorrow has been skipped");
+        }
+        else if (text === "/unskipnext") {
+          const tmr = new Date(Date.now() + 86400000).toDateString();
+          skips = skips.filter(d => d !== tmr);
+          localStorage.setItem("upmSkips", JSON.stringify(skips));
+          sendTelegram("✅ Unskipped tomorrow");
+        }
+        else if (text === "/skips") {
+          sendTelegram("📝 Skipped Dates:\n" + (skips.join("\n") || "None"));
+        }
+        else if (text === "/refresh") {
+          location.reload();
+          sendTelegram("🔄 Page reloaded (light refresh).");
+        }
+        else if (text === "/hardreset") {
+          sendTelegram("⚡ Hard reset triggered. Retyping URL...");
+          window.location.href = DASHBOARD_URL;
+        }
+      }
+    }, telegramPollInterval);
+  }
+
+  function init() {
+    const today = new Date();
+    const weekday = today.getDay();
+
+    const [inTime, outTime] = loadScheduleTimes();
+    createFloatingPanel(inTime, outTime);
+    log("✅ Script active");
+    sendTelegram("✅ Script active");
+
+    if (weekday !== 0 && weekday !== 6) {
+      scheduleAction(new Date(inTime.getTime() - 60000), () => location.reload());
+      scheduleAction(new Date(outTime.getTime() - 60000), () => location.reload());
+
+      scheduleAction(inTime, () => clickButton(clockInId, "Clock IN"));
+      scheduleAction(outTime, () => clickButton(clockOutId, "Clock OUT"));
+
+      checkMissedActions(today, inTime, outTime);
+    } else {
+      log("🚫 Weekend (no auto clocking today)");
+    }
+
+    startKeepAlive();
+    telegramPolling();
+
+    setInterval(() => {
+      log("🔄 Auto-reloading page (8-hour interval)");
+      location.reload();
+    }, 8 * 60 * 60 * 1000);
+  }
+
+  // Safe init on DOMContentLoaded or immediately if DOM ready
+  (function setupSafeInit(){
+    function safeInit(){ try { init(); } catch(e){ console.error('[UPM Clock] init error', e); } }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', safeInit, { once: true });
+    } else {
+      safeInit();
+    }
+  })();
+
+})();

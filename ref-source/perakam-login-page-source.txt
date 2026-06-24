@@ -1,0 +1,177 @@
+
+        
+                <!DOCTYPE html>
+<html lang="en">
+	<head>
+
+        <meta charset="utf-8">
+		<meta http-equiv="cache-control" content="no-cache,no-store,must-revalidate">
+		<meta http-equiv="pragma" content="no-cache">
+		<meta http-equiv="expires" content="0">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+		
+        <title>Login Page </title>
+		
+		<!-- CSS 
+        <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Roboto:400,100,300,500"> -->
+        <link rel="stylesheet" href="css/bootstrap/bootstrap-3.3.6.min.css">
+		<link rel="stylesheet" href="css/jquery/jquery-confirm.css">
+        <link rel="stylesheet" href="css/fonts/font-awesome.min.css">
+		<link rel="stylesheet" href="css/animate.min.css">
+		<link rel="stylesheet" href="css/form-elements.css"> 
+        <link rel="stylesheet" href="css/style.css">
+		
+		<!-- bootstrap-notify css -->
+		<link href="css/bootstrap/bootstrap-notify.css" rel="stylesheet">
+
+        <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+        <!--[if lt IE 9]>
+            <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+            <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+        <![endif]-->
+
+        <!-- Favicon and touch icons 
+        <link rel="shortcut icon" href="assets/ico/favicon.png">
+        <link rel="apple-touch-icon-precomposed" sizes="144x144" href="assets/ico/apple-touch-icon-144-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="114x114" href="assets/ico/apple-touch-icon-114-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" sizes="72x72" href="assets/ico/apple-touch-icon-72-precomposed.png">
+        <link rel="apple-touch-icon-precomposed" href="assets/ico/apple-touch-icon-57-precomposed.png"> -->
+		<style>
+		#footer {
+			background:#f5f5f5;
+			opacity:50%;
+			font-size: 12px;
+			width:100%;
+			height:40px;
+			position:fixed;
+			bottom:0;
+			left:0;
+			margin-bottom: 0;
+		}
+		
+		#logintitle {
+			font-family: 'Century Gothic';
+			font-size: 32px;
+			font-weight: 400;
+			padding-top: 30px;
+		}
+		
+		#password {
+			-webkit-text-security: circle !important;
+		}
+		
+		@media screen and (max-width: 400px) {
+			#date1 {
+				font-size: 12px;
+			}
+		}
+		</style>
+		<noscript>
+			<style type="text/css">
+				.container {display:none;}
+			</style>
+			<br><br><br><br><br><br>
+			<h2><center>
+			JavaScript is not enabled. <br> Please check your browser settings.
+			</center></h2>
+		</noscript>
+	</head>
+
+    <body>
+		<!-- body content -->
+                <div class="container">
+                    <div class="row">
+                        <div class="col-sm-8 col-sm-offset-2 text">
+                            <div id="logintitle"><strong><font color="#FFF">
+                            e-Perakam Waktu Online 								<!--<script> disable on 28 April 2022
+								window.confirm("Pastikan anda melengkapkan Borang Penilaian Risiko COVID-19 di url https://ertcovid19.upm.edu.my.  Terima kasih")
+                                </script> -->
+                                
+                                     
+                             </strong></font> <img id="img1" src="images/logo_upm.gif" border=0 width="15%" height="15%"> </div>
+							
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-6 col-sm-offset-3 form-box">
+                        	<div class="form-top">
+                        		<div class="form-top-left">
+                        			<p>
+										<a href="#" data-toggle="tooltip" data-placement="top" data-container="body" title="Enter your UPM-ID and Password to log on">
+											Sila masukkan UPM-ID dan katalaluan anda untuk log masuk.
+										</a>
+									</p>
+                        		</div>
+								
+								<div class="form-top-right">
+                        			<i class="fa fa-key"></i>
+                        		</div>
+								
+                            </div>
+                            <div class="form-bottom">
+			                    <form id="frmchklogin" role="form" action="chklogin.php" method="post" class="login-form">
+			                    	<div class="form-group">
+			                    		<label for="form-username" style="color:#3fc236">UPM-ID</label>
+			                        	<input type="text" name="username" placeholder="UPM-ID" class="form-username form-control" id="username" style="color: blue" required>
+										 <div id="mid"></div>
+			                        </div>
+			                        <div class="form-group">
+			                        	<label for="form-password" style="color:#3fc236">Katalaluan</label>
+										<input type="password" id="password" name="password" class="form-control" style="color: black" required>
+										<div id="mpwd"></div>
+			                        </div>
+									
+									<p>
+										<div id="notifications"></div>
+									</p>
+									
+									<div class="">
+			                        	<button type="submit" class="btn">Log Masuk!</button>
+									</div>
+									
+									<div class="" style="text-align:center; padding-top: 15px">
+			                        	<a href="http://portal.upm.edu.my" data-toggle="tooltip" data-trigger="hover" data-container="body" title="Putra Portal">Ke laman web Putra Portal</a> | <a href="https://upm-id.upm.edu.my/staff/public/ActivateUser" data-toggle="tooltip" data-trigger="hover" data-container="body" title="Klik untuk aktifkan UPM-ID anda">Aktifkan UPM-ID</a>
+									</div>
+								</form>
+							 </div>
+							 <br>
+							 <br>
+                        </div>
+                    </div>
+                   
+                    <footer id="footer">
+					  <div class="container">
+						<p align="center" style="padding-top: 10px">
+							<strong>10.150.148.32 Sistem e-Perakam Waktu Online &copy; 2016. Universiti Putra Malaysia. Hak Cipta Terpelihara. <br />
+<b>Notice</b>:  Undefined variable: ipX in <b>/var/www/html/perakamwaktu/loginpage.php</b> on line <b>226</b><br />
+ </strong>
+						</p>
+					  </div>
+					</footer>
+                            
+                </div>
+            
+        <!-- Javascript -->
+        <script src="js/jquery/jquery-1.12.3.min.js"></script>
+        <script src="js/bootstrap/bootstrap-3.3.6.min.js"></script>
+		<script src="js/bootstrap/bootstrap-notify.min.js"></script>
+		<script src="js/jquery/jquery-confirm.js"></script> 
+        <script src="js/jquery/jquery.backstretch.min.js"></script>
+        <script src="js/scripts.js"></script>
+
+		
+		<script>
+		$(document).ready(function() {
+			$('[data-toggle="tooltip"]').tooltip();
+		});
+		</script>
+        
+        <!--[if lt IE 10]>
+            <script src="assets/js/placeholder.js"></script>
+        <![endif]-->
+		
+		    </body>
+    <!-- credit to http://azmind.com -->
+</html>

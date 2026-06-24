@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALS Dashboard</title>
     <link rel="icon" href="data:,">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://cdn.jsdelivr.net https://pvutxjfkskzgccawfibu.supabase.co wss://pvutxjfkskzgccawfibu.supabase.co;">
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase v2 -->
@@ -121,16 +122,16 @@
             background: linear-gradient(145deg, var(--surface-color), #232323);
             border-top: 2px solid var(--accent-blue);
         }
-        
+
         .proof-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-top: 0.5rem;
         }
-        
+
         .proof-item {
-            background-color: rgba(0,0,0,0.2);
+            background-color: rgba(0, 0, 0, 0.2);
             padding: 1rem;
             border-radius: 8px;
             border: 1px solid var(--border-color);
@@ -324,6 +325,28 @@
     </header>
 
     <main>
+        <section class="panel settings-panel">
+            <h2>Local Engine Settings</h2>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                <label style="font-size: 0.85rem; color: var(--text-secondary);">Target UPM URL</label>
+                <input type="text" id="targetUrlInput"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff;" />
+
+                <label
+                    style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                    <input type="checkbox" id="showBrowserInput" />
+                    Show Browser Window (Debug Mode)
+                </label>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button class="btn btn-in" style="padding: 0.5rem; font-size: 0.9rem; flex: 1;"
+                        onclick="saveLocalSettings()">Save Settings</button>
+                    <button class="btn"
+                        style="padding: 0.5rem; font-size: 0.9rem; flex: 1; background-color: var(--border-color); color: #fff;"
+                        onclick="openDebugBrowser()">Open Browser Now</button>
+                </div>
+            </div>
+        </section>
+
         <section class="panel proof-panel">
             <h2>Today's Proof</h2>
             <div class="proof-grid">
@@ -387,7 +410,7 @@
         const statusText = document.getElementById('statusText');
         const logsContainer = document.getElementById('logsContainer');
         const calendarGrid = document.getElementById('calendarGrid');
-        
+
         const proofDate = document.getElementById('proofDate');
         const proofIn = document.getElementById('proofIn');
         const proofOut = document.getElementById('proofOut');
@@ -561,7 +584,7 @@
                 .select('*')
                 .eq('key', 'todays_proof')
                 .maybeSingle();
-            
+
             if (data && data.value) {
                 updateProofUI(data.value);
             }
@@ -582,11 +605,44 @@
             })
             .subscribe();
 
+        // ==========================================
+        // 6. LOCAL SETTINGS
+        // ==========================================
+        async function loadLocalSettings() {
+            if (window.electronAPI) {
+                const settings = await window.electronAPI.readSettings();
+                document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu3.upm.edu.my/';
+                document.getElementById('showBrowserInput').checked = settings.showBrowser || false;
+            }
+        }
+
+        async function saveLocalSettings() {
+            if (window.electronAPI) {
+                const targetUrl = document.getElementById('targetUrlInput').value;
+                const showBrowser = document.getElementById('showBrowserInput').checked;
+                await window.electronAPI.saveSettings({ targetUrl, showBrowser });
+                alert('Local settings saved!');
+            }
+        }
+
+        async function openDebugBrowser() {
+            if (window.electronAPI) {
+                try {
+                    await window.electronAPI.openBrowser();
+                } catch (err) {
+                    alert('Failed to launch browser (Is an automation already running?). Error: ' + err.message);
+                }
+            } else {
+                alert('Not running in local desktop mode!');
+            }
+        }
+
         // Initialize App
         fetchInitialStatus();
         fetchLogs();
         fetchConfig();
         fetchTodaysProof();
+        loadLocalSettings();
 
     </script>
 </body>
