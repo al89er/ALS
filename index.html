@@ -4,170 +4,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALS Automation Dashboard</title>
+    <title>ALS Dashboard</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase v2 -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --bg-dark: #121212;
-            --panel-bg: #1e1e1e;
-            --text-main: #e0e0e0;
-            --text-muted: #888;
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --border-color: #333333;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
             --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --accent-red: #ef4444;
-            --border-color: #333;
+            --accent-purple: #8b5cf6;
+            --status-online: #10b981;
+            --status-offline: #ef4444;
+            --font-family: 'Inter', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: var(--font-family);
+            background-image: radial-gradient(circle at top, #1a1a24 0%, var(--bg-color) 70%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
         header {
+            width: 100%;
+            max-width: 1200px;
+            padding: 2rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 2rem;
         }
 
         h1 {
-            margin: 0;
             font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #fff, #a0a0a0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .status-badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
         }
 
-        .online {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--accent-green);
-            border: 1px solid var(--accent-green);
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--status-offline);
+            box-shadow: 0 0 8px var(--status-offline);
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
         }
 
-        .offline {
-            background: rgba(239, 68, 68, 0.2);
-            color: var(--accent-red);
-            border: 1px solid var(--accent-red);
+        .status-online .status-dot {
+            background-color: var(--status-online);
+            box-shadow: 0 0 8px var(--status-online);
         }
 
-        .grid {
+        main {
+            width: 100%;
+            max-width: 1200px;
+            padding: 0 2rem 2rem 2rem;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 2rem;
         }
 
         .panel {
-            background: var(--panel-bg);
-            padding: 20px;
-            border-radius: 8px;
+            background-color: var(--surface-color);
             border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
         }
 
         .panel h2 {
-            margin-top: 0;
-            font-size: 1.1rem;
-            color: var(--accent-blue);
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
         }
 
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
+        /* Buttons */
+        .commands-panel {
+            grid-column: 1 / -1;
+            flex-direction: row;
+            justify-content: center;
+            gap: 2rem;
         }
 
-        button {
-            flex: 1;
-            padding: 10px;
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
             border: none;
-            border-radius: 5px;
-            font-weight: bold;
+            border-radius: 8px;
             cursor: pointer;
-            transition: opacity 0.2s;
-        }
-
-        button:hover {
-            opacity: 0.8;
+            color: #fff;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            flex: 1;
+            max-width: 300px;
         }
 
         .btn-in {
-            background-color: var(--accent-green);
-            color: white;
+            background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
         }
 
         .btn-out {
-            background-color: var(--accent-red);
-            color: white;
+            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
         }
 
-        .log-box {
-            height: 200px;
-            overflow-y: auto;
-            background: #000;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: var(--text-muted);
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
         }
 
-        .log-entry {
-            margin-bottom: 5px;
-            border-bottom: 1px dashed #333;
-            padding-bottom: 2px;
+        .btn:active {
+            transform: translateY(1px);
         }
 
-        .log-time {
-            color: var(--accent-blue);
-        }
-
+        /* Calendar */
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 5px;
-            margin-top: 10px;
-            text-align: center;
+            gap: 0.5rem;
         }
 
-        .day {
-            padding: 8px 0;
-            background: #2a2a2a;
-            border-radius: 4px;
+        .calendar-tile {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
         }
 
-        .day:hover {
-            background: #3a3a3a;
+        .calendar-tile:hover {
+            background-color: rgba(255, 255, 255, 0.1);
         }
 
-        .day.skipped {
-            background: var(--accent-blue);
-            color: white;
-            font-weight: bold;
+        .calendar-tile.active {
+            background-color: rgba(239, 68, 68, 0.2);
+            border-color: var(--status-offline);
+            color: #fff;
+            box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.1);
         }
 
-        @media (max-width: 600px) {
-            .grid {
+        .calendar-tile .day-name {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        /* Logs */
+        .logs-panel {
+            height: 400px;
+        }
+
+        .logs-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding-right: 0.5rem;
+        }
+
+        .logs-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .logs-container::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .log-time {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .log-status-success {
+            color: var(--status-online);
+        }
+
+        .log-status-failed {
+            color: var(--status-offline);
+        }
+
+        .log-status-pending {
+            color: #f59e0b;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 768px) {
+            main {
                 grid-template-columns: 1fr;
+            }
+
+            .commands-panel {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                max-width: 100%;
             }
         }
     </style>
@@ -175,169 +277,220 @@
 
 <body>
 
-    <div class="container">
-        <header>
-            <h1>ALS Dashboard 🔄</h1>
-            <div id="system-status" class="status-badge offline">System Offline</div>
-        </header>
-
-        <div class="grid">
-            <div class="panel">
-                <h2>Manual Override</h2>
-                <p style="font-size: 0.9rem; color: var(--text-muted);">Force the desktop engine to execute a clocking
-                    action immediately.</p>
-                <div class="button-group">
-                    <button class="btn-in" onclick="forceCommand('clock_in')">Force Clock IN</button>
-                    <button class="btn-out" onclick="forceCommand('clock_out')">Force Clock OUT</button>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>Skip Days Configuration</h2>
-                <p style="font-size: 0.9rem; color: var(--text-muted);">Highlighted days will bypass automation.</p>
-                <div id="calendar" class="calendar-grid">
-                </div>
-            </div>
+    <header>
+        <h1>ALS Dashboard</h1>
+        <div class="status-badge" id="statusBadge">
+            <div class="status-dot"></div>
+            <span id="statusText">Offline</span>
         </div>
+    </header>
 
-        <div class="panel">
+    <main>
+        <section class="panel commands-panel">
+            <button class="btn btn-in" onclick="forceCommand('clock_in')">Force Clock IN</button>
+            <button class="btn btn-out" onclick="forceCommand('clock_out')">Force Clock OUT</button>
+        </section>
+
+        <section class="panel calendar-panel">
+            <h2>Skip Days Config</h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                Select dates to skip automation for the next 14 days.
+            </p>
+            <div class="calendar-grid" id="calendarGrid">
+                <!-- JS generated tiles -->
+            </div>
+        </section>
+
+        <section class="panel logs-panel">
             <h2>Live System Logs</h2>
-            <div id="log-container" class="log-box">
-                <div><span class="log-time">System:</span> Waiting for Supabase connection...</div>
+            <div class="logs-container" id="logsContainer">
+                <div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">
+                    Connecting to Supabase...</div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
-        // --- 1. INITIALIZE SUPABASE ---
-        const _supabase = supabase.createClient(
-            'https://pvutxjfkskzgccawfibu.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw' // IMPORTANT: Use the public anon key here, never the service_role key!
-        );
+        // ==========================================
+        // CONFIGURATION: Replace these with your keys
+        // ==========================================
+        const SUPABASE_URL = 'https://pvutxjfkskzgccawfibu.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw';
 
-        // --- 2. STATE VARIABLES ---
-        let lastSeenTimestamp = new Date(0);
-        let skippedDates = [];
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // --- 3. HEARTBEAT MONITORING ---
-        function updateStatusUI(status, lastSeenStr) {
-            lastSeenTimestamp = new Date(lastSeenStr);
-            const statusEl = document.getElementById('system-status');
+        let lastSeenTimestamp = 0;
+        let skipDaysArray = [];
 
-            if (status === 'CAPTIVE_PORTAL') {
-                statusEl.className = 'status-badge offline';
-                statusEl.textContent = 'Network Blocked (Captive Portal)';
-            } else {
-                statusEl.className = 'status-badge online';
-                statusEl.textContent = 'Desktop Online';
-            }
-        }
+        // DOM Elements
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const logsContainer = document.getElementById('logsContainer');
+        const calendarGrid = document.getElementById('calendarGrid');
 
-        // Interval to check if desktop died (no heartbeat in 90 seconds)
-        setInterval(() => {
-            const now = new Date();
-            const diffMs = now - lastSeenTimestamp;
-            if (diffMs > 90000) {
-                const statusEl = document.getElementById('system-status');
-                statusEl.className = 'status-badge offline';
-                statusEl.textContent = 'Desktop Offline';
-            }
-        }, 10000);
-
-        // Listen to device_status table changes
-        _supabase.channel('device-status')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, payload => {
-                updateStatusUI(payload.new.current_status, payload.new.last_seen);
-            }).subscribe();
-
-        // Fetch initial status on load
+        // ==========================================
+        // 1. HEARTBEAT ENGINE
+        // ==========================================
         async function fetchInitialStatus() {
-            const { data } = await _supabase.from('device_status').select('*').eq('id', 'home_desktop_agent').single();
-            if (data) updateStatusUI(data.current_status, data.last_seen);
+            const { data, error } = await supabase
+                .from('device_status')
+                .select('*')
+                .eq('id', 'home_desktop_agent')
+                .single();
+
+            if (data) updateHeartbeat(data.last_seen, data.current_status);
         }
 
-        // --- 4. REAL-TIME LOGS ---
-        function appendLog(message, createdAt) {
-            const logBox = document.getElementById('log-container');
-            const time = new Date(createdAt).toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.className = 'log-entry';
-            logEntry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
-            logBox.prepend(logEntry); // Add to top
+        function updateHeartbeat(timestamp, statusStr) {
+            lastSeenTimestamp = new Date(timestamp).getTime();
+            evaluateStatus(statusStr);
         }
 
-        // Listen to live logs
-        _supabase.channel('live-logs')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
-                appendLog(payload.new.message, payload.new.created_at);
-            }).subscribe();
+        function evaluateStatus(overrideStatus = null) {
+            const now = Date.now();
+            const diff = now - lastSeenTimestamp;
+            const isOnline = diff < 90000; // 90 seconds
 
-        // Fetch recent logs on load
-        async function fetchRecentLogs() {
-            const { data } = await _supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(20);
-            if (data) data.reverse().forEach(log => appendLog(log.message, log.created_at));
-        }
-
-        // --- 5. MANUAL COMMANDS ---
-        async function forceCommand(action) {
-            if (!confirm(`Are you sure you want to force a ${action.toUpperCase()}?`)) return;
-
-            const { error } = await _supabase.from('commands').insert([{ action: action, status: 'pending' }]);
-            if (error) {
-                alert("Error sending command: " + error.message);
+            if (overrideStatus === 'CAPTIVE_PORTAL') {
+                statusBadge.className = 'status-badge';
+                statusText.innerText = 'Captive Portal';
+            } else if (isOnline) {
+                statusBadge.className = 'status-badge status-online';
+                statusText.innerText = 'Online';
             } else {
-                appendLog(`Remote command '${action}' sent to desktop agent.`, new Date().toISOString());
+                statusBadge.className = 'status-badge';
+                statusText.innerText = 'Offline';
             }
         }
 
-        // --- 6. SKIP DAYS CALENDAR ---
-        async function fetchSkipConfig() {
-            const { data } = await _supabase.from('config').select('value').eq('key', 'skip_days').single();
+        // Failsafe loop every 5s
+        setInterval(() => evaluateStatus(), 5000);
+
+        // Subscribe to Heartbeat
+        supabase.channel('heartbeat-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
+                updateHeartbeat(payload.new.last_seen, payload.new.current_status);
+            })
+            .subscribe();
+
+        // ==========================================
+        // 2. LIVE LOGS
+        // ==========================================
+        function createLogElement(log) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const dateStr = new Date(log.created_at).toLocaleString();
+            let statusClass = 'log-status-pending';
+            if (log.status === 'success' || log.status === 'completed') statusClass = 'log-status-success';
+            if (log.status === 'error' || log.status === 'failed') statusClass = 'log-status-failed';
+
+            div.innerHTML = `
+                <span class="log-time">${dateStr}</span>
+                <strong>[${log.action ? log.action.toUpperCase() : 'SYS'}]</strong> 
+                <span class="${statusClass}">${log.status || ''}</span>
+                <div style="margin-top: 4px; color: #ccc;">${log.message || ''}</div>
+            `;
+            return div;
+        }
+
+        async function fetchLogs() {
+            const { data, error } = await supabase
+                .from('logs')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (data) {
+                logsContainer.innerHTML = '';
+                data.forEach(log => logsContainer.appendChild(createLogElement(log)));
+            }
+        }
+
+        supabase.channel('logs-channel')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
+                // Remove placeholder text if it's the first log
+                if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Connecting')) {
+                    logsContainer.innerHTML = '';
+                }
+                const el = createLogElement(payload.new);
+                logsContainer.insertBefore(el, logsContainer.firstChild);
+            })
+            .subscribe();
+
+        // ==========================================
+        // 3. MANUAL COMMANDS
+        // ==========================================
+        async function forceCommand(actionType) {
+            const { error } = await supabase
+                .from('commands')
+                .insert([{ action: actionType, status: 'pending' }]);
+
+            if (error) alert('Failed to send command: ' + error.message);
+            else alert('Command ' + actionType + ' sent successfully!');
+        }
+
+        // ==========================================
+        // 4. SKIP DAYS CALENDAR
+        // ==========================================
+        async function fetchConfig() {
+            const { data, error } = await supabase
+                .from('config')
+                .select('*')
+                .eq('key', 'skip_days')
+                .single();
+
             if (data && data.value) {
-                skippedDates = data.value;
+                skipDaysArray = Array.isArray(data.value) ? data.value : [];
             }
             renderCalendar();
         }
 
-        async function toggleSkipDate(dateStr) {
-            if (skippedDates.includes(dateStr)) {
-                skippedDates = skippedDates.filter(d => d !== dateStr); // Remove
-            } else {
-                skippedDates.push(dateStr); // Add
-            }
-
-            renderCalendar(); // Update UI instantly
-
-            // Push to cloud
-            await _supabase.from('config').update({ value: skippedDates }).eq('key', 'skip_days');
-            appendLog(`Updated skip days configuration.`, new Date().toISOString());
-        }
-
         function renderCalendar() {
-            const cal = document.getElementById('calendar');
-            cal.innerHTML = '';
+            calendarGrid.innerHTML = '';
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-            // Simple upcoming 14-day view for easy clicking
-            let today = new Date();
+            const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
             for (let i = 0; i < 14; i++) {
-                let d = new Date(today);
+                const d = new Date(today);
                 d.setDate(today.getDate() + i);
-                const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
-                const displayStr = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+                const dateString = d.toISOString().split('T')[0]; // YYYY-MM-DD
 
-                const dayEl = document.createElement('div');
-                dayEl.className = 'day' + (skippedDates.includes(dateStr) ? ' skipped' : '');
-                dayEl.textContent = displayStr;
-                dayEl.onclick = () => toggleSkipDate(dateStr);
+                const tile = document.createElement('div');
+                tile.className = 'calendar-tile' + (skipDaysArray.includes(dateString) ? ' active' : '');
+                tile.onclick = () => toggleDate(dateString);
 
-                cal.appendChild(dayEl);
+                tile.innerHTML = `
+                    <span class="day-name">${daysOfWeek[d.getDay()]}</span>
+                    <strong>${d.getDate()}</strong>
+                `;
+                calendarGrid.appendChild(tile);
             }
         }
 
-        // --- INITIALIZATION ---
+        async function toggleDate(dateString) {
+            if (skipDaysArray.includes(dateString)) {
+                skipDaysArray = skipDaysArray.filter(d => d !== dateString);
+            } else {
+                skipDaysArray.push(dateString);
+            }
+            renderCalendar(); // Optimistic update
+
+            const { error } = await supabase
+                .from('config')
+                .upsert({ key: 'skip_days', value: skipDaysArray });
+
+            if (error) {
+                console.error("Failed to update config", error);
+                alert("Failed to save skip day");
+            }
+        }
+
+        // Initialize App
         fetchInitialStatus();
-        fetchRecentLogs();
-        fetchSkipConfig();
+        fetchLogs();
+        fetchConfig();
 
     </script>
 </body>
