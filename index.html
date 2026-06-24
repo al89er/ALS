@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALS Dashboard</title>
+    <link rel="icon" href="data:,">
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase v2 -->
@@ -376,7 +377,7 @@
         const SUPABASE_URL = 'https://pvutxjfkskzgccawfibu.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw';
 
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let lastSeenTimestamp = 0;
         let skipDaysArray = [];
@@ -396,7 +397,7 @@
         // 1. HEARTBEAT ENGINE
         // ==========================================
         async function fetchInitialStatus() {
-            const { data, error } = await supabase
+            const { data, error } = await _supabase
                 .from('device_status')
                 .select('*')
                 .eq('id', 'home_desktop_agent')
@@ -431,7 +432,7 @@
         setInterval(() => evaluateStatus(), 5000);
 
         // Subscribe to Heartbeat
-        supabase.channel('heartbeat-channel')
+        _supabase.channel('heartbeat-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
                 updateHeartbeat(payload.new.last_seen, payload.new.current_status);
             })
@@ -458,7 +459,7 @@
         }
 
         async function fetchLogs() {
-            const { data, error } = await supabase
+            const { data, error } = await _supabase
                 .from('logs')
                 .select('*')
                 .order('created_at', { ascending: false })
@@ -470,7 +471,7 @@
             }
         }
 
-        supabase.channel('logs-channel')
+        _supabase.channel('logs-channel')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
                 // Remove placeholder text if it's the first log
                 if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Connecting')) {
@@ -485,7 +486,7 @@
         // 3. MANUAL COMMANDS
         // ==========================================
         async function forceCommand(actionType) {
-            const { error } = await supabase
+            const { error } = await _supabase
                 .from('commands')
                 .insert([{ action: actionType, status: 'pending' }]);
 
@@ -497,7 +498,7 @@
         // 4. SKIP DAYS CALENDAR
         // ==========================================
         async function fetchConfig() {
-            const { data, error } = await supabase
+            const { data, error } = await _supabase
                 .from('config')
                 .select('*')
                 .eq('key', 'skip_days')
@@ -541,7 +542,7 @@
             }
             renderCalendar(); // Optimistic update
 
-            const { error } = await supabase
+            const { error } = await _supabase
                 .from('config')
                 .upsert({ key: 'skip_days', value: skipDaysArray });
 
@@ -555,7 +556,7 @@
         // 5. TODAY'S PROOF
         // ==========================================
         async function fetchTodaysProof() {
-            const { data, error } = await supabase
+            const { data, error } = await _supabase
                 .from('config')
                 .select('*')
                 .eq('key', 'todays_proof')
@@ -573,7 +574,7 @@
             proofUpdated.innerText = proof.lastUpdated ? new Date(proof.lastUpdated).toLocaleTimeString() : '--:--';
         }
 
-        supabase.channel('proof-channel')
+        _supabase.channel('proof-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'config', filter: "key=eq.todays_proof" }, payload => {
                 if (payload.new && payload.new.value) {
                     updateProofUI(payload.new.value);
