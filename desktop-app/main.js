@@ -58,6 +58,17 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('request-manual-proof', async () => {
+    const { manualFetchProof } = require('./automation');
+    try {
+      await manualFetchProof(supabase);
+      return true;
+    } catch (err) {
+      console.error('Failed to fetch proof manually:', err);
+      throw err;
+    }
+  });
+
   // Native OS Auto-Launch on boot
   app.setLoginItemSettings({
     openAtLogin: true,

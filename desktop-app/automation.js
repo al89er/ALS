@@ -244,4 +244,79 @@ async function openDebugBrowser() {
   return true;
 }
 
-module.exports = { executeClockAction, openDebugBrowser };
+async function manualFetchProof(supabase) {
+  let context;
+  try {
+    const settingsPath = path.join(__dirname, 'local_settings.json');
+    let settings = { targetUrl: 'https://perakamwaktu.upm.edu.my/', showBrowser: false };
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    }
+
+    console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
+    const userDataDir = path.join(__dirname, 'upm_session');
+    context = await chromium.launchPersistentContext(userDataDir, {
+      headless: !settings.showBrowser,
+      viewport: { width: 1280, height: 720 }
+    });
+
+    const page = await context.newPage();
+    await page.goto(settings.targetUrl);
+
+    const isLoginPage = page.url().toLowerCase().includes('login') ||
+      await page.isVisible('input[type="password"]');
+
+    if (isLoginPage) {
+      console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
+      await page.fill('input[type="text"]', process.env.UPM_USERNAME);
+      await page.fill('input[type="password"]', process.env.UPM_PASSWORD);
+      await page.click('button[type="submit"], input[type="submit"]');
+      await page.waitForNavigation();
+    }
+
+    console.log('[PLAYWRIGHT] Scraping DOM for proof...');
+    const proofData = await page.evaluate(() => {
+      const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
+      let twm = '--:--', wm = '--:--', wk = '--:--';
+      for (const doc of docs) {
+        if (doc.querySelector('#twm')) twm = doc.querySelector('#twm').innerText.trim();
+        if (doc.querySelector('#wm')) wm = doc.querySelector('#wm').innerText.trim();
+        if (doc.querySelector('#wk')) wk = doc.querySelector('#wk').innerText.trim();
+      }
+      return { date: twm, clockIn: wm, clockOut: wk };
+    });
+
+    console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
+    
+    await supabase.from('config').upsert({
+      key: 'todays_proof',
+      value: {
+        date: proofData.date,
+        clockIn: proofData.clockIn,
+        clockOut: proofData.clockOut,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+
+    await supabase.from('logs').insert({
+      action: 'manual_proof_sync',
+      status: 'success',
+      message: `Proof fetched manually. Date: ${proofData.date}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`
+    });
+    
+    await context.close();
+    return true;
+
+  } catch (error) {
+    console.error(`[PLAYWRIGHT] Manual proof sync failed: ${error.message}`);
+    await supabase.from('logs').insert({
+      action: 'manual_proof_sync',
+      status: 'failed',
+      message: `Failed to sync proof manually: ${error.message}`
+    });
+    if (context) await context.close();
+    throw error;
+  }
+}
+
+module.exports = { executeClockAction, openDebugBrowser, manualFetchProof };

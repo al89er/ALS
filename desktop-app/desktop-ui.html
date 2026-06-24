@@ -328,23 +328,20 @@
         <section class="panel settings-panel">
             <h2>Local Engine Settings</h2>
             <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
-                <label style="font-size: 0.85rem; color: var(--text-secondary);">Target UPM URL</label>
-                <input type="text" id="targetUrlInput"
-                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff;" />
-
-                <label
-                    style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
-                    <input type="checkbox" id="showBrowserInput" />
-                    Show Browser Window (Debug Mode)
-                </label>
-                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                    <button class="btn btn-in" style="padding: 0.5rem; font-size: 0.9rem; flex: 1;"
-                        onclick="saveLocalSettings()">Save Settings</button>
-                    <button class="btn"
-                        style="padding: 0.5rem; font-size: 0.9rem; flex: 1; background-color: var(--border-color); color: #fff;"
-                        onclick="openDebugBrowser()">Open Browser Now</button>
-                </div>
+            <div class="form-group">
+                <label>Target UPM URL</label>
+                <input type="text" id="targetUrlInput" class="form-input">
             </div>
+            <div class="form-group" style="flex-direction: row; align-items: center; justify-content: flex-start; gap: 0.5rem; margin-top: 1rem;">
+                <input type="checkbox" id="showBrowserCheck" style="width: 1.2rem; height: 1.2rem; accent-color: var(--accent-blue);">
+                <label style="margin: 0;">Show Browser Window (Debug Mode)</label>
+            </div>
+            <div class="btn-group" style="margin-top: 1rem; gap: 1rem;">
+                <button class="btn btn-in" style="font-size: 0.9rem; padding: 0.8rem;" onclick="saveLocalSettings()">Save Engine Settings</button>
+                <button class="btn" style="font-size: 0.9rem; padding: 0.8rem; background: rgba(255,255,255,0.1);" onclick="window.electronAPI.openBrowser()">Test Launch Browser</button>
+            </div>
+            <hr style="border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0;">
+            <button class="btn" style="font-size: 0.9rem; padding: 0.8rem; width: 100%; background: linear-gradient(135deg, #10b981, #059669);" onclick="requestManualProof()">Manual Sync Proof</button>
         </section>
 
         <section class="panel proof-panel">
@@ -612,23 +609,11 @@
             if (window.electronAPI) {
                 const settings = await window.electronAPI.readSettings();
                 document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu3.upm.edu.my/';
-                document.getElementById('showBrowserInput').checked = settings.showBrowser || false;
+                document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
             }
         }
 
         async function saveLocalSettings() {
-            if (window.electronAPI) {
-                const targetUrl = document.getElementById('targetUrlInput').value;
-                const showBrowser = document.getElementById('showBrowserInput').checked;
-                await window.electronAPI.saveSettings({ targetUrl, showBrowser });
-                alert('Local settings saved!');
-            }
-        }
-
-        async function openDebugBrowser() {
-            if (window.electronAPI) {
-                try {
-                    await window.electronAPI.openBrowser();
                 } catch (err) {
                     alert('Failed to launch browser (Is an automation already running?). Error: ' + err.message);
                 }

@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
-const { executeClockAction } = require('./automation'); // Import Playwright logic
+const { executeClockAction, manualFetchProof } = require('./automation'); // Import Playwright logic
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -73,6 +73,22 @@ function startCommandListener() {
 
           } catch (execError) {
             // Mark failed on error
+            await supabase
+              .from('commands')
+              .update({ status: 'failed' })
+              .eq('id', id);
+            console.error(`[SUPABASE] Command ${id} marked as failed due to Playwright error.`);
+          }
+        } else if (action === 'manual_proof_sync') {
+          try {
+            await manualFetchProof(supabase);
+            
+            await supabase
+              .from('commands')
+              .update({ status: 'completed' })
+              .eq('id', id);
+            console.log(`[SUPABASE] Command ${id} (manual proof) marked as completed.`);
+          } catch (execError) {
             await supabase
               .from('commands')
               .update({ status: 'failed' })
