@@ -114,6 +114,43 @@
             margin-bottom: 0.5rem;
         }
 
+        /* Today's Proof */
+        .proof-panel {
+            grid-column: 1 / -1;
+            background: linear-gradient(145deg, var(--surface-color), #232323);
+            border-top: 2px solid var(--accent-blue);
+        }
+        
+        .proof-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        
+        .proof-item {
+            background-color: rgba(0,0,0,0.2);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .proof-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .proof-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
         /* Buttons */
         .commands-panel {
             grid-column: 1 / -1;
@@ -286,6 +323,28 @@
     </header>
 
     <main>
+        <section class="panel proof-panel">
+            <h2>Today's Proof</h2>
+            <div class="proof-grid">
+                <div class="proof-item">
+                    <span class="proof-label">Tarikh Hadir</span>
+                    <span class="proof-value" id="proofDate">--:--</span>
+                </div>
+                <div class="proof-item">
+                    <span class="proof-label">Masa Hadir</span>
+                    <span class="proof-value" id="proofIn">--:--</span>
+                </div>
+                <div class="proof-item">
+                    <span class="proof-label">Masa Keluar</span>
+                    <span class="proof-value" id="proofOut">--:--</span>
+                </div>
+                <div class="proof-item">
+                    <span class="proof-label">Last Updated</span>
+                    <span class="proof-value" id="proofUpdated" style="font-size: 1rem;">--:--</span>
+                </div>
+            </div>
+        </section>
+
         <section class="panel commands-panel">
             <button class="btn btn-in" onclick="forceCommand('clock_in')">Force Clock IN</button>
             <button class="btn btn-out" onclick="forceCommand('clock_out')">Force Clock OUT</button>
@@ -327,6 +386,11 @@
         const statusText = document.getElementById('statusText');
         const logsContainer = document.getElementById('logsContainer');
         const calendarGrid = document.getElementById('calendarGrid');
+        
+        const proofDate = document.getElementById('proofDate');
+        const proofIn = document.getElementById('proofIn');
+        const proofOut = document.getElementById('proofOut');
+        const proofUpdated = document.getElementById('proofUpdated');
 
         // ==========================================
         // 1. HEARTBEAT ENGINE
@@ -487,10 +551,41 @@
             }
         }
 
+        // ==========================================
+        // 5. TODAY'S PROOF
+        // ==========================================
+        async function fetchTodaysProof() {
+            const { data, error } = await supabase
+                .from('config')
+                .select('*')
+                .eq('key', 'todays_proof')
+                .single();
+            
+            if (data && data.value) {
+                updateProofUI(data.value);
+            }
+        }
+
+        function updateProofUI(proof) {
+            proofDate.innerText = proof.date || '--:--';
+            proofIn.innerText = proof.clockIn || '--:--';
+            proofOut.innerText = proof.clockOut || '--:--';
+            proofUpdated.innerText = proof.lastUpdated ? new Date(proof.lastUpdated).toLocaleTimeString() : '--:--';
+        }
+
+        supabase.channel('proof-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'config', filter: "key=eq.todays_proof" }, payload => {
+                if (payload.new && payload.new.value) {
+                    updateProofUI(payload.new.value);
+                }
+            })
+            .subscribe();
+
         // Initialize App
         fetchInitialStatus();
         fetchLogs();
         fetchConfig();
+        fetchTodaysProof();
 
     </script>
 </body>
