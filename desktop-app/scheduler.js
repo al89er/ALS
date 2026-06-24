@@ -27,9 +27,24 @@ async function generateDailySchedule(supabase) {
       skipDays = Array.isArray(data.value) ? data.value : [];
   }
   
+  const dayOfWeek = today.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+      console.log(`[SCHEDULER] Today (${dateString}) is a Weekend. No automation scheduled.`);
+      const skipData = { date: dateString, skipped: true };
+      fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(skipData, null, 2));
+      try {
+        await supabase.from('config').upsert({ key: 'todays_schedule', value: skipData });
+      } catch (e) {}
+      return;
+  }
+  
   if (skipDays.includes(dateString)) {
       console.log(`[SCHEDULER] Today (${dateString}) is a Skip Day. No automation scheduled.`);
-      fs.writeFileSync(SCHEDULE_FILE, JSON.stringify({ date: dateString, skipped: true }, null, 2));
+      const skipData = { date: dateString, skipped: true };
+      fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(skipData, null, 2));
+      try {
+        await supabase.from('config').upsert({ key: 'todays_schedule', value: skipData });
+      } catch (e) {}
       return;
   }
   
@@ -54,6 +69,21 @@ async function generateDailySchedule(supabase) {
   fs.writeFileSync(SCHEDULE_FILE, JSON.stringify(scheduleData, null, 2));
   console.log(`[SCHEDULER] Generated schedule for ${dateString}: IN=${inTimeStr}, OUT=${outTimeStr}`);
   
+  try {
+    await supabase.from('config').upsert({
+      key: 'todays_schedule',
+      value: {
+        date: scheduleData.date,
+        clockInTarget: scheduleData.clockInTarget,
+        clockOutTarget: scheduleData.clockOutTarget,
+        skipped: scheduleData.skipped
+      }
+    });
+    console.log('[SCHEDULER] Synced today\'s schedule to Supabase.');
+  } catch (err) {
+    console.error('[SCHEDULER] Failed to sync schedule to Supabase:', err.message);
+  }
+  
   scheduleCronJobs(scheduleData, supabase);
 }
 
@@ -70,8 +100,21 @@ function scheduleCronJobs(scheduleData, supabase) {
   const [inH, inM] = scheduleData.clockInTarget.split(':');
   const [outH, outM] = scheduleData.clockOutTarget.split(':');
   
+  // Time shift logic: Shift cron trigger 1 minute early for pre-flight check
+  const inTime = new Date();
+  inTime.setHours(Number(inH), Number(inM), 0, 0);
+  inTime.setMinutes(inTime.getMinutes() - 1);
+  const cronInH = inTime.getHours();
+  const cronInM = inTime.getMinutes();
+  
+  const outTime = new Date();
+  outTime.setHours(Number(outH), Number(outM), 0, 0);
+  outTime.setMinutes(outTime.getMinutes() - 1);
+  const cronOutH = outTime.getHours();
+  const cronOutM = outTime.getMinutes();
+  
   if (!scheduleData.clockInDone) {
-    clockInTask = cron.schedule(`${inM} ${inH} * * *`, async () => {
+    clockInTask = cron.schedule(`${cronInM} ${cronInH} * * *`, async () => {
       console.log('[SCHEDULER] Triggering scheduled Clock IN...');
       try {
         await executeClockAction('clock_in', supabase);
@@ -84,7 +127,7 @@ function scheduleCronJobs(scheduleData, supabase) {
   }
   
   if (!scheduleData.clockOutDone) {
-    clockOutTask = cron.schedule(`${outM} ${outH} * * *`, async () => {
+    clockOutTask = cron.schedule(`${cronOutM} ${cronOutH} * * *`, async () => {
       console.log('[SCHEDULER] Triggering scheduled Clock OUT...');
       try {
         await executeClockAction('clock_out', supabase);
@@ -107,16 +150,20 @@ async function checkMissedActions(supabase) {
   
   if (scheduleData.date !== dateString || scheduleData.skipped) return;
   
-  const currentTotalMinutes = today.getHours() * 60 + today.getMinutes();
+  const now = Date.now();
   
   const [inH, inM] = scheduleData.clockInTarget.split(':').map(Number);
-  const inTotalMinutes = inH * 60 + inM;
+  const targetInTime = new Date(today);
+  targetInTime.setHours(inH, inM, 0, 0);
   
   const [outH, outM] = scheduleData.clockOutTarget.split(':').map(Number);
-  const outTotalMinutes = outH * 60 + outM;
+  const targetOutTime = new Date(today);
+  targetOutTime.setHours(outH, outM, 0, 0);
   
-  // 5 minute grace period
-  if (!scheduleData.clockInDone && currentTotalMinutes >= inTotalMinutes && currentTotalMinutes <= inTotalMinutes + 5) {
+  const gracePeriodMs = 300000; // 5 minutes
+  
+  // 5 minute grace period check
+  if (!scheduleData.clockInDone && now >= targetInTime.getTime() && (now - targetInTime.getTime()) <= gracePeriodMs) {
     console.log('[SCHEDULER] RECOVERY: Missed Clock IN! Triggering now within 5-min grace period...');
     try {
       await executeClockAction('clock_in', supabase);
@@ -127,7 +174,7 @@ async function checkMissedActions(supabase) {
     }
   }
   
-  if (!scheduleData.clockOutDone && currentTotalMinutes >= outTotalMinutes && currentTotalMinutes <= outTotalMinutes + 5) {
+  if (!scheduleData.clockOutDone && now >= targetOutTime.getTime() && (now - targetOutTime.getTime()) <= gracePeriodMs) {
     console.log('[SCHEDULER] RECOVERY: Missed Clock OUT! Triggering now within 5-min grace period...');
     try {
       await executeClockAction('clock_out', supabase);
