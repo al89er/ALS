@@ -193,10 +193,23 @@ async function init(supabase) {
   let needsNewSchedule = true;
   if (fs.existsSync(SCHEDULE_FILE)) {
     const scheduleData = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf8'));
-    if (scheduleData.date === dateString) {
-      needsNewSchedule = false;
-      console.log('[SCHEDULER] Booted with existing schedule for today.');
+    if (scheduleData && scheduleData.date === dateString) {
+      console.log(`[SCHEDULER] Loaded existing schedule for today (${dateString}).`);
+      
+      try {
+        await supabase.from('config').upsert({
+          key: 'todays_schedule',
+          value: {
+            date: scheduleData.date,
+            clockInTarget: scheduleData.clockInTarget,
+            clockOutTarget: scheduleData.clockOutTarget,
+            skipped: scheduleData.skipped
+          }
+        });
+      } catch (err) {}
+
       scheduleCronJobs(scheduleData, supabase);
+      return;
     }
   }
   
