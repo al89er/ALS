@@ -614,11 +614,32 @@
         }
 
         async function saveLocalSettings() {
+            if (window.electronAPI) {
+                const url = document.getElementById('targetUrlInput').value;
+                const showBrowser = document.getElementById('showBrowserCheck').checked;
+                await window.electronAPI.saveSettings({ targetUrl: url, showBrowser });
+                alert('Local Engine Settings saved!');
+            }
+        }
+
+        async function openDebugBrowser() {
+            if (window.electronAPI) {
+                try {
+                    await window.electronAPI.openBrowser();
                 } catch (err) {
                     alert('Failed to launch browser (Is an automation already running?). Error: ' + err.message);
                 }
             } else {
                 alert('Not running in local desktop mode!');
+            }
+        }
+
+        async function requestManualProof() {
+            try {
+                await window.electronAPI.requestManualProof();
+                alert('Manual sync command executed. Wait for logs to verify success.');
+            } catch (e) {
+                alert('Failed to execute manual sync: ' + e);
             }
         }
 
