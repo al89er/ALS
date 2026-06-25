@@ -65,6 +65,8 @@ async function checkDashboardStatus(page, actionType, supabase) {
         cacheManager.queueOfflineProof({ date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
       }
 
+      if (global.updateTrayTooltip) global.updateTrayTooltip();
+
       await remoteLog(supabase, actionType, 'skipped', 'Manual entry verified');
 
       return true;
@@ -110,6 +112,8 @@ async function executeClockAction(actionType, supabase) {
 
     if (!fetchText.includes('<html')) {
       console.warn('[PLAYWRIGHT] Captive Portal detected! Aborting sequence.');
+      global.connectivityState = 'Captive Portal Flag';
+      if (global.updateTrayTooltip) global.updateTrayTooltip();
       await remoteLog(supabase, 'network_check', 'error', 'Captive portal intercepted the connection.');
       try {
         await supabase.from('device_status').upsert({
@@ -210,7 +214,26 @@ async function executeClockAction(actionType, supabase) {
 
     // 6. Post-Flight
     console.log('[PLAYWRIGHT] Element triggered successfully. Verifying DOM for proof...');
-    await page.waitForTimeout(2000);
+    
+    const targetProofSelector = actionType === 'clock_in' ? '#wm' : '#wk';
+    
+    try {
+      await page.waitForFunction((selector) => {
+        const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
+        for (const doc of docs) {
+          const el = doc.querySelector(selector);
+          if (el) {
+            const text = el.innerText.trim();
+            if (text && text !== '?' && text !== '--:--' && text.length > 2) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }, targetProofSelector, { timeout: 15000 });
+    } catch (timeoutErr) {
+      throw new Error('[TIMEOUT] Portal dashboard failed to update time values within 15s');
+    }
     
     const postProofData = await page.evaluate(() => {
       const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
@@ -237,6 +260,8 @@ async function executeClockAction(actionType, supabase) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
       cacheManager.queueOfflineProof({ date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
     }
+
+    if (global.updateTrayTooltip) global.updateTrayTooltip();
 
     await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector} at ${new Date().toISOString()}`);
     await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`);
@@ -333,6 +358,8 @@ async function manualFetchProof(supabase) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
       cacheManager.queueOfflineProof({ date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
     }
+
+    if (global.updateTrayTooltip) global.updateTrayTooltip();
 
     await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`);
     

@@ -93,6 +93,8 @@ async function generateDailySchedule(supabase) {
       cacheManager.mergeSystemConfig(scheduleData, false);
   }
   
+  if (global.updateTrayTooltip) global.updateTrayTooltip();
+  
   scheduleCronJobs(scheduleData, supabase);
 }
 

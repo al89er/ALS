@@ -75,12 +75,18 @@ function startHeartbeat() {
 
       if (error) {
         console.error('[SUPABASE] Heartbeat error (Offline?):', error.message);
+        global.connectivityState = 'Offline';
+        if (global.updateTrayTooltip) global.updateTrayTooltip();
       } else {
+        global.connectivityState = 'Connected to Supabase';
+        if (global.updateTrayTooltip) global.updateTrayTooltip();
         // Connection alive, try resolving offline queue
         await reconcileCache();
       }
     } catch (err) {
       console.error('[SUPABASE] Heartbeat exception (Network drop?):', err.message);
+      global.connectivityState = 'Offline';
+      if (global.updateTrayTooltip) global.updateTrayTooltip();
     }
   }, 30000);
 }

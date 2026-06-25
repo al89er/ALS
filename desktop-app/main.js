@@ -8,6 +8,31 @@ const scheduler = require('./scheduler');
 let mainWindow;
 let tray;
 
+global.connectivityState = 'Pending Connection';
+global.updateTrayTooltip = function() {
+  if (!tray) return;
+
+  try {
+    const cacheManager = require('./cache-manager');
+    const cache = cacheManager.readCache();
+    
+    const inTarget = cache.system_config?.scheduled_clock_in || 'Pending Generation';
+    const outTarget = cache.system_config?.scheduled_clock_out || 'Pending Generation';
+    
+    const inProof = cache.todays_proof?.clock_in || '--:--';
+    const outProof = cache.todays_proof?.clock_out || '--:--';
+
+    const isSkipped = cache.system_config?.skipped;
+    const skipText = isSkipped ? ' (Skipped)' : '';
+
+    const tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
+
+    tray.setToolTip(tooltipText);
+  } catch (err) {
+    console.error('Failed to update tray tooltip:', err);
+  }
+};
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -104,8 +129,8 @@ app.whenReady().then(() => {
       }
     }
   ]);
-  tray.setToolTip('ALS Automation Engine');
   tray.setContextMenu(contextMenu);
+  global.updateTrayTooltip();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
