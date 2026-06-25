@@ -620,8 +620,7 @@
             loadLocalSettings();
         }
         
-        // Boot the client
-        initDesktopClient();
+        // init removed here, handled at end of script
 
         // DOM Elements
         const statusBadge = document.getElementById('statusBadge');
@@ -902,16 +901,16 @@ _supabase.channel('skip-channel')
         async function loadLocalSettings() {
             if (window.electronAPI) {
                 const settings = await window.electronAPI.readSettings();
-                document.getElementById('targetUrl').value = settings.targetUrl || '';
-                document.getElementById('showBrowser').checked = settings.showBrowser || false;
+                document.getElementById('targetUrlInput').value = settings.targetUrl || '';
+                document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
             }
         }
 
         async function saveLocalSettings() {
             if (window.electronAPI) {
                 const settings = {
-                    targetUrl: document.getElementById('targetUrl').value,
-                    showBrowser: document.getElementById('showBrowser').checked
+                    targetUrl: document.getElementById('targetUrlInput').value,
+                    showBrowser: document.getElementById('showBrowserCheck').checked
                 };
                 await window.electronAPI.saveSettings(settings);
                 alert('Local Engine settings saved securely via Supabase DB.');
