@@ -679,12 +679,8 @@
 
         setInterval(() => evaluateStatus(), 5000);
 
-        function bindChannels() {
-_supabase.channel('heartbeat-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
-                updateHeartbeat(payload.new.last_seen, payload.new.current_status);
-            })
-            .subscribe();
+        
+
 
         // ==========================================
         // 2. LIVE LOGS
@@ -733,15 +729,7 @@ _supabase.channel('heartbeat-channel')
             }
         }
 
-        _supabase.channel('logs-channel')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
-                if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
-                    logsContainer.innerHTML = '';
-                }
-                const el = createLogElement(payload.new);
-                logsContainer.insertBefore(el, logsContainer.firstChild);
-            })
-            .subscribe();
+        
 
         // ==========================================
         // 3. MANUAL COMMANDS
@@ -868,21 +856,40 @@ _supabase.channel('heartbeat-channel')
             }
         }
 
-        _supabase.channel('proof-channel')
+        
+
+        
+            
+        
+
+function bindChannels() {
+_supabase.channel('heartbeat-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
+                updateHeartbeat(payload.new.last_seen, payload.new.current_status);
+            })
+            .subscribe();
+_supabase.channel('logs-channel')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
+                if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
+                    logsContainer.innerHTML = '';
+                }
+                const el = createLogElement(payload.new);
+                logsContainer.insertBefore(el, logsContainer.firstChild);
+            })
+            .subscribe();
+_supabase.channel('proof-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
                 const todayStr = new Date().toISOString().split('T')[0];
                 if (payload.new && payload.new.date === todayStr) updateProofUI(payload.new);
             })
             .subscribe();
-
-        _supabase.channel('sys-channel')
+_supabase.channel('sys-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
                 const todayStr = new Date().toISOString().split('T')[0];
                 if (payload.new && payload.new.last_schedule_date === todayStr) updateScheduleUI(payload.new);
             })
             .subscribe();
-            
-        _supabase.channel('skip-channel')
+_supabase.channel('skip-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
                 fetchConfig();
             })
