@@ -613,8 +613,15 @@
             bindChannels();
             
             // Initialize App
-        initDesktopClient();
+            fetchInitialStatus();
+            fetchLogs();
+            fetchConfig();
+            fetchTodaysData();
+            loadLocalSettings();
         }
+        
+        // Boot the client
+        initDesktopClient();
 
         // DOM Elements
         const statusBadge = document.getElementById('statusBadge');
