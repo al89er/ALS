@@ -44,21 +44,22 @@ async function checkDashboardStatus(page, actionType, supabase) {
     });
 
     const targetVal = actionType === 'clock_in' ? proofData.clockIn : proofData.clockOut;
+    const standardDate = new Date().toISOString().split('T')[0];
     
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
       console.log(`[PLAYWRIGHT] Pre-Flight Check: Action already completed! Extracted: ${targetVal}`);
       
       try {
         await supabase.from('todays_proof').upsert({
-          date: proofData.date,
+          date: standardDate,
           clock_in: proofData.clockIn,
           clock_out: proofData.clockOut,
           updated_at: new Date().toISOString()
         }, { onConflict: 'date' });
-        cacheManager.updateCache('todays_proof', { date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
       } catch (err) {
         console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
-        cacheManager.queueOfflineProof({ date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
+        cacheManager.queueOfflineProof({ date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
       }
 
       await remoteLog(supabase, actionType, 'skipped', 'Manual entry verified');
@@ -214,17 +215,19 @@ async function executeClockAction(actionType, supabase) {
       return { date: twm, clockIn: wm, clockOut: wk };
     });
 
+    const standardDate = new Date().toISOString().split('T')[0];
+
     try {
       await supabase.from('todays_proof').upsert({
-        date: postProofData.date,
+        date: standardDate,
         clock_in: postProofData.clockIn,
         clock_out: postProofData.clockOut,
         updated_at: new Date().toISOString()
       }, { onConflict: 'date' });
-      cacheManager.updateCache('todays_proof', { date: postProofData.date, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
+      cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
-      cacheManager.queueOfflineProof({ date: postProofData.date, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
+      cacheManager.queueOfflineProof({ date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
     }
 
     await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector} at ${new Date().toISOString()}`);
@@ -298,20 +301,22 @@ async function manualFetchProof(supabase) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
+    const standardDate = new Date().toISOString().split('T')[0];
+    
     try {
       await supabase.from('todays_proof').upsert({
-        date: proofData.date,
+        date: standardDate,
         clock_in: proofData.clockIn,
         clock_out: proofData.clockOut,
         updated_at: new Date().toISOString()
       }, { onConflict: 'date' });
-      cacheManager.updateCache('todays_proof', { date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+      cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
-      cacheManager.queueOfflineProof({ date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
+      cacheManager.queueOfflineProof({ date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
     }
 
-    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${proofData.date}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`);
+    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`);
     
     await context.close();
     return true;
