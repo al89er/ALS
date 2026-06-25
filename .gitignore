@@ -3,4 +3,5 @@ node_modules/
 upm_session/
 desktop-app/local_settings.json
 desktop-app/schedule.json
+desktop-app/local_cache.json
 ref-source/
