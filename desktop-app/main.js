@@ -33,24 +33,27 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  const settingsPath = path.join(__dirname, 'local_settings.json');
-  
-  ipcMain.handle('read-settings', () => {
-    if (fs.existsSync(settingsPath)) {
-      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    }
-    return { targetUrl: 'https://perakamwaktu.upm.edu.my/', showBrowser: false };
+  ipcMain.handle('read-settings', async () => {
+    const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+    return {
+      targetUrl: data?.target_url || 'https://perakamwaktu.upm.edu.my/',
+      showBrowser: data?.show_browser || false
+    };
   });
 
-  ipcMain.handle('save-settings', (event, settings) => {
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+  ipcMain.handle('save-settings', async (event, settings) => {
+    await supabase.from('system_config').upsert({
+      id: 1,
+      target_url: settings.targetUrl,
+      show_browser: settings.showBrowser
+    });
     return true;
   });
 
   ipcMain.handle('open-browser', async () => {
     const { openDebugBrowser } = require('./automation');
     try {
-      await openDebugBrowser();
+      await openDebugBrowser(supabase);
       return true;
     } catch (err) {
       console.error('Failed to open browser:', err);

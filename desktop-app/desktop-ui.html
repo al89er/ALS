@@ -732,18 +732,14 @@
             }
         }
 
+        
         // ==========================================
         // 4. SKIP DAYS CALENDAR
         // ==========================================
         async function fetchConfig() {
-            const { data } = await _supabase
-                .from('config')
-                .select('*')
-                .eq('key', 'skip_days')
-                .maybeSingle();
-
-            if (data && data.value) {
-                skipDaysArray = Array.isArray(data.value) ? data.value : [];
+            const { data } = await _supabase.from('skip_days').select('date');
+            if (data) {
+                skipDaysArray = data.map(row => row.date);
             }
             renderCalendar();
         }
@@ -800,113 +796,71 @@
         async function toggleDate(dateString) {
             if (skipDaysArray.includes(dateString)) {
                 skipDaysArray = skipDaysArray.filter(d => d !== dateString);
+                await _supabase.from('skip_days').delete().eq('date', dateString);
             } else {
                 skipDaysArray.push(dateString);
+                await _supabase.from('skip_days').insert({ date: dateString });
             }
             renderCalendar(); 
-
-            const { error } = await _supabase
-                .from('config')
-                .upsert({ key: 'skip_days', value: skipDaysArray });
-
-            if (error) {
-                console.error("Failed to update config", error);
-                alert("Failed to save skip day");
-            }
         }
 
         // ==========================================
         // 5. TODAY'S DATA (PROOF & SCHEDULE)
         // ==========================================
         async function fetchTodaysData() {
-            const { data } = await _supabase
-                .from('config')
-                .select('*')
-                .in('key', ['todays_proof', 'todays_schedule']);
+            const todayStr = new Date().toISOString().split('T')[0];
             
-            if (data) {
-                data.forEach(row => {
-                    if (row.key === 'todays_proof') updateProofUI(row.value);
-                    if (row.key === 'todays_schedule') updateScheduleUI(row.value);
-                });
-            }
+            const [sysRes, proofRes] = await Promise.all([
+                _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
+                _supabase.from('todays_proof').select('*').eq('date', todayStr).maybeSingle()
+            ]);
+            
+            if (proofRes.data) updateProofUI(proofRes.data);
+            if (sysRes.data && sysRes.data.last_schedule_date === todayStr) updateScheduleUI(sysRes.data);
         }
 
         function updateProofUI(proof) {
             if (!proof) return;
             proofDate.innerText = proof.date || '--:--';
-            proofIn.innerText = proof.clockIn || '--:--';
-            proofOut.innerText = proof.clockOut || '--:--';
-            proofUpdated.innerText = proof.lastUpdated ? new Date(proof.lastUpdated).toLocaleTimeString() : '--:--';
+            proofIn.innerText = proof.clock_in || '--:--';
+            proofOut.innerText = proof.clock_out || '--:--';
+            proofUpdated.innerText = proof.updated_at ? new Date(proof.updated_at).toLocaleTimeString() : '--:--';
         }
 
         function updateScheduleUI(sched) {
             if (!sched) return;
-            schedDate.innerText = sched.date || '--:--';
+            schedDate.innerText = sched.last_schedule_date || '--:--';
             
             if (sched.skipped) {
                 schedIn.innerText = '--:--';
                 schedOut.innerText = '--:--';
                 schedSkippedTag.style.display = 'block';
             } else {
-                schedIn.innerText = sched.clockInTarget || '--:--';
-                schedOut.innerText = sched.clockOutTarget || '--:--';
+                schedIn.innerText = sched.scheduled_clock_in || '--:--';
+                schedOut.innerText = sched.scheduled_clock_out || '--:--';
                 schedSkippedTag.style.display = 'none';
             }
         }
 
-        _supabase.channel('config-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'config' }, payload => {
-                if (payload.new && payload.new.key === 'todays_proof') updateProofUI(payload.new.value);
-                if (payload.new && payload.new.key === 'todays_schedule') updateScheduleUI(payload.new.value);
+        _supabase.channel('proof-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (payload.new && payload.new.date === todayStr) updateProofUI(payload.new);
             })
             .subscribe();
 
-        
-        // ==========================================
-        // 6. LOCAL SETTINGS & IPC
-        // ==========================================
-        async function loadLocalSettings() {
-            if (window.electronAPI) {
-                const settings = await window.electronAPI.readSettings();
-                document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
-                document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
-            }
-        }
-
-        async function saveLocalSettings() {
-            if (window.electronAPI) {
-                const url = document.getElementById('targetUrlInput').value;
-                const showBrowser = document.getElementById('showBrowserCheck').checked;
-                await window.electronAPI.saveSettings({ targetUrl: url, showBrowser });
-                alert('Local Engine Settings saved!');
-            }
-        }
-
-        async function openDebugBrowser() {
-            if (window.electronAPI) {
-                try {
-                    await window.electronAPI.openBrowser();
-                } catch (err) {
-                    alert('Failed to launch browser. Error: ' + err.message);
-                }
-            } else {
-                alert('Not running in local desktop mode!');
-            }
-        }
-
-        async function requestManualProof() {
-            if (window.electronAPI) {
-                try {
-                    await window.electronAPI.requestManualProof();
-                    switchTab('history');
-                } catch (e) {
-                    alert('Failed to execute manual sync: ' + e);
-                }
-            } else {
-                forceCommand('manual_proof_sync');
-            }
-        }
+        _supabase.channel('sys-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (payload.new && payload.new.last_schedule_date === todayStr) updateScheduleUI(payload.new);
+            })
+            .subscribe();
+            
+        _supabase.channel('skip-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
+                fetchConfig();
+            })
+            .subscribe();
 
         // Initialize App
         fetchInitialStatus();

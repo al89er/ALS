@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { chromium } = require('playwright');
 const path = require('path');
-const fs = require('fs');
 
 async function sendTelegramAlert(message) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -10,20 +9,13 @@ async function sendTelegramAlert(message) {
     console.warn('[TELEGRAM] Token or Chat ID missing. Skipping alert.');
     return;
   }
-  
   try {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message
-      })
+      body: JSON.stringify({ chat_id: chatId, text: message })
     });
-    if (!response.ok) {
-      console.error('[TELEGRAM] Failed to send message:', await response.text());
-    }
   } catch (err) {
     console.error('[TELEGRAM] Error sending alert:', err.message);
   }
@@ -46,15 +38,20 @@ async function checkDashboardStatus(page, actionType, supabase) {
     
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
       console.log(`[PLAYWRIGHT] Pre-Flight Check: Action already completed! Extracted: ${targetVal}`);
-      await supabase.from('config').upsert({
-        key: 'todays_proof',
-        value: {
-          date: proofData.date,
-          clockIn: proofData.clockIn,
-          clockOut: proofData.clockOut,
-          lastUpdated: new Date().toISOString()
-        }
+      
+      await supabase.from('todays_proof').upsert({
+        date: proofData.date,
+        clock_in: proofData.clockIn,
+        clock_out: proofData.clockOut,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'date' });
+
+      await supabase.from('logs').insert({
+        action: actionType,
+        status: 'skipped',
+        message: 'Manual entry verified'
       });
+
       return true;
     }
     console.log('[PLAYWRIGHT] Pre-Flight Check: Action not yet completed.');
@@ -65,14 +62,18 @@ async function checkDashboardStatus(page, actionType, supabase) {
   }
 }
 
+async function getSystemConfig(supabase) {
+  const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+  return {
+    targetUrl: data?.target_url || 'https://perakamwaktu3.upm.edu.my/',
+    showBrowser: data?.show_browser || false
+  };
+}
+
 async function executeClockAction(actionType, supabase) {
   let context;
   try {
-    const settingsPath = path.join(__dirname, 'local_settings.json');
-    let settings = { targetUrl: 'https://perakamwaktu3.upm.edu.my/', showBrowser: false };
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    }
+    const config = await getSystemConfig(supabase);
 
     // 1. Network / Captive Portal Check
     console.log('[PLAYWRIGHT] Checking network route via neverssl.com...');
@@ -96,27 +97,24 @@ async function executeClockAction(actionType, supabase) {
     }
 
     // 2. Browser Launch with Persistent State
-    console.log('[PLAYWRIGHT] Launching persistent browser context (headless: ' + !settings.showBrowser + ')...');
+    console.log('[PLAYWRIGHT] Launching persistent browser context (headless: ' + !config.showBrowser + ')...');
     const userDataDir = path.join(__dirname, 'upm_session');
     context = await chromium.launchPersistentContext(userDataDir, {
-      headless: !settings.showBrowser,
+      headless: !config.showBrowser,
       viewport: { width: 1280, height: 720 }
     });
 
     const page = await context.newPage();
 
     // 3. Portal Navigation
-    console.log('[PLAYWRIGHT] Navigating to target portal: ' + settings.targetUrl);
-    await page.goto(settings.targetUrl);
+    console.log('[PLAYWRIGHT] Navigating to target portal: ' + config.targetUrl);
+    await page.goto(config.targetUrl);
 
     // 4. Auth Check & Injection
-    // If the URL contains 'login' or we can see a specific login field
-    const isLoginPage = page.url().toLowerCase().includes('login') ||
-      await page.isVisible('input[type="password"]');
+    const isLoginPage = page.url().toLowerCase().includes('login') || await page.isVisible('input[type="password"]');
 
     if (isLoginPage) {
       console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
-      // Adjust these selectors depending on the exact DOM of the UPM portal
       await page.fill('input[type="text"]', process.env.UPM_USERNAME);
       await page.fill('input[type="password"]', process.env.UPM_PASSWORD);
       await page.click('button[type="submit"], input[type="submit"]');
@@ -128,11 +126,6 @@ async function executeClockAction(actionType, supabase) {
     const isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
     if (isAlreadyDone) {
       console.log(`[PLAYWRIGHT] Manual action detected, skipping automated click for ${actionType}`);
-      await supabase.from('logs').insert({
-        action: actionType,
-        status: 'skipped',
-        message: `Manual action detected. Skipping automated click. Scraped proof.`
-      });
       await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`);
       await context.close();
       return true;
@@ -148,7 +141,6 @@ async function executeClockAction(actionType, supabase) {
     let targetFrame = page;
     let targetHandle = null;
 
-    // Search across all frames
     for (const frame of page.frames()) {
       targetHandle = await frame.$(selector);
       if (targetHandle) {
@@ -161,7 +153,6 @@ async function executeClockAction(actionType, supabase) {
       throw new Error(`Element ${selector} not found in any frame.`);
     }
 
-    // Menu Expansion Logic
     await targetFrame.evaluate((selectorStr) => {
       const el = document.querySelector(selectorStr);
       if (!el) return;
@@ -174,26 +165,40 @@ async function executeClockAction(actionType, supabase) {
 
       const cls = (li.getAttribute('class') || '').trim();
       const anchor = li.querySelector(':scope > a, a');
-
       const style = window.getComputedStyle(el);
       const hidden = (el.offsetParent === null && style.position !== 'fixed') || style.display === 'none' || style.visibility === 'hidden';
 
       if (hidden || cls === '' || cls.includes('vn') || !cls.includes('active')) {
-        if (anchor) {
-          anchor.click();
-        }
+        if (anchor) anchor.click();
       }
     }, selector);
 
-    // Wait 1s for any UI animation/expansion to complete
     await new Promise(r => setTimeout(r, 1000));
-
-    // Wait for the button to be visibly clickable and click it
     await targetFrame.waitForSelector(selector, { state: 'visible', timeout: 15000 });
     await targetFrame.click(selector);
 
-    // 6. Logging Success
-    console.log('[PLAYWRIGHT] Element triggered successfully.');
+    // 6. Post-Flight: Scrape proof and log success
+    console.log('[PLAYWRIGHT] Element triggered successfully. Verifying DOM for proof...');
+    await page.waitForTimeout(2000); // Wait for portal to process the click and refresh iframe
+    
+    const postProofData = await page.evaluate(() => {
+      const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
+      let twm = '--:--', wm = '--:--', wk = '--:--';
+      for (const doc of docs) {
+        if (doc.querySelector('#twm')) twm = doc.querySelector('#twm').innerText.trim();
+        if (doc.querySelector('#wm')) wm = doc.querySelector('#wm').innerText.trim();
+        if (doc.querySelector('#wk')) wk = doc.querySelector('#wk').innerText.trim();
+      }
+      return { date: twm, clockIn: wm, clockOut: wk };
+    });
+
+    await supabase.from('todays_proof').upsert({
+      date: postProofData.date,
+      clock_in: postProofData.clockIn,
+      clock_out: postProofData.clockOut,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'date' });
+
     await supabase.from('logs').insert({
       action: actionType,
       status: 'success',
@@ -202,14 +207,11 @@ async function executeClockAction(actionType, supabase) {
 
     await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`);
 
-    // 7. Cleanup
     await context.close();
     return true;
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Execution failed: ${error.message}`);
-
-    // Log Failure
     await supabase.from('logs').insert({
       action: actionType,
       status: 'failed',
@@ -220,19 +222,13 @@ async function executeClockAction(actionType, supabase) {
       await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`);
     }
 
-    if (context) {
-      await context.close();
-    }
+    if (context) await context.close();
     throw error;
   }
 }
 
-async function openDebugBrowser() {
-  const settingsPath = path.join(__dirname, 'local_settings.json');
-  let settings = { targetUrl: 'https://perakamwaktu3.upm.edu.my/', showBrowser: false };
-  if (fs.existsSync(settingsPath)) {
-    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  }
+async function openDebugBrowser(supabase) {
+  const config = await getSystemConfig(supabase);
   const userDataDir = path.join(__dirname, 'upm_session');
   console.log('[PLAYWRIGHT] Opening standalone debug browser...');
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -240,31 +236,26 @@ async function openDebugBrowser() {
     viewport: { width: 1280, height: 720 }
   });
   const page = await context.newPage();
-  await page.goto(settings.targetUrl);
+  await page.goto(config.targetUrl);
   return true;
 }
 
 async function manualFetchProof(supabase) {
   let context;
   try {
-    const settingsPath = path.join(__dirname, 'local_settings.json');
-    let settings = { targetUrl: 'https://perakamwaktu.upm.edu.my/', showBrowser: false };
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    }
+    const config = await getSystemConfig(supabase);
 
     console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
     const userDataDir = path.join(__dirname, 'upm_session');
     context = await chromium.launchPersistentContext(userDataDir, {
-      headless: !settings.showBrowser,
+      headless: !config.showBrowser,
       viewport: { width: 1280, height: 720 }
     });
 
     const page = await context.newPage();
-    await page.goto(settings.targetUrl);
+    await page.goto(config.targetUrl);
 
-    const isLoginPage = page.url().toLowerCase().includes('login') ||
-      await page.isVisible('input[type="password"]');
+    const isLoginPage = page.url().toLowerCase().includes('login') || await page.isVisible('input[type="password"]');
 
     if (isLoginPage) {
       console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
@@ -288,15 +279,12 @@ async function manualFetchProof(supabase) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
-    await supabase.from('config').upsert({
-      key: 'todays_proof',
-      value: {
-        date: proofData.date,
-        clockIn: proofData.clockIn,
-        clockOut: proofData.clockOut,
-        lastUpdated: new Date().toISOString()
-      }
-    });
+    await supabase.from('todays_proof').upsert({
+      date: proofData.date,
+      clock_in: proofData.clockIn,
+      clock_out: proofData.clockOut,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'date' });
 
     await supabase.from('logs').insert({
       action: 'manual_proof_sync',
