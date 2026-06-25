@@ -1,0 +1,17 @@
+{
+  "name": "ALS Dashboard",
+  "short_name": "ALS",
+  "description": "ALS Automation System Dashboard",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230b0f19'/%3E%3Cpath d='M256 128l128 256H128z' fill='%233b82f6'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

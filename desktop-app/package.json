@@ -1,11 +1,24 @@
 {
   "name": "desktop-app",
   "version": "1.0.0",
-  "description": "",
+  "description": "ALS Automation Engine",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build": "electron-builder --win",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.als.dashboard",
+    "productName": "ALS Automation Engine",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "keywords": [],
   "author": "",
@@ -13,8 +26,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
     "dotenv": "^17.4.2",
-    "electron": "^42.5.0",
     "node-cron": "^4.5.0",
     "playwright": "^1.61.1"
+  },
+  "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3"
   }
 }

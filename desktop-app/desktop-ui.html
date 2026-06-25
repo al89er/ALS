@@ -600,14 +600,21 @@
         // ==========================================
         // CONFIGURATION
         // ==========================================
-        const SUPABASE_URL = 'https://pvutxjfkskzgccawfibu.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw';
-
-        const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+        let _supabase;
         let lastSeenTimestamp = 0;
         let skipDaysArray = [];
         let currentNavDate = new Date();
+
+        async function initDesktopClient() {
+            const env = await window.electronAPI.getEnvVariables();
+            _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+            
+            // Re-bind all channels after client creation
+            bindChannels();
+            
+            // Initialize App
+        initDesktopClient();
+        }
 
         // DOM Elements
         const statusBadge = document.getElementById('statusBadge');
@@ -665,7 +672,8 @@
 
         setInterval(() => evaluateStatus(), 5000);
 
-        _supabase.channel('heartbeat-channel')
+        function bindChannels() {
+_supabase.channel('heartbeat-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
                 updateHeartbeat(payload.new.last_seen, payload.new.current_status);
             })
@@ -872,6 +880,7 @@
                 fetchConfig();
             })
             .subscribe();
+}
 
         // ==========================================
         // 6. ELECTRON DESKTOP IPC
@@ -920,11 +929,7 @@
         }
 
         // Initialize App
-        fetchInitialStatus();
-        fetchLogs();
-        fetchConfig();
-        fetchTodaysData();
-        loadLocalSettings();
+        initDesktopClient();
 
     </script>
 </body>

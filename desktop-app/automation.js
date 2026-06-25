@@ -24,7 +24,10 @@ async function sendTelegramAlert(message) {
 
 async function remoteLog(supabase, action, status, message) {
   try {
-    await supabase.from('logs').insert({ action, status, message });
+    const { error } = await supabase.from('logs').insert({ action, status, message });
+    if (error) {
+        console.error('[SUPABASE LOG ERROR]', error.message);
+    }
   } catch (err) {
     cacheManager.logOffline(action, status, message);
   }

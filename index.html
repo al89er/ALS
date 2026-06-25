@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ALS Dashboard | Core</title>
     <link rel="icon" href="data:,">
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0b0f19">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Supabase v2 -->
@@ -439,6 +446,24 @@
 
 <body>
 
+    
+    <!-- ==================== LOGIN OVERLAY ==================== -->
+    <div id="loginOverlay" style="position: fixed; inset: 0; background: var(--bg-color); z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+        <div style="background: rgba(30, 41, 59, 0.6); padding: 2.5rem; border-radius: 16px; border: 1px solid var(--border-color); width: 90%; max-width: 400px; text-align: center; backdrop-filter: blur(12px);">
+            <h1 style="margin-bottom: 0.5rem; font-size: 1.5rem; color: #fff;">ALS Authorization</h1>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem;">Please sign in to access the dashboard.</p>
+            <form id="loginForm" onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+                <input type="email" id="emailInput" placeholder="Email" required style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); outline: none;">
+                <input type="password" id="passwordInput" placeholder="Password" required style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); outline: none;">
+                <button type="submit" id="loginBtn" class="btn btn-primary" style="margin-top: 0.5rem; justify-content: center;">Sign In</button>
+            </form>
+            <div id="loginError" style="color: var(--status-offline); margin-top: 1rem; font-size: 0.85rem; display: none;"></div>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTENT -->
+    <div id="appContainer" style="display: none;">
+
     <nav>
         <div class="nav-container">
             <div class="brand">
@@ -555,6 +580,7 @@
         </div>
 
     </main>
+    </div>
 
     <script>
         // ==========================================
@@ -845,11 +871,69 @@
             })
             .subscribe();
 
-        // Initialize App
-        fetchInitialStatus();
-        fetchLogs();
-        fetchConfig();
-        fetchTodaysData();
+        // ==========================================
+        // PWA SERVICE WORKER
+        // ==========================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.error('SW registration failed:', err));
+            });
+        }
+
+        // ==========================================
+        // AUTHENTICATION
+        // ==========================================
+        const loginOverlay = document.getElementById('loginOverlay');
+        const appContainer = document.getElementById('appContainer');
+        const loginError = document.getElementById('loginError');
+        const loginBtn = document.getElementById('loginBtn');
+
+        async function checkSession() {
+            const { data: { session }, error } = await _supabase.auth.getSession();
+            if (session) {
+                // User is logged in, show app
+                loginOverlay.style.display = 'none';
+                appContainer.style.display = 'block';
+                initializeApp();
+            } else {
+                loginOverlay.style.display = 'flex';
+                appContainer.style.display = 'none';
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            
+            loginBtn.innerText = 'Signing In...';
+            loginError.style.display = 'none';
+
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+            
+            if (error) {
+                loginError.innerText = error.message;
+                loginError.style.display = 'block';
+                loginBtn.innerText = 'Sign In';
+            } else {
+                checkSession();
+            }
+        }
+
+        async function handleSignOut() {
+            await _supabase.auth.signOut();
+            window.location.reload();
+        }
+
+        function initializeApp() {
+            fetchInitialStatus();
+            fetchLogs();
+            fetchConfig();
+            fetchTodaysData();
+        }
+
+        // Call checkSession instead of initializeApp on load
+        checkSession();
 
     </script>
 </body>

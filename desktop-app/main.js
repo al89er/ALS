@@ -33,6 +33,10 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  ipcMain.handle('get-env-variables', () => {
+    return { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY };
+  });
+
   ipcMain.handle('read-settings', async () => {
     const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
     return {
