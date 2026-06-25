@@ -882,6 +882,7 @@
                 };
                 await window.electronAPI.saveSettings(settings);
                 alert('Local Engine settings saved securely via Supabase DB.');
+                fetchTodaysData();
             }
         }
 
@@ -891,6 +892,7 @@
                 try {
                     await window.electronAPI.requestManualProof();
                     alert('Manual Proof sequence completed!');
+                    fetchTodaysData();
                 } catch (e) {
                     alert('Manual proof failed: ' + e);
                 }
