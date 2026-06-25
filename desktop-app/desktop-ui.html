@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALS Dashboard | Core</title>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co;">
+    <title>ALS Desktop Engine</title>
     <link rel="icon" href="data:,">
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -861,6 +862,50 @@
                 fetchConfig();
             })
             .subscribe();
+
+        // ==========================================
+        // 6. ELECTRON DESKTOP IPC
+        // ==========================================
+        async function loadLocalSettings() {
+            if (window.electronAPI) {
+                const settings = await window.electronAPI.readSettings();
+                document.getElementById('targetUrl').value = settings.targetUrl || '';
+                document.getElementById('showBrowser').checked = settings.showBrowser || false;
+            }
+        }
+
+        async function saveLocalSettings() {
+            if (window.electronAPI) {
+                const settings = {
+                    targetUrl: document.getElementById('targetUrl').value,
+                    showBrowser: document.getElementById('showBrowser').checked
+                };
+                await window.electronAPI.saveSettings(settings);
+                alert('Local Engine settings saved securely via Supabase DB.');
+            }
+        }
+
+        async function requestManualProof() {
+            if (window.electronAPI) {
+                alert('Requesting Manual Proof Sequence. Please wait...');
+                try {
+                    await window.electronAPI.requestManualProof();
+                    alert('Manual Proof sequence completed!');
+                } catch (e) {
+                    alert('Manual proof failed: ' + e);
+                }
+            }
+        }
+
+        async function openDebugBrowser() {
+            if (window.electronAPI) {
+                try {
+                    await window.electronAPI.openBrowser();
+                } catch (e) {
+                    alert('Failed to open browser: ' + e);
+                }
+            }
+        }
 
         // Initialize App
         fetchInitialStatus();
