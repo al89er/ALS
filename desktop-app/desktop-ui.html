@@ -696,15 +696,25 @@
         }
 
         async function fetchLogs() {
-            const { data } = await _supabase
+            const { data, error } = await _supabase
                 .from('logs')
                 .select('*')
                 .order('created_at', { ascending: false })
                 .limit(20);
 
+            if (error) {
+                console.error('[FETCH LOGS ERROR]', error);
+                logsContainer.innerHTML = `<div style="color: #ef4444; font-size: 0.85rem; text-align: center; margin-top: 2rem;">Failed to load logs: ${error.message}</div>`;
+                return;
+            }
+
             if (data) {
                 logsContainer.innerHTML = '';
-                data.forEach(log => logsContainer.appendChild(createLogElement(log)));
+                if (data.length === 0) {
+                    logsContainer.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">No logs found in the database.</div>';
+                } else {
+                    data.forEach(log => logsContainer.appendChild(createLogElement(log)));
+                }
             }
         }
 
