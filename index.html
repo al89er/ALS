@@ -701,8 +701,7 @@
 
             if (error) alert('Failed to send command: ' + error.message);
             else {
-                // Switch to history tab to see the command action log
-                switchTab('history');
+                alert('Command dispatched successfully. Waiting for desktop agent execution...');
             }
         }
 
