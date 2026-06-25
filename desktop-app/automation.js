@@ -124,7 +124,12 @@ async function executeClockAction(actionType, supabase) {
 
     // 2. Browser Launch
     console.log('[PLAYWRIGHT] Launching persistent browser context (headless: ' + !config.showBrowser + ')...');
-    const userDataDir = path.join(__dirname, 'upm_session');
+    let userDataDir;
+    try {
+      userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+    } catch (e) {
+      userDataDir = path.join(require('os').homedir(), '.als_upm_session');
+    }
     context = await chromium.launchPersistentContext(userDataDir, {
       headless: !config.showBrowser,
       viewport: { width: 1280, height: 720 }
@@ -254,7 +259,12 @@ async function executeClockAction(actionType, supabase) {
 
 async function openDebugBrowser(supabase) {
   const config = await getSystemConfig(supabase);
-  const userDataDir = path.join(__dirname, 'upm_session');
+  let userDataDir;
+  try {
+    userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+  } catch (e) {
+    userDataDir = path.join(require('os').homedir(), '.als_upm_session');
+  }
   console.log('[PLAYWRIGHT] Opening standalone debug browser...');
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
@@ -271,7 +281,12 @@ async function manualFetchProof(supabase) {
     const config = await getSystemConfig(supabase);
 
     console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
-    const userDataDir = path.join(__dirname, 'upm_session');
+    let userDataDir;
+    try {
+      userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+    } catch (e) {
+      userDataDir = path.join(require('os').homedir(), '.als_upm_session');
+    }
     context = await chromium.launchPersistentContext(userDataDir, {
       headless: !config.showBrowser,
       viewport: { width: 1280, height: 720 }
