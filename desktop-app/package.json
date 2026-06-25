@@ -11,6 +11,10 @@
   "build": {
     "appId": "com.als.dashboard",
     "productName": "ALS Automation Engine",
+    "files": [
+      "**/*",
+      ".env"
+    ],
     "win": {
       "target": "nsis",
       "icon": "icon.png"

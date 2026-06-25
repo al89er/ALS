@@ -1,6 +1,6 @@
-require('dotenv').config();
-const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const fs = require('fs');
 const { initSupabase, supabase } = require('./supabase-client');
 const scheduler = require('./scheduler');
