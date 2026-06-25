@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const { executeClockAction } = require('./automation');
+const cacheManager = require('./cache-manager');
 
 // Helper to get random minute between min and max
 function getRandomMinute(min, max) {
@@ -10,48 +11,64 @@ function getRandomMinute(min, max) {
 async function generateDailySchedule(supabase) {
   const today = new Date();
   const dateString = today.toISOString().split('T')[0];
-  
-  // 1. Check if today is skipped (using skip_days table)
-  const { data: skipData } = await supabase
-      .from('skip_days')
-      .select('date')
-      .eq('date', dateString)
-      .maybeSingle();
-      
   const dayOfWeek = today.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-  const isSkipDay = !!skipData;
+  
+  let isSkipDay = false;
+  let supabaseOnline = true;
+
+  try {
+    const { data: skipData, error } = await supabase
+        .from('skip_days')
+        .select('date')
+        .eq('date', dateString)
+        .maybeSingle();
+        
+    if (error) throw error;
+    isSkipDay = !!skipData;
+  } catch (err) {
+    console.error('[SCHEDULER] Supabase offline during schedule generation! Falling back to local cache.');
+    supabaseOnline = false;
+    const cache = cacheManager.readCache();
+    isSkipDay = cache.skip_days.includes(dateString);
+  }
 
   if (isWeekend || isSkipDay) {
       console.log(`[SCHEDULER] Today (${dateString}) is skipped (Weekend/Holiday). No automation scheduled.`);
-      await supabase.from('system_config').upsert({
-          id: 1,
+      
+      const payload = {
           last_schedule_date: dateString,
           skipped: true,
           scheduled_clock_in: null,
           scheduled_clock_out: null,
           clock_in_done: false,
           clock_out_done: false
-      });
-      await supabase.from('logs').insert({
-          action: 'scheduler',
-          status: 'skipped',
-          message: `Automation skipped for ${dateString}`
-      });
+      };
+
+      if (supabaseOnline) {
+          try {
+              await supabase.from('system_config').upsert({ id: 1, ...payload });
+              await supabase.from('logs').insert({ action: 'scheduler', status: 'skipped', message: `Automation skipped for ${dateString}` });
+              cacheManager.mergeSystemConfig(payload, true);
+          } catch(e) {
+              cacheManager.mergeSystemConfig(payload, false);
+              cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
+          }
+      } else {
+          cacheManager.mergeSystemConfig(payload, false);
+          cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
+      }
       return;
   }
   
   // 2. Generate random times
-  // In: 07:45 - 07:50
   const inMinute = getRandomMinute(45, 50);
   const inTimeStr = `07:${inMinute.toString().padStart(2, '0')}`;
   
-  // Out: 17:05 - 17:10
   const outMinute = getRandomMinute(5, 10);
   const outTimeStr = `17:${outMinute.toString().padStart(2, '0')}`;
   
   const scheduleData = {
-      id: 1,
       last_schedule_date: dateString,
       skipped: false,
       scheduled_clock_in: inTimeStr,
@@ -62,11 +79,18 @@ async function generateDailySchedule(supabase) {
   
   console.log(`[SCHEDULER] Generated schedule for ${dateString}: IN=${inTimeStr}, OUT=${outTimeStr}`);
   
-  try {
-    await supabase.from('system_config').upsert(scheduleData);
-    console.log('[SCHEDULER] Synced today\\'s schedule to Supabase system_config.');
-  } catch (err) {
-    console.error('[SCHEDULER] Failed to sync schedule to Supabase:', err.message);
+  if (supabaseOnline) {
+      try {
+        await supabase.from('system_config').upsert({ id: 1, ...scheduleData });
+        console.log('[SCHEDULER] Synced today\'s schedule to Supabase system_config.');
+        cacheManager.mergeSystemConfig(scheduleData, true);
+      } catch (err) {
+        console.error('[SCHEDULER] Failed to sync schedule to Supabase:', err.message);
+        cacheManager.mergeSystemConfig(scheduleData, false);
+      }
+  } else {
+      console.log('[SCHEDULER] Wrote schedule strictly to local cache (synced=false).');
+      cacheManager.mergeSystemConfig(scheduleData, false);
   }
   
   scheduleCronJobs(scheduleData, supabase);
@@ -103,7 +127,12 @@ function scheduleCronJobs(scheduleData, supabase) {
       console.log('[SCHEDULER] Triggering scheduled Clock IN...');
       try {
         await executeClockAction('clock_in', supabase);
-        await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
+        try {
+          await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
+          cacheManager.mergeSystemConfig({ clock_in_done: true }, true);
+        } catch (e) {
+          cacheManager.mergeSystemConfig({ clock_in_done: true }, false);
+        }
       } catch (err) {
         console.error('[SCHEDULER] Scheduled Clock IN failed:', err.message);
       }
@@ -115,7 +144,12 @@ function scheduleCronJobs(scheduleData, supabase) {
       console.log('[SCHEDULER] Triggering scheduled Clock OUT...');
       try {
         await executeClockAction('clock_out', supabase);
-        await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
+        try {
+          await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
+          cacheManager.mergeSystemConfig({ clock_out_done: true }, true);
+        } catch (e) {
+          cacheManager.mergeSystemConfig({ clock_out_done: true }, false);
+        }
       } catch (err) {
         console.error('[SCHEDULER] Scheduled Clock OUT failed:', err.message);
       }
@@ -144,25 +178,30 @@ async function checkMissedActions(scheduleData, supabase) {
   
   const gracePeriodMs = 300000; // 5 minutes
   
-  // 5 minute grace period check
   if (!scheduleData.clock_in_done && now >= targetInTime.getTime() && (now - targetInTime.getTime()) <= gracePeriodMs) {
-    console.log('[SCHEDULER] RECOVERY: Missed Clock IN! Triggering now within 5-min grace period...');
+    console.log('[SCHEDULER] RECOVERY: Missed Clock IN! Triggering now...');
     try {
       await executeClockAction('clock_in', supabase);
-      await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
-    } catch (err) {
-      console.error('[SCHEDULER] Recovery Clock IN failed:', err.message);
-    }
+      try {
+        await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
+        cacheManager.mergeSystemConfig({ clock_in_done: true }, true);
+      } catch (e) {
+        cacheManager.mergeSystemConfig({ clock_in_done: true }, false);
+      }
+    } catch (err) {}
   }
   
   if (!scheduleData.clock_out_done && now >= targetOutTime.getTime() && (now - targetOutTime.getTime()) <= gracePeriodMs) {
-    console.log('[SCHEDULER] RECOVERY: Missed Clock OUT! Triggering now within 5-min grace period...');
+    console.log('[SCHEDULER] RECOVERY: Missed Clock OUT! Triggering now...');
     try {
       await executeClockAction('clock_out', supabase);
-      await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
-    } catch (err) {
-      console.error('[SCHEDULER] Recovery Clock OUT failed:', err.message);
-    }
+      try {
+        await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
+        cacheManager.mergeSystemConfig({ clock_out_done: true }, true);
+      } catch (e) {
+        cacheManager.mergeSystemConfig({ clock_out_done: true }, false);
+      }
+    } catch (err) {}
   }
 }
 
@@ -170,15 +209,34 @@ async function init(supabase) {
   const today = new Date();
   const dateString = today.toISOString().split('T')[0];
   
-  // Fetch config from Supabase natively
-  const { data: scheduleData } = await supabase
-    .from('system_config')
-    .select('*')
-    .eq('id', 1)
-    .maybeSingle();
+  let scheduleData = null;
+  try {
+    const { data, error } = await supabase
+      .from('system_config')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+      
+    if (error) throw error;
+    scheduleData = data;
+    if (data) {
+        cacheManager.mergeSystemConfig({
+            last_schedule_date: data.last_schedule_date,
+            skipped: data.skipped,
+            scheduled_clock_in: data.scheduled_clock_in,
+            scheduled_clock_out: data.scheduled_clock_out,
+            clock_in_done: data.clock_in_done,
+            clock_out_done: data.clock_out_done
+        }, true);
+    }
+  } catch (err) {
+    console.error(`[SCHEDULER] Supabase offline on boot! Reading from local cache.`);
+    const cache = cacheManager.readCache();
+    scheduleData = cache.system_config;
+  }
   
   if (scheduleData && scheduleData.last_schedule_date === dateString) {
-    console.log(`[SCHEDULER] Loaded existing schedule for today (${dateString}) from Supabase.`);
+    console.log(`[SCHEDULER] Loaded existing schedule for today (${dateString}).`);
     scheduleCronJobs(scheduleData, supabase);
     await checkMissedActions(scheduleData, supabase);
   } else {
@@ -186,7 +244,6 @@ async function init(supabase) {
     await generateDailySchedule(supabase);
   }
   
-  // Schedule the midnight job generator
   cron.schedule('0 0 * * *', () => {
     generateDailySchedule(supabase);
   });

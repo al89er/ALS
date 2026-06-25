@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { chromium } = require('playwright');
 const path = require('path');
+const cacheManager = require('./cache-manager');
 
 async function sendTelegramAlert(message) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -18,6 +19,14 @@ async function sendTelegramAlert(message) {
     });
   } catch (err) {
     console.error('[TELEGRAM] Error sending alert:', err.message);
+  }
+}
+
+async function remoteLog(supabase, action, status, message) {
+  try {
+    await supabase.from('logs').insert({ action, status, message });
+  } catch (err) {
+    cacheManager.logOffline(action, status, message);
   }
 }
 
@@ -39,18 +48,20 @@ async function checkDashboardStatus(page, actionType, supabase) {
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
       console.log(`[PLAYWRIGHT] Pre-Flight Check: Action already completed! Extracted: ${targetVal}`);
       
-      await supabase.from('todays_proof').upsert({
-        date: proofData.date,
-        clock_in: proofData.clockIn,
-        clock_out: proofData.clockOut,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'date' });
+      try {
+        await supabase.from('todays_proof').upsert({
+          date: proofData.date,
+          clock_in: proofData.clockIn,
+          clock_out: proofData.clockOut,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'date' });
+        cacheManager.updateCache('todays_proof', { date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+      } catch (err) {
+        console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
+        cacheManager.queueOfflineProof({ date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
+      }
 
-      await supabase.from('logs').insert({
-        action: actionType,
-        status: 'skipped',
-        message: 'Manual entry verified'
-      });
+      await remoteLog(supabase, actionType, 'skipped', 'Manual entry verified');
 
       return true;
     }
@@ -63,11 +74,24 @@ async function checkDashboardStatus(page, actionType, supabase) {
 }
 
 async function getSystemConfig(supabase) {
-  const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
-  return {
-    targetUrl: data?.target_url || 'https://perakamwaktu3.upm.edu.my/',
-    showBrowser: data?.show_browser || false
-  };
+  try {
+    const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+    if (error) throw error;
+    
+    const targetUrl = data?.target_url || 'https://perakamwaktu3.upm.edu.my/';
+    const showBrowser = data?.show_browser || false;
+    
+    cacheManager.mergeSystemConfig({ target_url: targetUrl, show_browser: showBrowser }, true);
+    
+    return { targetUrl, showBrowser };
+  } catch (err) {
+    console.warn('[PLAYWRIGHT] Supabase offline! Fetching config from local cache.');
+    const cache = cacheManager.readCache();
+    return {
+      targetUrl: cache.system_config.target_url || 'https://perakamwaktu3.upm.edu.my/',
+      showBrowser: cache.system_config.show_browser || false
+    };
+  }
 }
 
 async function executeClockAction(actionType, supabase) {
@@ -82,21 +106,19 @@ async function executeClockAction(actionType, supabase) {
 
     if (!fetchText.includes('<html')) {
       console.warn('[PLAYWRIGHT] Captive Portal detected! Aborting sequence.');
-      await supabase.from('logs').insert({
-        action: 'network_check',
-        status: 'error',
-        message: 'Captive portal intercepted the connection.'
-      });
-      await supabase.from('device_status').upsert({
-        id: 'home_desktop_agent',
-        current_status: 'CAPTIVE_PORTAL',
-        last_seen: new Date().toISOString()
-      });
+      await remoteLog(supabase, 'network_check', 'error', 'Captive portal intercepted the connection.');
+      try {
+        await supabase.from('device_status').upsert({
+          id: 'home_desktop_agent',
+          current_status: 'CAPTIVE_PORTAL',
+          last_seen: new Date().toISOString()
+        });
+      } catch (e) {}
       await sendTelegramAlert(`🚨 [ALS Desktop] CAPTIVE PORTAL DETECTED! Cannot execute ${actionType.toUpperCase()}.`);
       throw new Error('CAPTIVE_PORTAL');
     }
 
-    // 2. Browser Launch with Persistent State
+    // 2. Browser Launch
     console.log('[PLAYWRIGHT] Launching persistent browser context (headless: ' + !config.showBrowser + ')...');
     const userDataDir = path.join(__dirname, 'upm_session');
     context = await chromium.launchPersistentContext(userDataDir, {
@@ -110,7 +132,7 @@ async function executeClockAction(actionType, supabase) {
     console.log('[PLAYWRIGHT] Navigating to target portal: ' + config.targetUrl);
     await page.goto(config.targetUrl);
 
-    // 4. Auth Check & Injection
+    // 4. Auth
     const isLoginPage = page.url().toLowerCase().includes('login') || await page.isVisible('input[type="password"]');
 
     if (isLoginPage) {
@@ -121,7 +143,7 @@ async function executeClockAction(actionType, supabase) {
       await page.waitForNavigation();
     }
 
-    // 4.5 Pre-Flight Check
+    // 4.5 Pre-Flight
     console.log('[PLAYWRIGHT] Running Pre-Flight Dashboard Verification...');
     const isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
     if (isAlreadyDone) {
@@ -134,7 +156,7 @@ async function executeClockAction(actionType, supabase) {
     console.log('[PLAYWRIGHT] Pre-Flight cleared. Waiting 60 seconds to hit exact target time...');
     await page.waitForTimeout(60000);
 
-    // 5. Smart Iframe & Menu Expansion
+    // 5. Trigger
     console.log(`[PLAYWRIGHT] Executing smart element trigger for action: ${actionType}`);
     const selector = actionType === 'clock_in' ? '#a50' : '#a51';
 
@@ -177,9 +199,9 @@ async function executeClockAction(actionType, supabase) {
     await targetFrame.waitForSelector(selector, { state: 'visible', timeout: 15000 });
     await targetFrame.click(selector);
 
-    // 6. Post-Flight: Scrape proof and log success
+    // 6. Post-Flight
     console.log('[PLAYWRIGHT] Element triggered successfully. Verifying DOM for proof...');
-    await page.waitForTimeout(2000); // Wait for portal to process the click and refresh iframe
+    await page.waitForTimeout(2000);
     
     const postProofData = await page.evaluate(() => {
       const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
@@ -192,19 +214,20 @@ async function executeClockAction(actionType, supabase) {
       return { date: twm, clockIn: wm, clockOut: wk };
     });
 
-    await supabase.from('todays_proof').upsert({
-      date: postProofData.date,
-      clock_in: postProofData.clockIn,
-      clock_out: postProofData.clockOut,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'date' });
+    try {
+      await supabase.from('todays_proof').upsert({
+        date: postProofData.date,
+        clock_in: postProofData.clockIn,
+        clock_out: postProofData.clockOut,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'date' });
+      cacheManager.updateCache('todays_proof', { date: postProofData.date, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
+    } catch (err) {
+      console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
+      cacheManager.queueOfflineProof({ date: postProofData.date, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
+    }
 
-    await supabase.from('logs').insert({
-      action: actionType,
-      status: 'success',
-      message: `Successfully clicked ${selector} at ${new Date().toISOString()}`
-    });
-
+    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector} at ${new Date().toISOString()}`);
     await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`);
 
     await context.close();
@@ -212,11 +235,7 @@ async function executeClockAction(actionType, supabase) {
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Execution failed: ${error.message}`);
-    await supabase.from('logs').insert({
-      action: actionType,
-      status: 'failed',
-      message: `Error during execution: ${error.message}`
-    });
+    await remoteLog(supabase, actionType, 'failed', `Error during execution: ${error.message}`);
 
     if (error.message !== 'CAPTIVE_PORTAL') {
       await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`);
@@ -279,29 +298,27 @@ async function manualFetchProof(supabase) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
-    await supabase.from('todays_proof').upsert({
-      date: proofData.date,
-      clock_in: proofData.clockIn,
-      clock_out: proofData.clockOut,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'date' });
+    try {
+      await supabase.from('todays_proof').upsert({
+        date: proofData.date,
+        clock_in: proofData.clockIn,
+        clock_out: proofData.clockOut,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'date' });
+      cacheManager.updateCache('todays_proof', { date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+    } catch (err) {
+      console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
+      cacheManager.queueOfflineProof({ date: proofData.date, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
+    }
 
-    await supabase.from('logs').insert({
-      action: 'manual_proof_sync',
-      status: 'success',
-      message: `Proof fetched manually. Date: ${proofData.date}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`
-    });
+    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${proofData.date}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`);
     
     await context.close();
     return true;
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Manual proof sync failed: ${error.message}`);
-    await supabase.from('logs').insert({
-      action: 'manual_proof_sync',
-      status: 'failed',
-      message: `Failed to sync proof manually: ${error.message}`
-    });
+    await remoteLog(supabase, 'manual_proof_sync', 'failed', `Failed to sync proof manually: ${error.message}`);
     if (context) await context.close();
     throw error;
   }
