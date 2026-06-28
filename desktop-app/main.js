@@ -16,13 +16,25 @@ global.updateTrayTooltip = function() {
     const cacheManager = require('./cache-manager');
     const cache = cacheManager.readCache();
     
-    const inTarget = cache.daily_schedule?.scheduled_clock_in || 'Pending Generation';
-    const outTarget = cache.daily_schedule?.scheduled_clock_out || 'Pending Generation';
+    const todayStr = new Date().toISOString().split('T')[0];
     
-    const inProof = cache.todays_proof?.clock_in || '--:--';
-    const outProof = cache.todays_proof?.clock_out || '--:--';
+    let inTarget = 'Pending Generation';
+    let outTarget = 'Pending Generation';
+    let isSkipped = false;
+    
+    if (cache.daily_schedule && cache.daily_schedule.date === todayStr) {
+      inTarget = cache.daily_schedule.scheduled_clock_in || 'Pending Generation';
+      outTarget = cache.daily_schedule.scheduled_clock_out || 'Pending Generation';
+      isSkipped = cache.daily_schedule.skipped;
+    }
+    
+    let inProof = '--:--';
+    let outProof = '--:--';
+    if (cache.todays_proof && cache.todays_proof.date === todayStr) {
+      inProof = cache.todays_proof.clock_in || '--:--';
+      outProof = cache.todays_proof.clock_out || '--:--';
+    }
 
-    const isSkipped = cache.daily_schedule?.skipped;
     const skipText = isSkipped ? ' (Skipped)' : '';
 
     const tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
@@ -115,7 +127,7 @@ app.whenReady().then(() => {
 
   // Setup System Tray
   const { nativeImage } = require('electron');
-  const iconPath = path.join(__dirname, 'assets', 'tray.svg');
+  const iconPath = path.join(__dirname, 'assets', 'tray.png');
   // Simple 16x16 red square fallback
   const fallbackIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAcSURBVDhPYzzP+P8/AwXAhFE1aNqgaYOmDcIEwAAXyA8d9Zt0XAAAAABJRU5ErkJggg==');
   const trayIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : fallbackIcon;
