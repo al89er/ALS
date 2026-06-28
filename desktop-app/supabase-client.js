@@ -30,6 +30,20 @@ async function reconcileCache() {
     }
   }
 
+  if (cache.daily_schedule && cache.daily_schedule.synced === false) {
+    console.log('[SUPABASE] Reconciling offline daily_schedule to cloud...');
+    const payload = { ...cache.daily_schedule };
+    delete payload.synced;
+    
+    const { error } = await supabase.from('daily_schedules').upsert(payload);
+    if (!error) {
+      console.log('[SUPABASE] daily_schedules reconciliation successful.');
+      cacheManager.mergeDailySchedule({}, true);
+    } else {
+      console.error('[SUPABASE] daily_schedules reconciliation failed:', error.message);
+    }
+  }
+
   if (cache.todays_proof && cache.todays_proof.synced === false) {
     console.log('[SUPABASE] Reconciling offline todays_proof to cloud...');
     const payload = { ...cache.todays_proof };

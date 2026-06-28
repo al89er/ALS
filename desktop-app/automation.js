@@ -111,10 +111,11 @@ async function executeClockAction(actionType, supabase) {
     const fetchText = await fetchResponse.text();
 
     if (!fetchText.includes('<html')) {
-      console.warn('[PLAYWRIGHT] Captive Portal detected! Aborting sequence.');
+      console.warn('[PLAYWRIGHT] Captive Portal detected! Attempting autonomous bypass...');
       global.connectivityState = 'Captive Portal Flag';
       if (global.updateTrayTooltip) global.updateTrayTooltip();
-      await remoteLog(supabase, 'network_check', 'error', 'Captive portal intercepted the connection.');
+      await remoteLog(supabase, 'network_check', 'warning', 'Captive portal intercepted the connection. Attempting bypass.');
+      
       try {
         await supabase.from('device_status').upsert({
           id: 'home_desktop_agent',
@@ -122,8 +123,46 @@ async function executeClockAction(actionType, supabase) {
           last_seen: new Date().toISOString()
         });
       } catch (e) {}
-      await sendTelegramAlert(`🚨 [ALS Desktop] CAPTIVE PORTAL DETECTED! Cannot execute ${actionType.toUpperCase()}.`);
-      throw new Error('CAPTIVE_PORTAL');
+
+      let cpContext;
+      try {
+        cpContext = await chromium.launch({ headless: true });
+        const cpPage = await cpContext.newPage();
+        await cpPage.goto('http://neverssl.com', { waitUntil: 'networkidle', timeout: 20000 });
+        
+        const hasUserInput = await cpPage.$('input[type="text"], input[type="email"], input[name="username"], input[name="user"]');
+        const hasPassInput = await cpPage.$('input[type="password"]');
+        
+        if (hasUserInput && hasPassInput && process.env.WIFI_USERNAME && process.env.WIFI_PASSWORD) {
+          console.log('[PLAYWRIGHT] Captive Portal login fields found. Injecting credentials...');
+          await cpPage.fill('input[type="text"], input[type="email"], input[name="username"], input[name="user"]', process.env.WIFI_USERNAME);
+          await cpPage.fill('input[type="password"]', process.env.WIFI_PASSWORD);
+          
+          await cpPage.click('button[type="submit"], input[type="submit"], button:has-text("Login"), button:has-text("Submit"), button:has-text("Sign In")');
+          
+          console.log('[PLAYWRIGHT] Captive Portal credentials submitted. Waiting for network clearance...');
+          await cpPage.waitForTimeout(5000);
+          
+          const postFetch = await fetch('http://neverssl.com');
+          const postText = await postFetch.text();
+          if (postText.includes('<html')) {
+            console.log('[PLAYWRIGHT] Captive Portal bypassed successfully!');
+            await remoteLog(supabase, 'network_check', 'success', 'Captive portal bypassed successfully.');
+            global.connectivityState = 'Connected to Supabase';
+            if (global.updateTrayTooltip) global.updateTrayTooltip();
+          } else {
+            throw new Error('Bypass failed, still intercepted.');
+          }
+        } else {
+          throw new Error('Missing WIFI credentials or login fields not found.');
+        }
+      } catch (cpErr) {
+        console.error('[PLAYWRIGHT] Captive Portal bypass failed:', cpErr.message);
+        await sendTelegramAlert(`🚨 [ALS Desktop] CAPTIVE PORTAL BYPASS FAILED! Cannot execute ${actionType.toUpperCase()}. Reason: ${cpErr.message}`);
+        throw new Error('CAPTIVE_PORTAL');
+      } finally {
+        if (cpContext) await cpContext.close();
+      }
     }
 
     // 2. Browser Launch

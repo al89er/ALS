@@ -7,14 +7,9 @@ const DEFAULT_CACHE = {
   system_config: {
     target_url: 'https://perakamwaktu3.upm.edu.my/',
     show_browser: false,
-    scheduled_clock_in: null,
-    scheduled_clock_out: null,
-    last_schedule_date: null,
-    clock_in_done: false,
-    clock_out_done: false,
-    skipped: false,
     synced: true
   },
+  daily_schedule: null,
   skip_days: [],
   todays_proof: null,
   offline_logs: []
@@ -51,6 +46,12 @@ function updateCache(key, payload) {
 function mergeSystemConfig(payload, synced = true) {
   const cache = readCache();
   cache.system_config = { ...cache.system_config, ...payload, synced };
+  writeCache(cache);
+}
+
+function mergeDailySchedule(payload, synced = true) {
+  const cache = readCache();
+  cache.daily_schedule = { ...cache.daily_schedule, ...payload, synced };
   writeCache(cache);
 }
 
@@ -93,6 +94,7 @@ module.exports = {
   readCache,
   writeCache,
   mergeSystemConfig,
+  mergeDailySchedule,
   updateSkipDays,
   queueOfflineProof,
   clearProofIfSynced,

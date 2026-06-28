@@ -803,13 +803,14 @@
         async function fetchTodaysData() {
             const todayStr = new Date().toISOString().split('T')[0];
             
-            const [sysRes, proofRes] = await Promise.all([
+            const [sysRes, proofRes, schedRes] = await Promise.all([
                 _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
-                _supabase.from('todays_proof').select('*').eq('date', todayStr).maybeSingle()
+                _supabase.from('todays_proof').select('*').eq('date', todayStr).maybeSingle(),
+                _supabase.from('daily_schedules').select('*').eq('date', todayStr).maybeSingle()
             ]);
             
             if (proofRes.data) updateProofUI(proofRes.data);
-            if (sysRes.data && sysRes.data.last_schedule_date === todayStr) updateScheduleUI(sysRes.data);
+            if (schedRes.data) updateScheduleUI(schedRes.data);
         }
 
         function updateProofUI(proof) {
@@ -822,7 +823,7 @@
 
         function updateScheduleUI(sched) {
             if (!sched) return;
-            schedDate.innerText = sched.last_schedule_date || '--:--';
+            schedDate.innerText = sched.date || '--:--';
             
             if (sched.skipped) {
                 schedIn.innerText = '--:--';
@@ -913,8 +914,13 @@
             .subscribe();
             _supabase.channel('sys-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
+                // system config handles other state
+            })
+            .subscribe();
+            _supabase.channel('schedule-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_schedules' }, payload => {
                 const todayStr = new Date().toISOString().split('T')[0];
-                if (payload.new && payload.new.last_schedule_date === todayStr) updateScheduleUI(payload.new);
+                if (payload.new && payload.new.date === todayStr) updateScheduleUI(payload.new);
             })
             .subscribe();
             _supabase.channel('skip-channel')

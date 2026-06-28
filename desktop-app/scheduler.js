@@ -37,7 +37,7 @@ async function generateDailySchedule(supabase) {
       console.log(`[SCHEDULER] Today (${dateString}) is skipped (Weekend/Holiday). No automation scheduled.`);
       
       const payload = {
-          last_schedule_date: dateString,
+          date: dateString,
           skipped: true,
           scheduled_clock_in: null,
           scheduled_clock_out: null,
@@ -47,15 +47,15 @@ async function generateDailySchedule(supabase) {
 
       if (supabaseOnline) {
           try {
-              await supabase.from('system_config').upsert({ id: 1, ...payload });
+              await supabase.from('daily_schedules').upsert(payload);
               await supabase.from('logs').insert({ action: 'scheduler', status: 'skipped', message: `Automation skipped for ${dateString}` });
-              cacheManager.mergeSystemConfig(payload, true);
+              cacheManager.mergeDailySchedule(payload, true);
           } catch(e) {
-              cacheManager.mergeSystemConfig(payload, false);
+              cacheManager.mergeDailySchedule(payload, false);
               cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
           }
       } else {
-          cacheManager.mergeSystemConfig(payload, false);
+          cacheManager.mergeDailySchedule(payload, false);
           cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
       }
       return;
@@ -69,7 +69,7 @@ async function generateDailySchedule(supabase) {
   const outTimeStr = `17:${outMinute.toString().padStart(2, '0')}`;
   
   const scheduleData = {
-      last_schedule_date: dateString,
+      date: dateString,
       skipped: false,
       scheduled_clock_in: inTimeStr,
       scheduled_clock_out: outTimeStr,
@@ -81,16 +81,16 @@ async function generateDailySchedule(supabase) {
   
   if (supabaseOnline) {
       try {
-        await supabase.from('system_config').upsert({ id: 1, ...scheduleData });
-        console.log('[SCHEDULER] Synced today\'s schedule to Supabase system_config.');
-        cacheManager.mergeSystemConfig(scheduleData, true);
+        await supabase.from('daily_schedules').upsert(scheduleData);
+        console.log('[SCHEDULER] Synced today\'s schedule to Supabase daily_schedules.');
+        cacheManager.mergeDailySchedule(scheduleData, true);
       } catch (err) {
         console.error('[SCHEDULER] Failed to sync schedule to Supabase:', err.message);
-        cacheManager.mergeSystemConfig(scheduleData, false);
+        cacheManager.mergeDailySchedule(scheduleData, false);
       }
   } else {
       console.log('[SCHEDULER] Wrote schedule strictly to local cache (synced=false).');
-      cacheManager.mergeSystemConfig(scheduleData, false);
+      cacheManager.mergeDailySchedule(scheduleData, false);
   }
   
   if (global.updateTrayTooltip) global.updateTrayTooltip();
@@ -111,16 +111,16 @@ function scheduleCronJobs(scheduleData, supabase) {
   const [inH, inM] = scheduleData.scheduled_clock_in.split(':');
   const [outH, outM] = scheduleData.scheduled_clock_out.split(':');
   
-  // Time shift logic: Shift cron trigger 1 minute early for pre-flight check
+  // Time shift logic: Shift cron trigger 2 minutes early for pre-flight check + captive portal padding
   const inTime = new Date();
   inTime.setHours(Number(inH), Number(inM), 0, 0);
-  inTime.setMinutes(inTime.getMinutes() - 1);
+  inTime.setMinutes(inTime.getMinutes() - 2);
   const cronInH = inTime.getHours();
   const cronInM = inTime.getMinutes();
   
   const outTime = new Date();
   outTime.setHours(Number(outH), Number(outM), 0, 0);
-  outTime.setMinutes(outTime.getMinutes() - 1);
+  outTime.setMinutes(outTime.getMinutes() - 2);
   const cronOutH = outTime.getHours();
   const cronOutM = outTime.getMinutes();
   
@@ -130,10 +130,11 @@ function scheduleCronJobs(scheduleData, supabase) {
       try {
         await executeClockAction('clock_in', supabase);
         try {
-          await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
-          cacheManager.mergeSystemConfig({ clock_in_done: true }, true);
+          const dateStr = scheduleData.date;
+          await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateStr);
+          cacheManager.mergeDailySchedule({ clock_in_done: true }, true);
         } catch (e) {
-          cacheManager.mergeSystemConfig({ clock_in_done: true }, false);
+          cacheManager.mergeDailySchedule({ clock_in_done: true }, false);
         }
       } catch (err) {
         console.error('[SCHEDULER] Scheduled Clock IN failed:', err.message);
@@ -147,10 +148,11 @@ function scheduleCronJobs(scheduleData, supabase) {
       try {
         await executeClockAction('clock_out', supabase);
         try {
-          await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
-          cacheManager.mergeSystemConfig({ clock_out_done: true }, true);
+          const dateStr = scheduleData.date;
+          await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateStr);
+          cacheManager.mergeDailySchedule({ clock_out_done: true }, true);
         } catch (e) {
-          cacheManager.mergeSystemConfig({ clock_out_done: true }, false);
+          cacheManager.mergeDailySchedule({ clock_out_done: true }, false);
         }
       } catch (err) {
         console.error('[SCHEDULER] Scheduled Clock OUT failed:', err.message);
@@ -166,7 +168,7 @@ async function checkMissedActions(scheduleData, supabase) {
   const today = new Date();
   const dateString = today.toISOString().split('T')[0];
   
-  if (scheduleData.last_schedule_date !== dateString) return;
+  if (scheduleData.date !== dateString) return;
   
   const now = Date.now();
   
@@ -185,10 +187,10 @@ async function checkMissedActions(scheduleData, supabase) {
     try {
       await executeClockAction('clock_in', supabase);
       try {
-        await supabase.from('system_config').update({ clock_in_done: true }).eq('id', 1);
-        cacheManager.mergeSystemConfig({ clock_in_done: true }, true);
+        await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateString);
+        cacheManager.mergeDailySchedule({ clock_in_done: true }, true);
       } catch (e) {
-        cacheManager.mergeSystemConfig({ clock_in_done: true }, false);
+        cacheManager.mergeDailySchedule({ clock_in_done: true }, false);
       }
     } catch (err) {}
   }
@@ -198,10 +200,10 @@ async function checkMissedActions(scheduleData, supabase) {
     try {
       await executeClockAction('clock_out', supabase);
       try {
-        await supabase.from('system_config').update({ clock_out_done: true }).eq('id', 1);
-        cacheManager.mergeSystemConfig({ clock_out_done: true }, true);
+        await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateString);
+        cacheManager.mergeDailySchedule({ clock_out_done: true }, true);
       } catch (e) {
-        cacheManager.mergeSystemConfig({ clock_out_done: true }, false);
+        cacheManager.mergeDailySchedule({ clock_out_done: true }, false);
       }
     } catch (err) {}
   }
@@ -214,16 +216,16 @@ async function init(supabase) {
   let scheduleData = null;
   try {
     const { data, error } = await supabase
-      .from('system_config')
+      .from('daily_schedules')
       .select('*')
-      .eq('id', 1)
+      .eq('date', dateString)
       .maybeSingle();
       
     if (error) throw error;
     scheduleData = data;
     if (data) {
-        cacheManager.mergeSystemConfig({
-            last_schedule_date: data.last_schedule_date,
+        cacheManager.mergeDailySchedule({
+            date: data.date,
             skipped: data.skipped,
             scheduled_clock_in: data.scheduled_clock_in,
             scheduled_clock_out: data.scheduled_clock_out,
@@ -234,10 +236,10 @@ async function init(supabase) {
   } catch (err) {
     console.error(`[SCHEDULER] Supabase offline on boot! Reading from local cache.`);
     const cache = cacheManager.readCache();
-    scheduleData = cache.system_config;
+    scheduleData = cache.daily_schedule;
   }
   
-  if (scheduleData && scheduleData.last_schedule_date === dateString) {
+  if (scheduleData && scheduleData.date === dateString) {
     console.log(`[SCHEDULER] Loaded existing schedule for today (${dateString}).`);
     scheduleCronJobs(scheduleData, supabase);
     await checkMissedActions(scheduleData, supabase);

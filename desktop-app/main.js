@@ -16,13 +16,13 @@ global.updateTrayTooltip = function() {
     const cacheManager = require('./cache-manager');
     const cache = cacheManager.readCache();
     
-    const inTarget = cache.system_config?.scheduled_clock_in || 'Pending Generation';
-    const outTarget = cache.system_config?.scheduled_clock_out || 'Pending Generation';
+    const inTarget = cache.daily_schedule?.scheduled_clock_in || 'Pending Generation';
+    const outTarget = cache.daily_schedule?.scheduled_clock_out || 'Pending Generation';
     
     const inProof = cache.todays_proof?.clock_in || '--:--';
     const outProof = cache.todays_proof?.clock_out || '--:--';
 
-    const isSkipped = cache.system_config?.skipped;
+    const isSkipped = cache.daily_schedule?.skipped;
     const skipText = isSkipped ? ' (Skipped)' : '';
 
     const tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
