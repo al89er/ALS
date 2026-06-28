@@ -761,7 +761,7 @@
         function renderCalendar() {
             calendarGrid.innerHTML = '';
             
-            const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             daysOfWeek.forEach(day => {
                 const header = document.createElement('div');
                 header.className = 'calendar-day-header';
@@ -774,7 +774,8 @@
             
             document.getElementById('currentMonthLabel').innerText = currentNavDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-            const firstDay = new Date(year, month, 1).getDay();
+            let firstDay = new Date(year, month, 1).getDay();
+            firstDay = firstDay === 0 ? 6 : firstDay - 1;
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
             const todayStr = new Date().toISOString().split('T')[0];
