@@ -830,7 +830,12 @@
             ]);
             
             if (proofRes.data) updateProofUI(proofRes.data);
-            if (schedRes.data) updateScheduleUI(schedRes.data);
+            
+            if (schedRes.data) {
+                updateScheduleUI(schedRes.data);
+            } else {
+                updateScheduleUI(null);
+            }
         }
 
         function updateProofUI(proof) {
@@ -842,8 +847,20 @@
         }
 
         function updateScheduleUI(sched) {
-            if (!sched) return;
-            schedDate.innerText = sched.date || '--:--';
+            if (!sched) {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const dateObj = new Date(todayStr + "T12:00:00");
+                const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+                schedDate.innerText = dateObj.toLocaleDateString('en-US', options) + ' (Pending)';
+                schedIn.innerText = '--:--';
+                schedOut.innerText = '--:--';
+                schedSkippedTag.style.display = 'none';
+                return;
+            }
+
+            const dateObj = new Date(sched.date + "T12:00:00");
+            const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
+            schedDate.innerText = dateObj.toLocaleDateString('en-US', options);
             
             if (sched.skipped) {
                 schedIn.innerText = '--:--';
