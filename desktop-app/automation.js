@@ -109,10 +109,11 @@ async function executeClockAction(actionType, supabase) {
     console.log('[PLAYWRIGHT] Checking network route via neverssl.com...');
     let fetchText = '';
     try {
-      const fetchResponse = await fetch('http://neverssl.com');
+      const fetchResponse = await fetch('http://neverssl.com', { signal: AbortSignal.timeout(5000) });
       fetchText = await fetchResponse.text();
     } catch (e) {
-      throw new Error(`NO_INTERNET_CONNECTION: Could not reach the internet gateway (${e.message})`);
+      console.warn(`[PLAYWRIGHT] Pre-flight ping to neverssl.com failed (${e.message}). Skipping Captive Portal check and attempting direct portal navigation...`);
+      fetchText = '<html'; // Mock a clean response to bypass captive portal logic
     }
 
     if (!fetchText.includes('<html')) {
