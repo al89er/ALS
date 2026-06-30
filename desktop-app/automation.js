@@ -107,8 +107,13 @@ async function executeClockAction(actionType, supabase) {
 
     // 1. Network / Captive Portal Check
     console.log('[PLAYWRIGHT] Checking network route via neverssl.com...');
-    const fetchResponse = await fetch('http://neverssl.com');
-    const fetchText = await fetchResponse.text();
+    let fetchText = '';
+    try {
+      const fetchResponse = await fetch('http://neverssl.com');
+      fetchText = await fetchResponse.text();
+    } catch (e) {
+      throw new Error(`NO_INTERNET_CONNECTION: Could not reach the internet gateway (${e.message})`);
+    }
 
     if (!fetchText.includes('<html')) {
       console.warn('[PLAYWRIGHT] Captive Portal detected! Attempting autonomous bypass...');
