@@ -1,7 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const CACHE_FILE = path.join(__dirname, 'local_cache.json');
+let CACHE_FILE;
+try {
+  const { app } = require('electron');
+  CACHE_FILE = path.join(app.getPath('userData'), 'local_cache.json');
+} catch (e) {
+  CACHE_FILE = path.join(__dirname, 'local_cache.json');
+}
 
 const DEFAULT_CACHE = {
   system_config: {
