@@ -47,7 +47,7 @@ async function checkDashboardStatus(page, actionType, supabase) {
     });
 
     const targetVal = actionType === 'clock_in' ? proofData.clockIn : proofData.clockOut;
-    const standardDate = new Date().toISOString().split('T')[0];
+    const standardDate = new Date().toLocaleDateString('en-CA');
     
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
       console.log(`[PLAYWRIGHT] Pre-Flight Check: Action already completed! Extracted: ${targetVal}`);
@@ -285,7 +285,7 @@ async function executeClockAction(actionType, supabase) {
       return { date: twm, clockIn: wm, clockOut: wk };
     });
 
-    const standardDate = new Date().toISOString().split('T')[0];
+    const standardDate = new Date().toLocaleDateString('en-CA');
 
     try {
       await supabase.from('todays_proof').upsert({
@@ -383,7 +383,7 @@ async function manualFetchProof(supabase) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
-    const standardDate = new Date().toISOString().split('T')[0];
+    const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
       await supabase.from('todays_proof').upsert({

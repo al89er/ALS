@@ -16,7 +16,7 @@ global.updateTrayTooltip = function() {
     const cacheManager = require('./cache-manager');
     const cache = cacheManager.readCache();
     
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocaleDateString('en-CA');
     
     let inTarget = 'Pending Generation';
     let outTarget = 'Pending Generation';

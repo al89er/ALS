@@ -778,7 +778,7 @@
             firstDay = firstDay === 0 ? 6 : firstDay - 1;
             const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toLocaleDateString('en-CA');
 
             for (let i = 0; i < firstDay; i++) {
                 const emptyTile = document.createElement('div');
@@ -823,7 +823,7 @@
         // 5. TODAY'S DATA (PROOF & SCHEDULE)
         // ==========================================
         async function fetchTodaysData() {
-            const todayStr = new Date().toISOString().split('T')[0];
+            const todayStr = new Date().toLocaleDateString('en-CA');
             
             const [sysRes, proofRes, schedRes] = await Promise.all([
                 _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
@@ -850,7 +850,7 @@
 
         function updateScheduleUI(sched) {
             if (!sched) {
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocaleDateString('en-CA');
                 const dateObj = new Date(todayStr + "T12:00:00");
                 const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
                 schedDate.innerText = dateObj.toLocaleDateString('en-US', options) + ' (Pending)';
@@ -898,7 +898,7 @@ _supabase.channel('logs-channel')
             .subscribe();
 _supabase.channel('proof-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocaleDateString('en-CA');
                 if (payload.new && payload.new.date === todayStr) updateProofUI(payload.new);
             })
             .subscribe();
@@ -909,7 +909,7 @@ _supabase.channel('sys-channel')
             .subscribe();
 _supabase.channel('schedule-channel')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_schedules' }, payload => {
-                const todayStr = new Date().toISOString().split('T')[0];
+                const todayStr = new Date().toLocaleDateString('en-CA');
                 if (payload.new && payload.new.date === todayStr) updateScheduleUI(payload.new);
             })
             .subscribe();

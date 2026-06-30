@@ -10,7 +10,7 @@ function getRandomMinute(min, max) {
 // Generate today's schedule
 async function generateDailySchedule(supabase) {
   const today = new Date();
-  const dateString = today.toISOString().split('T')[0];
+  const dateString = today.toLocaleDateString('en-CA');
   const dayOfWeek = today.getDay();
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
   
@@ -166,7 +166,7 @@ async function checkMissedActions(scheduleData, supabase) {
   if (!scheduleData || scheduleData.skipped) return;
   
   const today = new Date();
-  const dateString = today.toISOString().split('T')[0];
+  const dateString = today.toLocaleDateString('en-CA');
   
   if (scheduleData.date !== dateString) return;
   
@@ -211,7 +211,7 @@ async function checkMissedActions(scheduleData, supabase) {
 
 async function init(supabase) {
   const today = new Date();
-  const dateString = today.toISOString().split('T')[0];
+  const dateString = today.toLocaleDateString('en-CA');
   
   let scheduleData = null;
   try {
