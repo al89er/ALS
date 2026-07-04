@@ -103,10 +103,10 @@ let clockInTask = null;
 let clockOutTask = null;
 
 function scheduleCronJobs(scheduleData, supabase) {
-  if (scheduleData.skipped) return;
-  
   if (clockInTask) clockInTask.stop();
   if (clockOutTask) clockOutTask.stop();
+
+  if (scheduleData.skipped) return;
   
   const [inH, inM] = scheduleData.scheduled_clock_in.split(':');
   const [outH, outM] = scheduleData.scheduled_clock_out.split(':');
@@ -215,6 +215,13 @@ async function init(supabase) {
   
   let scheduleData = null;
   try {
+    const { data: skipData } = await supabase
+      .from('skip_days')
+      .select('date')
+      .eq('date', dateString)
+      .maybeSingle();
+    const isSkipDay = !!skipData;
+
     const { data, error } = await supabase
       .from('daily_schedules')
       .select('*')
@@ -223,14 +230,30 @@ async function init(supabase) {
       
     if (error) throw error;
     scheduleData = data;
-    if (data) {
+
+    if (scheduleData && isSkipDay && !scheduleData.skipped) {
+      console.log(`[SCHEDULER] Day was marked as skipped AFTER schedule generation. Updating...`);
+      scheduleData.skipped = true;
+      scheduleData.scheduled_clock_in = null;
+      scheduleData.scheduled_clock_out = null;
+      await supabase.from('daily_schedules').upsert(scheduleData);
+    } else if (scheduleData && !isSkipDay && scheduleData.skipped) {
+       const dayOfWeek = today.getDay();
+       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+         console.log(`[SCHEDULER] Day was un-skipped! Removing old skipped schedule to force regeneration...`);
+         scheduleData = null;
+         await supabase.from('daily_schedules').delete().eq('date', dateString);
+       }
+    }
+
+    if (scheduleData) {
         cacheManager.mergeDailySchedule({
-            date: data.date,
-            skipped: data.skipped,
-            scheduled_clock_in: data.scheduled_clock_in,
-            scheduled_clock_out: data.scheduled_clock_out,
-            clock_in_done: data.clock_in_done,
-            clock_out_done: data.clock_out_done
+            date: scheduleData.date,
+            skipped: scheduleData.skipped,
+            scheduled_clock_in: scheduleData.scheduled_clock_in,
+            scheduled_clock_out: scheduleData.scheduled_clock_out,
+            clock_in_done: scheduleData.clock_in_done,
+            clock_out_done: scheduleData.clock_out_done
         }, true);
     }
   } catch (err) {

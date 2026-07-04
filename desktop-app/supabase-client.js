@@ -171,6 +171,22 @@ function startCommandListener() {
     .subscribe((status) => {
       console.log(`[SUPABASE] Command listener subscription status: ${status}`);
     });
+
+  supabase
+    .channel('public:skip_days')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'skip_days' },
+      async (payload) => {
+        console.log(`[SUPABASE] skip_days table changed (${payload.eventType}). Re-evaluating schedule...`);
+        const scheduler = require('./scheduler');
+        await scheduler.init(supabase);
+        if (global.updateTrayTooltip) global.updateTrayTooltip();
+      }
+    )
+    .subscribe((status) => {
+      console.log(`[SUPABASE] skip_days listener subscription status: ${status}`);
+    });
 }
 
 function initSupabase() {
