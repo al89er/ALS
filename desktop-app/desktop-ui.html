@@ -527,7 +527,45 @@
         <div id="tab-settings" class="tab-content">
             <div class="panel">
                 <div class="panel-header">
-                    <h2 class="panel-title">Local Engine Settings</h2>
+                    <h2 class="panel-title">Device & Credentials Setup</h2>
+                    <span class="panel-subtitle">Configure multi-device ID and local credentials</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="grid-2">
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Device ID / Identifier</label>
+                            <input type="text" id="deviceIdInput" placeholder="e.g. office-pc" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Device Display Name</label>
+                            <input type="text" id="deviceNameInput" placeholder="e.g. Office PC" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">UPM Username</label>
+                            <input type="text" id="upmUsernameInput" placeholder="UPM Username" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">UPM Password</label>
+                            <input type="password" id="upmPasswordInput" placeholder="UPM Password" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase URL</label>
+                        <input type="text" id="supabaseUrlInput" placeholder="https://<YOUR_PROJECT>.supabase.co" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase Key</label>
+                        <input type="password" id="supabaseKeyInput" placeholder="Key..." style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                    </div>
+                    <button class="btn btn-primary" onclick="saveDeviceConfigUI()">Save Device & Credentials</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Local Engine Parameters</h2>
                     <span class="panel-subtitle">Configure Playwright execution parameters</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -540,7 +578,7 @@
                         <label style="font-size: 0.9rem; color: #fff;">Show Browser Window (Debug Mode)</label>
                     </div>
                     <div class="btn-group">
-                        <button class="btn btn-primary" onclick="saveLocalSettings()">Save Settings</button>
+                        <button class="btn btn-primary" onclick="saveLocalSettings()">Save Engine Settings</button>
                         <button class="btn" style="background: rgba(255,255,255,0.1);" onclick="openDebugBrowser()">Test Launch Browser</button>
                     </div>
                 </div>
@@ -751,9 +789,20 @@
         // 4. SKIP DAYS CALENDAR
         // ==========================================
         async function fetchConfig() {
-            const { data } = await _supabase.from('skip_days').select('date');
-            if (data) {
-                skipDaysArray = data.map(row => row.date);
+            try {
+                const { data, error } = await _supabase.from('skip_days').select('date');
+                if (error) throw error;
+                if (data) {
+                    skipDaysArray = data.map(row => row.date);
+                }
+            } catch (err) {
+                console.warn('[UI] Supabase skip_days fetch failed, checking local cache fallback:', err.message);
+                if (window.electronAPI && typeof window.electronAPI.readCache === 'function') {
+                    const cache = await window.electronAPI.readCache();
+                    if (cache && Array.isArray(cache.skip_days)) {
+                        skipDaysArray = cache.skip_days;
+                    }
+                }
             }
             renderCalendar();
         }
@@ -809,14 +858,32 @@
         }
 
         async function toggleDate(dateString) {
-            if (skipDaysArray.includes(dateString)) {
+            const wasSkipped = skipDaysArray.includes(dateString);
+            if (wasSkipped) {
                 skipDaysArray = skipDaysArray.filter(d => d !== dateString);
-                await _supabase.from('skip_days').delete().eq('date', dateString);
+                renderCalendar();
+                try {
+                    const { error } = await _supabase.from('skip_days').delete().eq('date', dateString);
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('[UI] Failed to delete skip day:', err);
+                    skipDaysArray = skipDaysArray.concat([dateString]);
+                    renderCalendar();
+                    alert('Failed to remove skip day: ' + (err.message || err));
+                }
             } else {
                 skipDaysArray.push(dateString);
-                await _supabase.from('skip_days').insert({ date: dateString });
+                renderCalendar();
+                try {
+                    const { error } = await _supabase.from('skip_days').insert({ date: dateString });
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('[UI] Failed to insert skip day:', err);
+                    skipDaysArray = skipDaysArray.filter(d => d !== dateString);
+                    renderCalendar();
+                    alert('Failed to add skip day: ' + (err.message || err));
+                }
             }
-            renderCalendar(); 
         }
 
         // ==========================================
@@ -923,7 +990,37 @@ _supabase.channel('skip-channel')
         // ==========================================
         // 6. ELECTRON DESKTOP IPC
         // ==========================================
+        async function loadDeviceConfigUI() {
+            if (window.electronAPI && window.electronAPI.getDeviceConfig) {
+                const config = await window.electronAPI.getDeviceConfig();
+                if (config) {
+                    if (document.getElementById('deviceIdInput')) document.getElementById('deviceIdInput').value = config.device_id || '';
+                    if (document.getElementById('deviceNameInput')) document.getElementById('deviceNameInput').value = config.device_name || '';
+                    if (document.getElementById('upmUsernameInput')) document.getElementById('upmUsernameInput').value = config.upm_username || '';
+                    if (document.getElementById('upmPasswordInput')) document.getElementById('upmPasswordInput').value = config.upm_password || '';
+                    if (document.getElementById('supabaseUrlInput')) document.getElementById('supabaseUrlInput').value = config.supabase_url || '';
+                    if (document.getElementById('supabaseKeyInput')) document.getElementById('supabaseKeyInput').value = config.supabase_key || '';
+                }
+            }
+        }
+
+        async function saveDeviceConfigUI() {
+            if (window.electronAPI && window.electronAPI.saveDeviceConfig) {
+                const config = {
+                    device_id: document.getElementById('deviceIdInput').value.trim() || 'home_desktop_agent',
+                    device_name: document.getElementById('deviceNameInput').value.trim() || 'Home Desktop Agent',
+                    upm_username: document.getElementById('upmUsernameInput').value.trim(),
+                    upm_password: document.getElementById('upmPasswordInput').value.trim(),
+                    supabase_url: document.getElementById('supabaseUrlInput').value.trim(),
+                    supabase_key: document.getElementById('supabaseKeyInput').value.trim()
+                };
+                await window.electronAPI.saveDeviceConfig(config);
+                alert('Device & Credentials saved! Please restart the desktop app to apply changes.');
+            }
+        }
+
         async function loadLocalSettings() {
+            await loadDeviceConfigUI();
             if (window.electronAPI) {
                 const settings = await window.electronAPI.readSettings();
                 document.getElementById('targetUrlInput').value = settings.targetUrl || '';

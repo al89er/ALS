@@ -1,13 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
-let CACHE_FILE;
-try {
-  const { app } = require('electron');
-  CACHE_FILE = path.join(app.getPath('userData'), 'local_cache.json');
-} catch (e) {
-  CACHE_FILE = path.join(__dirname, 'local_cache.json');
+function resolveCacheFile() {
+  if (process.env.ALS_CACHE_FILE) {
+    return path.resolve(process.env.ALS_CACHE_FILE);
+  }
+
+  try {
+    const { app } = require('electron');
+    if (app && typeof app.getPath === 'function') {
+      return path.join(app.getPath('userData'), 'local_cache.json');
+    }
+  } catch (error) {
+    // Fall through to development path.
+  }
+
+  return path.join(__dirname, 'local_cache.json');
 }
+
+const CACHE_FILE = resolveCacheFile();
 
 const DEFAULT_CACHE = {
   system_config: {
@@ -96,14 +107,79 @@ function clearOfflineLogs() {
   writeCache(cache);
 }
 
+function resolveDeviceSettingsFile() {
+  if (process.env.ALS_SETTINGS_FILE) {
+    return path.resolve(process.env.ALS_SETTINGS_FILE);
+  }
+
+  try {
+    const { app } = require('electron');
+    if (app && typeof app.getPath === 'function') {
+      return path.join(app.getPath('userData'), 'local_settings.json');
+    }
+  } catch (error) {
+    // Fall through to development path.
+  }
+
+  return path.join(__dirname, 'local_settings.json');
+}
+
+const SETTINGS_FILE = resolveDeviceSettingsFile();
+
+const DEFAULT_DEVICE_CONFIG = {
+  device_id: process.env.DEVICE_ID || process.env.UPM_USERNAME || 'home_desktop_agent',
+  device_name: process.env.DEVICE_NAME || process.env.UPM_USERNAME || 'Home Desktop Agent',
+  upm_username: process.env.UPM_USERNAME || '',
+  upm_password: process.env.UPM_PASSWORD || '',
+  supabase_url: process.env.SUPABASE_URL || '',
+  supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+};
+
+function getDeviceConfig() {
+  if (!fs.existsSync(SETTINGS_FILE)) {
+    return { ...DEFAULT_DEVICE_CONFIG };
+  }
+  try {
+    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const fallbackId = parsed.device_id || process.env.DEVICE_ID || parsed.upm_username || process.env.UPM_USERNAME || 'home_desktop_agent';
+    return {
+      device_id: fallbackId,
+      device_name: parsed.device_name || process.env.DEVICE_NAME || parsed.upm_username || 'Home Desktop Agent',
+      upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
+      upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
+      supabase_url: parsed.supabase_url || process.env.SUPABASE_URL || '',
+      supabase_key: parsed.supabase_key || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    };
+  } catch (err) {
+    return { ...DEFAULT_DEVICE_CONFIG };
+  }
+}
+
+function saveDeviceConfig(config) {
+  try {
+    const current = getDeviceConfig();
+    const updated = { ...current, ...config };
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+    return updated;
+  } catch (err) {
+    console.error('[CACHE] Failed to save device config:', err.message);
+    throw err;
+  }
+}
+
 module.exports = {
   readCache,
   writeCache,
+  updateCache,
   mergeSystemConfig,
   mergeDailySchedule,
   updateSkipDays,
   queueOfflineProof,
   clearProofIfSynced,
   logOffline,
-  clearOfflineLogs
+  clearOfflineLogs,
+  getDeviceConfig,
+  saveDeviceConfig
 };
+

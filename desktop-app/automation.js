@@ -1,4 +1,6 @@
-require('dotenv').config();
+if (process.env.NODE_ENV !== 'test') {
+  require('dotenv').config();
+}
 const { chromium } = require('playwright');
 const path = require('path');
 const cacheManager = require('./cache-manager');
@@ -51,14 +53,14 @@ async function checkDashboardStatus(page, actionType, supabase) {
     
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
       console.log(`[PLAYWRIGHT] Pre-Flight Check: Action already completed! Extracted: ${targetVal}`);
-      
       try {
-        await supabase.from('todays_proof').upsert({
+        const { error } = await supabase.from('todays_proof').upsert({
           date: standardDate,
           clock_in: proofData.clockIn,
           clock_out: proofData.clockOut,
           updated_at: new Date().toISOString()
         }, { onConflict: 'date' });
+        if (error) throw error;
         cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
       } catch (err) {
         console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
@@ -100,7 +102,31 @@ async function getSystemConfig(supabase) {
   }
 }
 
-async function executeClockAction(actionType, supabase) {
+async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
+  if (!targetAt) return;
+  const targetTime = new Date(targetAt).getTime();
+  
+  if (!Number.isFinite(targetTime)) {
+    throw new Error('INVALID_TARGET_TIME');
+  }
+  
+  while (true) {
+    const now = Date.now();
+    const remainingMs = targetTime - now;
+
+    if (remainingMs <= 0) {
+      if (-remainingMs > maxLateMs) {
+        throw new Error('MISSED_TARGET_WINDOW');
+      }
+      break;
+    }
+
+    const waitMs = Math.min(remainingMs, 5000); // Check every 5 seconds
+    await page.waitForTimeout(waitMs);
+  }
+}
+
+async function executeClockAction(actionType, supabase, options = {}) {
   let context;
   try {
     const config = await getSystemConfig(supabase);
@@ -123,11 +149,12 @@ async function executeClockAction(actionType, supabase) {
       await remoteLog(supabase, 'network_check', 'warning', 'Captive portal intercepted the connection. Attempting bypass.');
       
       try {
-        await supabase.from('device_status').upsert({
+        const { error } = await supabase.from('device_status').upsert({
           id: 'home_desktop_agent',
           current_status: 'CAPTIVE_PORTAL',
           last_seen: new Date().toISOString()
         });
+        if (error) throw error;
       } catch (e) {}
 
       let cpContext;
@@ -195,15 +222,23 @@ async function executeClockAction(actionType, supabase) {
 
     if (isLoginPage) {
       console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
-      await page.fill('input[type="text"]', process.env.UPM_USERNAME);
-      await page.fill('input[type="password"]', process.env.UPM_PASSWORD);
+      const deviceConfig = cacheManager.getDeviceConfig();
+      const username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
+      const password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
+      
+      if (!username || !password) {
+        console.warn('[PLAYWRIGHT] Missing UPM Username or Password in device settings!');
+      }
+
+      await page.fill('input[type="text"]', username);
+      await page.fill('input[type="password"]', password);
       await page.click('button[type="submit"], input[type="submit"]');
       await page.waitForNavigation();
     }
 
     // 4.5 Pre-Flight
     console.log('[PLAYWRIGHT] Running Pre-Flight Dashboard Verification...');
-    const isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
+    let isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
     if (isAlreadyDone) {
       console.log(`[PLAYWRIGHT] Manual action detected, skipping automated click for ${actionType}`);
       await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`);
@@ -211,8 +246,21 @@ async function executeClockAction(actionType, supabase) {
       return true;
     }
     
-    console.log('[PLAYWRIGHT] Pre-Flight cleared. Waiting 60 seconds to hit exact target time...');
-    await page.waitForTimeout(60000);
+    if (options.targetAt) {
+      console.log(`[PLAYWRIGHT] Pre-Flight cleared. Waiting dynamically for exact target time: ${options.targetAt}...`);
+      await waitUntilTarget(page, options.targetAt);
+
+      console.log('[PLAYWRIGHT] Target time reached. Running final pre-flight check...');
+      isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
+      if (isAlreadyDone) {
+        console.log(`[PLAYWRIGHT] Manual action detected during wait, skipping automated click for ${actionType}`);
+        await sendTelegramAlert(`✅ [ALS Desktop] Final Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`);
+        await context.close();
+        return true;
+      }
+    } else {
+      console.log('[PLAYWRIGHT] Pre-Flight cleared. Executing immediately (no target time provided)...');
+    }
 
     // 5. Trigger
     console.log(`[PLAYWRIGHT] Executing smart element trigger for action: ${actionType}`);
@@ -255,6 +303,16 @@ async function executeClockAction(actionType, supabase) {
 
     await new Promise(r => setTimeout(r, 1000));
     await targetFrame.waitForSelector(selector, { state: 'visible', timeout: 15000 });
+
+    const actualClickAt = new Date();
+    const targetMs = options.targetAt
+      ? new Date(options.targetAt).getTime()
+      : null;
+
+    const driftMs = targetMs === null
+      ? null
+      : actualClickAt.getTime() - targetMs;
+
     await targetFrame.click(selector);
 
     // 6. Post-Flight
@@ -294,12 +352,13 @@ async function executeClockAction(actionType, supabase) {
     const standardDate = new Date().toLocaleDateString('en-CA');
 
     try {
-      await supabase.from('todays_proof').upsert({
+      const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: postProofData.clockIn,
         clock_out: postProofData.clockOut,
         updated_at: new Date().toISOString()
       }, { onConflict: 'date' });
+      if (error) throw error;
       cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
@@ -308,7 +367,12 @@ async function executeClockAction(actionType, supabase) {
 
     if (global.updateTrayTooltip) global.updateTrayTooltip();
 
-    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector} at ${new Date().toISOString()}`);
+    const source = options.source || 'unknown';
+    const timingDescription = options.targetAt
+      ? `source=${source}; target=${options.targetAt}; actual=${actualClickAt.toISOString()}; drift_ms=${driftMs}`
+      : `source=${source}; actual=${actualClickAt.toISOString()}`;
+
+    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`);
     await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`);
 
     await context.close();
@@ -392,12 +456,13 @@ async function manualFetchProof(supabase) {
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
-      await supabase.from('todays_proof').upsert({
+      const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: proofData.clockIn,
         clock_out: proofData.clockOut,
         updated_at: new Date().toISOString()
       }, { onConflict: 'date' });
+      if (error) throw error;
       cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
@@ -419,4 +484,11 @@ async function manualFetchProof(supabase) {
   }
 }
 
-module.exports = { executeClockAction, openDebugBrowser, manualFetchProof };
+module.exports = {
+  executeClockAction,
+  openDebugBrowser,
+  manualFetchProof,
+  __test: {
+    waitUntilTarget
+  }
+};

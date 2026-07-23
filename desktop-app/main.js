@@ -74,12 +74,28 @@ app.whenReady().then(() => {
     return { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY };
   });
 
+  ipcMain.handle('read-cache', () => {
+    const cacheManager = require('./cache-manager');
+    return cacheManager.readCache();
+  });
+
   ipcMain.handle('read-settings', async () => {
     const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
     return {
       targetUrl: data?.target_url || 'https://perakamwaktu.upm.edu.my/',
       showBrowser: data?.show_browser || false
     };
+  });
+
+  ipcMain.handle('get-device-config', () => {
+    const cacheManager = require('./cache-manager');
+    return cacheManager.getDeviceConfig();
+  });
+
+  ipcMain.handle('save-device-config', (event, config) => {
+    const cacheManager = require('./cache-manager');
+    const updated = cacheManager.saveDeviceConfig(config);
+    return updated;
   });
 
   ipcMain.handle('save-settings', async (event, settings) => {

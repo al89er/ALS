@@ -474,6 +474,12 @@
                     <span id="statusText">Connecting...</span>
                 </div>
             </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <label style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Device:</label>
+                <select id="deviceSelect" onchange="onDeviceChange(this.value)" style="background: rgba(0,0,0,0.4); color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; outline: none; cursor: pointer;">
+                    <option value="home_desktop_agent">Home Desktop Agent (Default)</option>
+                </select>
+            </div>
             <div class="tab-menu">
                 <button class="tab-btn active" onclick="switchTab('control')">Control</button>
                 <button class="tab-btn" onclick="switchTab('skips')">Skips</button>
@@ -628,6 +634,46 @@
         const logsContainer = document.getElementById('logsContainer');
         const calendarGrid = document.getElementById('calendarGrid');
 
+        let activeDeviceId = new URLSearchParams(window.location.search).get('device_id') || 'home_desktop_agent';
+
+        async function fetchDevices() {
+            try {
+                const { data } = await _supabase.from('device_status').select('id, device_id, device_name');
+                const select = document.getElementById('deviceSelect');
+                if (select && data && data.length > 0) {
+                    select.innerHTML = '';
+                    const deviceMap = new Map();
+                    data.forEach(d => {
+                        const devId = d.device_id || d.id;
+                        const devName = d.device_name || d.id;
+                        if (!deviceMap.has(devId)) {
+                            deviceMap.set(devId, devName);
+                            const opt = document.createElement('option');
+                            opt.value = devId;
+                            opt.innerText = `${devName} (${devId})`;
+                            if (devId === activeDeviceId) opt.selected = true;
+                            select.appendChild(opt);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('[DEVICES] Failed to fetch device list:', err);
+            }
+        }
+
+        function onDeviceChange(newDeviceId) {
+            activeDeviceId = newDeviceId;
+            const url = new URL(window.location);
+            url.searchParams.set('device_id', newDeviceId);
+            window.history.replaceState({}, '', url);
+
+            fetchInitialStatus();
+            fetchLogs();
+            fetchConfig();
+            fetchTodaysData();
+            bindChannels();
+        }
+
         // ==========================================
         // 1. HEARTBEAT ENGINE
         // ==========================================
@@ -635,10 +681,11 @@
             const { data, error } = await _supabase
                 .from('device_status')
                 .select('*')
-                .eq('id', 'home_desktop_agent')
+                .or(`id.eq.${activeDeviceId},device_id.eq.${activeDeviceId}`)
                 .maybeSingle();
 
             if (data) updateHeartbeat(data.last_seen, data.current_status);
+            else evaluateStatus('OFFLINE');
         }
 
         function updateHeartbeat(timestamp, statusStr) {
@@ -693,6 +740,7 @@
             const { data, error } = await _supabase
                 .from('logs')
                 .select('*')
+                .or(`device_id.eq.${activeDeviceId},device_id.is.null`)
                 .order('created_at', { ascending: false })
                 .limit(20);
 
@@ -718,20 +766,23 @@
         async function forceCommand(actionType) {
             const { error } = await _supabase
                 .from('commands')
-                .insert([{ action: actionType, status: 'pending' }]);
+                .insert([{ action: actionType, status: 'pending', device_id: activeDeviceId }]);
 
             if (error) alert('Failed to send command: ' + error.message);
             else {
-                alert('Command dispatched successfully. Waiting for desktop agent execution...');
+                alert(`Command dispatched to ${activeDeviceId}. Waiting for desktop agent execution...`);
             }
         }
 
-        
         // ==========================================
         // 4. SKIP DAYS CALENDAR
         // ==========================================
         async function fetchConfig() {
-            const { data } = await _supabase.from('skip_days').select('date');
+            const { data } = await _supabase
+                .from('skip_days')
+                .select('date, device_id')
+                .or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+
             if (data) {
                 skipDaysArray = data.map(row => row.date);
             }
@@ -789,14 +840,38 @@
         }
 
         async function toggleDate(dateString) {
-            if (skipDaysArray.includes(dateString)) {
+            const wasSkipped = skipDaysArray.includes(dateString);
+            if (wasSkipped) {
                 skipDaysArray = skipDaysArray.filter(d => d !== dateString);
-                await _supabase.from('skip_days').delete().eq('date', dateString);
+                renderCalendar();
+                try {
+                    const { error } = await _supabase
+                        .from('skip_days')
+                        .delete()
+                        .eq('date', dateString)
+                        .or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('Failed to delete skip day:', err);
+                    skipDaysArray.push(dateString);
+                    renderCalendar();
+                    alert('Failed to remove skip day: ' + (err.message || err));
+                }
             } else {
                 skipDaysArray.push(dateString);
-                await _supabase.from('skip_days').insert({ date: dateString });
+                renderCalendar();
+                try {
+                    const { error } = await _supabase
+                        .from('skip_days')
+                        .insert({ date: dateString, device_id: activeDeviceId });
+                    if (error) throw error;
+                } catch (err) {
+                    console.error('Failed to insert skip day:', err);
+                    skipDaysArray = skipDaysArray.filter(d => d !== dateString);
+                    renderCalendar();
+                    alert('Failed to add skip day: ' + (err.message || err));
+                }
             }
-            renderCalendar(); 
         }
 
         // ==========================================
@@ -807,11 +882,12 @@
             
             const [sysRes, proofRes, schedRes] = await Promise.all([
                 _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
-                _supabase.from('todays_proof').select('*').eq('date', todayStr).maybeSingle(),
-                _supabase.from('daily_schedules').select('*').eq('date', todayStr).maybeSingle()
+                _supabase.from('todays_proof').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle(),
+                _supabase.from('daily_schedules').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle()
             ]);
             
             if (proofRes.data) updateProofUI(proofRes.data);
+            else updateProofUI(null);
             
             if (schedRes.data) {
                 updateScheduleUI(schedRes.data);
@@ -821,7 +897,13 @@
         }
 
         function updateProofUI(proof) {
-            if (!proof) return;
+            if (!proof) {
+                proofDate.innerText = '--:--';
+                proofIn.innerText = '--:--';
+                proofOut.innerText = '--:--';
+                proofUpdated.innerText = '--:--';
+                return;
+            }
             proofDate.innerText = proof.date || '--:--';
             proofIn.innerText = proof.clock_in || '--:--';
             proofOut.innerText = proof.clock_out || '--:--';
@@ -875,7 +957,24 @@
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
             if (session) {
-                // User is logged in, show app
+                const urlParamDeviceId = new URLSearchParams(window.location.search).get('device_id');
+                if (urlParamDeviceId) {
+                    activeDeviceId = urlParamDeviceId;
+                } else if (session.user && session.user.email) {
+                    // Check if user email exists in device_status, otherwise fall back to home_desktop_agent
+                    const { data: userDevice } = await _supabase
+                        .from('device_status')
+                        .select('id, device_id')
+                        .or(`id.eq.${session.user.email},device_id.eq.${session.user.email}`)
+                        .maybeSingle();
+
+                    if (userDevice) {
+                        activeDeviceId = session.user.email;
+                    } else {
+                        // Desktop agent hasn't updated device_id yet: keep legacy home_desktop_agent
+                        activeDeviceId = 'home_desktop_agent';
+                    }
+                }
                 loginOverlay.style.display = 'none';
                 appContainer.style.display = 'block';
                 initializeApp();
@@ -909,40 +1008,51 @@
             window.location.reload();
         }
 
-        
         function bindChannels() {
-            _supabase.channel('heartbeat-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
-                updateHeartbeat(payload.new.last_seen, payload.new.current_status);
-            })
-            .subscribe();
-            _supabase.channel('logs-channel')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
-                if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
-                    logsContainer.innerHTML = '';
+            if (_supabase.removeAllChannels) {
+                _supabase.removeAllChannels();
+            }
+
+            _supabase.channel(`heartbeat-${activeDeviceId}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, payload => {
+                if (payload.new && (payload.new.id === activeDeviceId || payload.new.device_id === activeDeviceId)) {
+                    updateHeartbeat(payload.new.last_seen, payload.new.current_status);
+                    fetchDevices();
                 }
-                const el = createLogElement(payload.new);
-                logsContainer.insertBefore(el, logsContainer.firstChild);
             })
             .subscribe();
-            _supabase.channel('proof-channel')
+
+            _supabase.channel(`logs-${activeDeviceId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
+                if (!payload.new.device_id || payload.new.device_id === activeDeviceId) {
+                    if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
+                        logsContainer.innerHTML = '';
+                    }
+                    const el = createLogElement(payload.new);
+                    logsContainer.insertBefore(el, logsContainer.firstChild);
+                }
+            })
+            .subscribe();
+
+            _supabase.channel(`proof-${activeDeviceId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
                 const todayStr = new Date().toLocaleDateString('en-CA');
-                if (payload.new && payload.new.date === todayStr) updateProofUI(payload.new);
+                if (payload.new && payload.new.date === todayStr && (!payload.new.device_id || payload.new.device_id === activeDeviceId)) {
+                    updateProofUI(payload.new);
+                }
             })
             .subscribe();
-            _supabase.channel('sys-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
-                // system config handles other state
-            })
-            .subscribe();
-            _supabase.channel('schedule-channel')
+
+            _supabase.channel(`schedule-${activeDeviceId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_schedules' }, payload => {
                 const todayStr = new Date().toLocaleDateString('en-CA');
-                if (payload.new && payload.new.date === todayStr) updateScheduleUI(payload.new);
+                if (payload.new && payload.new.date === todayStr && (!payload.new.device_id || payload.new.device_id === activeDeviceId)) {
+                    updateScheduleUI(payload.new);
+                }
             })
             .subscribe();
-            _supabase.channel('skip-channel')
+
+            _supabase.channel(`skip-${activeDeviceId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
                 fetchConfig();
             })
@@ -950,6 +1060,7 @@
         }
 
         function initializeApp() {
+            fetchDevices();
             fetchInitialStatus();
             fetchLogs();
             fetchConfig();
