@@ -137,6 +137,9 @@ function getAppEdition() {
   return 'full';
 }
 
+const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || 'https://pvutxjfkskzgccawfibu.supabase.co';
+const DEFAULT_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjI1Njg5MywiZXhwIjoyMDk3ODMyODkzfQ.j41U6Fm1ykBbgabpkhdxyp5G9-X-bvGmEOSkTYHGhtI';
+
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
 const DEFAULT_DEVICE_CONFIG = {
@@ -144,8 +147,8 @@ const DEFAULT_DEVICE_CONFIG = {
   device_name: process.env.DEVICE_NAME || process.env.UPM_USERNAME || 'Home Desktop Agent',
   upm_username: process.env.UPM_USERNAME || '',
   upm_password: process.env.UPM_PASSWORD || '',
-  supabase_url: process.env.SUPABASE_URL || '',
-  supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  supabase_url: DEFAULT_SUPABASE_URL,
+  supabase_key: DEFAULT_SUPABASE_KEY,
   auto_clock_enabled: true,
   clock_in_base_time: '07:45',
   clock_out_base_time: '17:05',
@@ -167,8 +170,8 @@ function getDeviceConfig() {
       device_name: parsed.device_name || process.env.DEVICE_NAME || parsed.upm_username || 'Home Desktop Agent',
       upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
       upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
-      supabase_url: parsed.supabase_url || process.env.SUPABASE_URL || '',
-      supabase_key: parsed.supabase_key || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+      supabase_url: parsed.supabase_url || DEFAULT_SUPABASE_URL,
+      supabase_key: parsed.supabase_key || DEFAULT_SUPABASE_KEY,
       auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
       clock_in_base_time: parsed.clock_in_base_time || '07:45',
       clock_out_base_time: parsed.clock_out_base_time || '17:05',

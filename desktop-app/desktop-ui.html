@@ -551,14 +551,22 @@
                             <input type="password" id="upmPasswordInput" placeholder="UPM Password" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
                         </div>
                     </div>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase URL</label>
-                        <input type="text" id="supabaseUrlInput" placeholder="https://<YOUR_PROJECT>.supabase.co" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase Key</label>
-                        <input type="password" id="supabaseKeyInput" placeholder="Key..." style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
-                    </div>
+                    <!-- Advanced Cloud Endpoint Settings (Built-in by Default) -->
+                    <details style="border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; background: rgba(0,0,0,0.15);">
+                        <summary style="cursor: pointer; font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; outline: none;">
+                            Advanced Cloud Connection Settings (Pre-configured)
+                        </summary>
+                        <div style="display: flex; flex-direction: column; gap: 0.8rem; margin-top: 0.8rem;">
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                <label style="font-size: 0.8rem; color: var(--text-secondary);">Supabase URL</label>
+                                <input type="text" id="supabaseUrlInput" style="padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff; font-family: var(--font-family); font-size: 0.85rem; outline: none;" />
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                <label style="font-size: 0.8rem; color: var(--text-secondary);">Supabase Key</label>
+                                <input type="password" id="supabaseKeyInput" style="padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff; font-family: var(--font-family); font-size: 0.85rem; outline: none;" />
+                            </div>
+                        </div>
+                    </details>
                     <button class="btn btn-primary" onclick="saveDeviceConfigUI()">Save Device & Credentials</button>
                 </div>
             </div>

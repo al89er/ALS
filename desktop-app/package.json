@@ -6,15 +6,16 @@
   "scripts": {
     "start": "electron .",
     "clean": "node clean.js",
-    "build": "npm run clean && electron-builder --win -c.extraMetadata.edition=full -c.artifactName=\"ALS-Full-Setup-${version}.${ext}\"",
-    "build:full": "npm run clean && electron-builder --win -c.extraMetadata.edition=full -c.artifactName=\"ALS-Full-Setup-${version}.${ext}\"",
-    "build:lite": "npm run clean && electron-builder --win -c.extraMetadata.edition=lite -c.artifactName=\"ALS-Lite-Setup-${version}.${ext}\"",
+    "build": "npm run clean && electron-builder --win -c.extraMetadata.edition=Full && node postbuild.js",
+    "build:full": "npm run clean && electron-builder --win -c.extraMetadata.edition=Full && node postbuild.js",
+    "build:lite": "npm run clean && electron-builder --win -c.extraMetadata.edition=Lite && node postbuild.js",
+    "build:all": "npm run build:full && npm run build:lite",
     "test": "node --test tests/*.test.js"
   },
   "build": {
     "appId": "com.als.dashboard",
     "productName": "ALS Automation Engine",
-    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "artifactName": "ALS-${edition}-Setup-${version}.${ext}",
     "files": [
       "**/*",
       ".env",
