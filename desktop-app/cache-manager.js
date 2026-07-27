@@ -124,6 +124,19 @@ function resolveDeviceSettingsFile() {
   return path.join(__dirname, 'local_settings.json');
 }
 
+function getAppEdition() {
+  if (process.env.ALS_EDITION) {
+    return process.env.ALS_EDITION.toLowerCase();
+  }
+  try {
+    const pkg = require('./package.json');
+    if (pkg && pkg.edition) {
+      return pkg.edition.toLowerCase();
+    }
+  } catch (e) {}
+  return 'full';
+}
+
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
 const DEFAULT_DEVICE_CONFIG = {
@@ -136,12 +149,14 @@ const DEFAULT_DEVICE_CONFIG = {
   auto_clock_enabled: true,
   clock_in_base_time: '07:45',
   clock_out_base_time: '17:05',
-  random_period_minutes: 5
+  random_period_minutes: 5,
+  edition: getAppEdition()
 };
 
 function getDeviceConfig() {
+  const edition = getAppEdition();
   if (!fs.existsSync(SETTINGS_FILE)) {
-    return { ...DEFAULT_DEVICE_CONFIG };
+    return { ...DEFAULT_DEVICE_CONFIG, edition };
   }
   try {
     const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
@@ -157,10 +172,11 @@ function getDeviceConfig() {
       auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
       clock_in_base_time: parsed.clock_in_base_time || '07:45',
       clock_out_base_time: parsed.clock_out_base_time || '17:05',
-      random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5
+      random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5,
+      edition: edition
     };
   } catch (err) {
-    return { ...DEFAULT_DEVICE_CONFIG };
+    return { ...DEFAULT_DEVICE_CONFIG, edition };
   }
 }
 
@@ -188,6 +204,7 @@ module.exports = {
   logOffline,
   clearOfflineLogs,
   getDeviceConfig,
-  saveDeviceConfig
+  saveDeviceConfig,
+  getAppEdition
 };
 

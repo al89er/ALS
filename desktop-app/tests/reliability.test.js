@@ -386,7 +386,14 @@ test('Reliability Improvements', async (t) => {
     assert.ok(updatedCache.skip_days.includes('2026-07-30'));
   });
 
-  await t.test('Schedule settings options and defaults', async () => {
+  await t.test('Schedule settings options and edition mode', async () => {
+    cacheManager.saveDeviceConfig({
+      auto_clock_enabled: true,
+      clock_in_base_time: '07:45',
+      clock_out_base_time: '17:05',
+      random_period_minutes: 5
+    });
+
     const config = cacheManager.getDeviceConfig();
     assert.strictEqual(config.auto_clock_enabled, true);
     assert.strictEqual(config.clock_in_base_time, '07:45');
@@ -404,5 +411,11 @@ test('Reliability Improvements', async (t) => {
     assert.strictEqual(saved.clock_in_base_time, '08:00');
     assert.strictEqual(saved.clock_out_base_time, '17:30');
     assert.strictEqual(saved.random_period_minutes, 10);
+
+    // Test Lite edition guard
+    process.env.ALS_EDITION = 'lite';
+    assert.strictEqual(cacheManager.getAppEdition(), 'lite');
+    assert.strictEqual(cacheManager.getDeviceConfig().edition, 'lite');
+    delete process.env.ALS_EDITION;
   });
 });

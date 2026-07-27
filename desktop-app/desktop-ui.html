@@ -564,7 +564,7 @@
             </div>
 
             <!-- Automated Schedule Settings Panel -->
-            <div class="panel">
+            <div class="panel" id="autoSchedulePanel">
                 <div class="panel-header">
                     <h2 class="panel-title">Automated Clock In / Out Schedule</h2>
                     <span class="panel-subtitle">Enable automatic daily execution and configure target times</span>
@@ -1035,6 +1035,11 @@ _supabase.channel('skip-channel')
             if (window.electronAPI && window.electronAPI.getDeviceConfig) {
                 const config = await window.electronAPI.getDeviceConfig();
                 if (config) {
+                    if (config.edition === 'lite') {
+                        const panel = document.getElementById('autoSchedulePanel');
+                        if (panel) panel.style.display = 'none';
+                    }
+
                     if (document.getElementById('deviceIdInput')) document.getElementById('deviceIdInput').value = config.device_id || '';
                     if (document.getElementById('deviceNameInput')) document.getElementById('deviceNameInput').value = config.device_name || '';
                     if (document.getElementById('upmUsernameInput')) document.getElementById('upmUsernameInput').value = config.upm_username || '';

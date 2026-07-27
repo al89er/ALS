@@ -72,10 +72,11 @@ function generateRandomTimeStr(baseTimeStr, durationMinutes = 5) {
 }
 
   const deviceConfig = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
-  const isAutoEnabled = deviceConfig.auto_clock_enabled !== false;
+  const isLite = (deviceConfig.edition === 'lite') || (cacheManager.getAppEdition && cacheManager.getAppEdition() === 'lite');
+  const isAutoEnabled = isLite ? false : (deviceConfig.auto_clock_enabled !== false);
 
   if (isWeekend || isSkipDay || !isAutoEnabled) {
-      const skipReason = !isAutoEnabled ? 'Auto Clock Disabled' : 'Weekend/Holiday';
+      const skipReason = isLite ? 'Lite Edition (Manual Mode)' : (!isAutoEnabled ? 'Auto Clock Disabled' : 'Weekend/Holiday');
       console.log(`[SCHEDULER] Today (${dateString}) is skipped (${skipReason}). No automation scheduled for ${deviceId}.`);
       
       const payload = {
