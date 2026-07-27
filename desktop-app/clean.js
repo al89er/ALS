@@ -2,9 +2,11 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Build happens in C:\Temp\ALS-build (outside OneDrive to avoid EBUSY locks from sync)
+const buildDir = 'C:\\Temp\\ALS-build';
 const distDir = path.join(__dirname, 'dist');
 
-// Stop running unpacked instances to release file locks on dist/win-unpacked
+// Kill any running instances
 try {
   if (process.platform === 'win32') {
     execSync('taskkill /F /IM "ALS Automation Engine.exe" /T', { stdio: 'ignore' });
@@ -12,27 +14,18 @@ try {
   }
 } catch (e) {}
 
-function cleanUnpacked(retries = 8, delay = 1500) {
-  if (!fs.existsSync(distDir)) return;
-  
-  const winUnpacked = path.join(distDir, 'win-unpacked');
+function cleanDir(dir, label) {
+  if (!fs.existsSync(dir)) return;
+  const retries = 5;
+  const delay = 1000;
   for (let i = 0; i < retries; i++) {
     try {
-      if (fs.existsSync(winUnpacked)) {
-        fs.rmSync(winUnpacked, { recursive: true, force: true });
-      }
-      // Remove temporary .blockmap or .7z files but KEEP .exe setups
-      const files = fs.readdirSync(distDir);
-      for (const file of files) {
-        if (file.endsWith('.blockmap') || file.endsWith('.7z') || file.includes('__uninstaller')) {
-          fs.rmSync(path.join(distDir, file), { force: true });
-        }
-      }
-      console.log('[BUILD] Successfully prepared dist directory.');
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`[BUILD] Cleaned ${label}.`);
       return;
     } catch (err) {
       if (i === retries - 1) {
-        console.warn('[BUILD] Warning during clean:', err.message);
+        console.warn(`[BUILD] Warning: could not clean ${label}: ${err.message}`);
       } else {
         const end = Date.now() + delay;
         while (Date.now() < end) {}
@@ -41,4 +34,17 @@ function cleanUnpacked(retries = 8, delay = 1500) {
   }
 }
 
-cleanUnpacked();
+// Clean the temp build dir and recreate it
+cleanDir(buildDir, 'C:\\Temp\\ALS-build');
+fs.mkdirSync(buildDir, { recursive: true });
+
+// Also clean old .exe files from dist (keep folder itself)
+if (fs.existsSync(distDir)) {
+  for (const file of fs.readdirSync(distDir)) {
+    if (file.endsWith('.exe') || file.endsWith('.7z') || file.endsWith('.blockmap') || file.includes('__uninstaller')) {
+      try { fs.rmSync(path.join(distDir, file), { force: true }); } catch {}
+    }
+  }
+}
+
+console.log('[BUILD] Successfully prepared build directory.');
