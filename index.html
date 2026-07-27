@@ -639,11 +639,17 @@
 
         async function fetchDevices() {
             try {
-                const { data } = await _supabase.from('device_status').select('id, device_id, device_name');
+                const { data } = await _supabase
+                    .from('device_status')
+                    .select('id, device_id, device_name, last_seen')
+                    .order('last_seen', { ascending: false });
+
                 const select = document.getElementById('deviceSelect');
                 if (select && data && data.length > 0) {
                     select.innerHTML = '';
                     const deviceMap = new Map();
+                    let foundActive = false;
+
                     data.forEach(d => {
                         const devId = d.device_id || d.id;
                         const devName = d.device_name || d.id;
@@ -652,10 +658,21 @@
                             const opt = document.createElement('option');
                             opt.value = devId;
                             opt.innerText = `${devName} (${devId})`;
-                            if (devId === activeDeviceId) opt.selected = true;
+                            if (devId === activeDeviceId) {
+                                opt.selected = true;
+                                foundActive = true;
+                            }
                             select.appendChild(opt);
                         }
                     });
+
+                    // If activeDeviceId is stale/not found, auto-target the most recently seen device
+                    if (!foundActive && data.length > 0) {
+                        const mostRecent = data[0].device_id || data[0].id;
+                        activeDeviceId = mostRecent;
+                        select.value = mostRecent;
+                        fetchInitialStatus();
+                    }
                 }
             } catch (err) {
                 console.error('[DEVICES] Failed to fetch device list:', err);

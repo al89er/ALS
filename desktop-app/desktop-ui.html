@@ -727,11 +727,22 @@
         // ==========================================
         // 1. HEARTBEAT ENGINE
         // ==========================================
+        let activeDeviceId = 'home_desktop_agent';
+
+        async function getActiveDeviceIdUI() {
+            if (window.electronAPI && window.electronAPI.getDeviceConfig) {
+                const cfg = await window.electronAPI.getDeviceConfig();
+                if (cfg && cfg.device_id) return cfg.device_id;
+            }
+            return 'home_desktop_agent';
+        }
+
         async function fetchInitialStatus() {
+            activeDeviceId = await getActiveDeviceIdUI();
             const { data, error } = await _supabase
                 .from('device_status')
                 .select('*')
-                .eq('id', 'home_desktop_agent')
+                .or(`id.eq.${activeDeviceId},device_id.eq.${activeDeviceId}`)
                 .maybeSingle();
 
             if (data) updateHeartbeat(data.last_seen, data.current_status);
@@ -992,12 +1003,15 @@
             
         
 
-function bindChannels() {
-_supabase.channel('heartbeat-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status', filter: "id=eq.home_desktop_agent" }, payload => {
+async function bindChannels() {
+    activeDeviceId = await getActiveDeviceIdUI();
+    _supabase.channel(`heartbeat-${activeDeviceId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, payload => {
+            if (payload.new && (payload.new.id === activeDeviceId || payload.new.device_id === activeDeviceId)) {
                 updateHeartbeat(payload.new.last_seen, payload.new.current_status);
-            })
-            .subscribe();
+            }
+        })
+        .subscribe();
 _supabase.channel('logs-channel')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
                 if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
