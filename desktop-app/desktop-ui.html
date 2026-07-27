@@ -563,6 +563,42 @@
                 </div>
             </div>
 
+            <!-- Automated Schedule Settings Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Automated Clock In / Out Schedule</h2>
+                    <span class="panel-subtitle">Enable automatic daily execution and configure target times</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.95rem; color: #fff;">Auto Clock-In / Clock-Out</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">Automatically run background automation daily</div>
+                        </div>
+                        <input type="checkbox" id="autoClockToggle" onchange="toggleAutoClockDetails(this.checked)" style="width: 1.4rem; height: 1.4rem; accent-color: var(--accent-blue); cursor: pointer;" />
+                    </div>
+
+                    <div id="autoClockDetails" style="display: flex; flex-direction: column; gap: 1rem; transition: all 0.3s ease;">
+                        <div class="grid-2">
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Base Clock-In Time</label>
+                                <input type="time" id="clockInTimeInput" value="07:45" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Base Clock-Out Time</label>
+                                <input type="time" id="clockOutTimeInput" value="17:05" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Randomized Period / Jitter Window (Minutes)</label>
+                            <input type="number" id="randomPeriodInput" min="0" max="60" value="5" placeholder="e.g. 5" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                            <span style="font-size: 0.75rem; color: var(--text-secondary);">e.g. Base 07:45 with 5 mins period triggers randomly between 07:45 and 07:50.</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveDeviceConfigUI()">Save Schedule Settings</button>
+                </div>
+            </div>
+
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="panel-title">Local Engine Parameters</h2>
@@ -987,9 +1023,14 @@ _supabase.channel('skip-channel')
             .subscribe();
 }
 
-        // ==========================================
-        // 6. ELECTRON DESKTOP IPC
-        // ==========================================
+        function toggleAutoClockDetails(enabled) {
+            const details = document.getElementById('autoClockDetails');
+            if (details) {
+                details.style.opacity = enabled ? '1' : '0.35';
+                details.style.pointerEvents = enabled ? 'auto' : 'none';
+            }
+        }
+
         async function loadDeviceConfigUI() {
             if (window.electronAPI && window.electronAPI.getDeviceConfig) {
                 const config = await window.electronAPI.getDeviceConfig();
@@ -1000,6 +1041,15 @@ _supabase.channel('skip-channel')
                     if (document.getElementById('upmPasswordInput')) document.getElementById('upmPasswordInput').value = config.upm_password || '';
                     if (document.getElementById('supabaseUrlInput')) document.getElementById('supabaseUrlInput').value = config.supabase_url || '';
                     if (document.getElementById('supabaseKeyInput')) document.getElementById('supabaseKeyInput').value = config.supabase_key || '';
+                    
+                    const isAuto = typeof config.auto_clock_enabled === 'boolean' ? config.auto_clock_enabled : true;
+                    if (document.getElementById('autoClockToggle')) {
+                        document.getElementById('autoClockToggle').checked = isAuto;
+                        toggleAutoClockDetails(isAuto);
+                    }
+                    if (document.getElementById('clockInTimeInput')) document.getElementById('clockInTimeInput').value = config.clock_in_base_time || '07:45';
+                    if (document.getElementById('clockOutTimeInput')) document.getElementById('clockOutTimeInput').value = config.clock_out_base_time || '17:05';
+                    if (document.getElementById('randomPeriodInput')) document.getElementById('randomPeriodInput').value = typeof config.random_period_minutes === 'number' ? config.random_period_minutes : 5;
                 }
             }
         }
@@ -1012,10 +1062,14 @@ _supabase.channel('skip-channel')
                     upm_username: document.getElementById('upmUsernameInput').value.trim(),
                     upm_password: document.getElementById('upmPasswordInput').value.trim(),
                     supabase_url: document.getElementById('supabaseUrlInput').value.trim(),
-                    supabase_key: document.getElementById('supabaseKeyInput').value.trim()
+                    supabase_key: document.getElementById('supabaseKeyInput').value.trim(),
+                    auto_clock_enabled: document.getElementById('autoClockToggle') ? document.getElementById('autoClockToggle').checked : true,
+                    clock_in_base_time: document.getElementById('clockInTimeInput') ? document.getElementById('clockInTimeInput').value || '07:45' : '07:45',
+                    clock_out_base_time: document.getElementById('clockOutTimeInput') ? document.getElementById('clockOutTimeInput').value || '17:05' : '17:05',
+                    random_period_minutes: document.getElementById('randomPeriodInput') ? parseInt(document.getElementById('randomPeriodInput').value, 10) || 0 : 5
                 };
                 await window.electronAPI.saveDeviceConfig(config);
-                alert('Device & Credentials saved! Please restart the desktop app to apply changes.');
+                alert('Device & Schedule Settings saved successfully!');
             }
         }
 

@@ -54,8 +54,29 @@ async function generateDailySchedule(supabase) {
     isSkipDay = cache.skip_days.includes(dateString);
   }
 
-  if (isWeekend || isSkipDay) {
-      console.log(`[SCHEDULER] Today (${dateString}) is skipped (Weekend/Holiday). No automation scheduled for ${deviceId}.`);
+function generateRandomTimeStr(baseTimeStr, durationMinutes = 5) {
+  if (!baseTimeStr || typeof baseTimeStr !== 'string') baseTimeStr = '07:45';
+  const [hStr, mStr] = baseTimeStr.split(':');
+  let baseHour = parseInt(hStr, 10) || 7;
+  let baseMin = parseInt(mStr, 10) || 45;
+  const dur = Math.max(0, parseInt(durationMinutes, 10) || 0);
+
+  const baseTotalMins = baseHour * 60 + baseMin;
+  const offset = dur > 0 ? getRandomMinute(0, dur) : 0;
+  const targetTotalMins = baseTotalMins + offset;
+
+  const targetHour = Math.floor(targetTotalMins / 60) % 24;
+  const targetMin = targetTotalMins % 60;
+
+  return `${targetHour.toString().padStart(2, '0')}:${targetMin.toString().padStart(2, '0')}`;
+}
+
+  const deviceConfig = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
+  const isAutoEnabled = deviceConfig.auto_clock_enabled !== false;
+
+  if (isWeekend || isSkipDay || !isAutoEnabled) {
+      const skipReason = !isAutoEnabled ? 'Auto Clock Disabled' : 'Weekend/Holiday';
+      console.log(`[SCHEDULER] Today (${dateString}) is skipped (${skipReason}). No automation scheduled for ${deviceId}.`);
       
       const payload = {
           date: dateString,
@@ -70,26 +91,23 @@ async function generateDailySchedule(supabase) {
       if (supabaseOnline) {
           try {
               await supabase.from('daily_schedules').upsert(payload);
-              await supabase.from('logs').insert({ action: 'scheduler', status: 'skipped', message: `Automation skipped for ${dateString}`, device_id: deviceId });
+              await supabase.from('logs').insert({ action: 'scheduler', status: 'skipped', message: `Automation skipped for ${dateString} (${skipReason})`, device_id: deviceId });
               cacheManager.mergeDailySchedule(payload, true);
           } catch(e) {
               cacheManager.mergeDailySchedule(payload, false);
-              cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
+              cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString} (${skipReason})`);
           }
       } else {
           cacheManager.mergeDailySchedule(payload, false);
-          cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString}`);
+          cacheManager.logOffline('scheduler', 'skipped', `Automation skipped for ${dateString} (${skipReason})`);
       }
       scheduleCronJobs(payload, supabase);
       return;
   }
   
-  // 2. Generate random times
-  const inMinute = getRandomMinute(45, 50);
-  const inTimeStr = `07:${inMinute.toString().padStart(2, '0')}`;
-  
-  const outMinute = getRandomMinute(5, 10);
-  const outTimeStr = `17:${outMinute.toString().padStart(2, '0')}`;
+  // 2. Generate random times using device configuration
+  const inTimeStr = generateRandomTimeStr(deviceConfig.clock_in_base_time || '07:45', deviceConfig.random_period_minutes);
+  const outTimeStr = generateRandomTimeStr(deviceConfig.clock_out_base_time || '17:05', deviceConfig.random_period_minutes);
   
   const scheduleData = {
       date: dateString,

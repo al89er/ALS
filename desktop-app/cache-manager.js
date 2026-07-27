@@ -132,7 +132,11 @@ const DEFAULT_DEVICE_CONFIG = {
   upm_username: process.env.UPM_USERNAME || '',
   upm_password: process.env.UPM_PASSWORD || '',
   supabase_url: process.env.SUPABASE_URL || '',
-  supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+  supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+  auto_clock_enabled: true,
+  clock_in_base_time: '07:45',
+  clock_out_base_time: '17:05',
+  random_period_minutes: 5
 };
 
 function getDeviceConfig() {
@@ -149,7 +153,11 @@ function getDeviceConfig() {
       upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
       upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
       supabase_url: parsed.supabase_url || process.env.SUPABASE_URL || '',
-      supabase_key: parsed.supabase_key || process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+      supabase_key: parsed.supabase_key || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+      auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
+      clock_in_base_time: parsed.clock_in_base_time || '07:45',
+      clock_out_base_time: parsed.clock_out_base_time || '17:05',
+      random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5
     };
   } catch (err) {
     return { ...DEFAULT_DEVICE_CONFIG };

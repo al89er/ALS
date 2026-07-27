@@ -385,4 +385,24 @@ test('Reliability Improvements', async (t) => {
     assert.ok(updatedCache.skip_days.includes('2026-07-25'));
     assert.ok(updatedCache.skip_days.includes('2026-07-30'));
   });
+
+  await t.test('Schedule settings options and defaults', async () => {
+    const config = cacheManager.getDeviceConfig();
+    assert.strictEqual(config.auto_clock_enabled, true);
+    assert.strictEqual(config.clock_in_base_time, '07:45');
+    assert.strictEqual(config.clock_out_base_time, '17:05');
+    assert.strictEqual(config.random_period_minutes, 5);
+
+    const saved = cacheManager.saveDeviceConfig({
+      auto_clock_enabled: false,
+      clock_in_base_time: '08:00',
+      clock_out_base_time: '17:30',
+      random_period_minutes: 10
+    });
+
+    assert.strictEqual(saved.auto_clock_enabled, false);
+    assert.strictEqual(saved.clock_in_base_time, '08:00');
+    assert.strictEqual(saved.clock_out_base_time, '17:30');
+    assert.strictEqual(saved.random_period_minutes, 10);
+  });
 });
