@@ -646,9 +646,11 @@
                     .order('last_seen', { ascending: false });
 
                 const select = document.getElementById('deviceSelect');
-                if (select && data && data.length > 0) {
+                if (select) {
                     select.innerHTML = '';
-                    const deviceMap = new Map();
+                    
+                    if (data && data.length > 0) {
+                        const deviceMap = new Map();
                     let foundActive = false;
 
                     data.forEach(d => {
@@ -674,7 +676,14 @@
                         select.value = mostRecent;
                         fetchInitialStatus();
                     }
+                } else {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.innerText = 'No Devices Found';
+                    select.appendChild(opt);
+                    activeDeviceId = null;
                 }
+            }
             } catch (err) {
                 console.error('[DEVICES] Failed to fetch device list:', err);
             }
