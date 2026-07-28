@@ -731,7 +731,7 @@
                 statusText.innerText = 'Captive Portal';
             } else if (isOnline) {
                 statusBadge.className = 'status-badge status-online';
-                statusText.innerText = 'Online';
+                statusText.innerText = 'Connected';
             } else {
                 statusBadge.className = 'status-badge';
                 statusText.innerText = 'Offline';
@@ -1046,7 +1046,12 @@
                     fetchDevices();
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    // Instantly refresh the last_seen time when the browser tab wakes up from sleep
+                    fetchInitialStatus();
+                }
+            });
 
             _supabase.channel(`logs-${activeDeviceId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
