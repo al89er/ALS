@@ -5,8 +5,19 @@ require('dotenv').config({ path: envPath });
 const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 
 // Isolate user data between Full and Lite editions to prevent settings crossover
-const getAppEdition = require('./cache-manager').getAppEdition;
-const edition = getAppEdition();
+// Evaluate this BEFORE requiring cache-manager to ensure settings files use the correct path!
+let edition = 'full';
+if (process.env.ALS_EDITION) {
+  edition = process.env.ALS_EDITION.toLowerCase();
+} else {
+  try {
+    const pkg = require('./package.json');
+    if (pkg && pkg.edition) {
+      edition = pkg.edition.toLowerCase();
+    }
+  } catch(e) {}
+}
+
 const appDataPath = path.join(app.getPath('appData'), edition === 'lite' ? 'ALS-Lite' : 'ALS-Full');
 app.setPath('userData', appDataPath);
 

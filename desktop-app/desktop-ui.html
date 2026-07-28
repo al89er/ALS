@@ -444,7 +444,7 @@
     <nav>
         <div class="nav-container">
             <div class="brand">
-                ALS Automation Engine
+                <span id="appBrandTitle">ALS Automation Engine</span>
                 <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v?.?.?</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
@@ -704,6 +704,11 @@
             _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
             
             const config = await window.electronAPI.getDeviceConfig();
+            if (config && config.edition === 'lite') {
+                document.title = 'ALS Desktop Engine [Lite]';
+                document.getElementById('appBrandTitle').innerText = 'ALS Automation Engine Lite';
+            }
+
             if (config && config.supabase_email && config.supabase_password) {
                 await _supabase.auth.signInWithPassword({ email: config.supabase_email, password: config.supabase_password });
             }
