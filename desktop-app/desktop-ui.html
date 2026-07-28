@@ -444,7 +444,8 @@
     <nav>
         <div class="nav-container">
             <div class="brand">
-                ALS Hub
+                ALS Automation Engine
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v?.?.?</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -549,6 +550,16 @@
                         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                             <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">UPM Password</label>
                             <input type="password" id="upmPasswordInput" placeholder="UPM Password" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase Email (Web App Login)</label>
+                            <input type="email" id="supabaseEmailInput" placeholder="Email" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Supabase Password</label>
+                            <input type="password" id="supabasePasswordInput" placeholder="Password" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
                         </div>
                     </div>
                     <!-- Advanced Cloud Endpoint Settings (Built-in by Default) -->
@@ -690,7 +701,12 @@
 
         async function initDesktopClient() {
             const env = await window.electronAPI.getEnvVariables();
-            _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+            _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+            
+            const config = await window.electronAPI.getDeviceConfig();
+            if (config && config.supabase_email && config.supabase_password) {
+                await _supabase.auth.signInWithPassword({ email: config.supabase_email, password: config.supabase_password });
+            }
             
             // Re-bind all channels after client creation
             bindChannels();
@@ -1066,6 +1082,8 @@ _supabase.channel('skip-channel')
                     if (document.getElementById('deviceNameInput')) document.getElementById('deviceNameInput').value = config.device_name || '';
                     if (document.getElementById('upmUsernameInput')) document.getElementById('upmUsernameInput').value = config.upm_username || '';
                     if (document.getElementById('upmPasswordInput')) document.getElementById('upmPasswordInput').value = config.upm_password || '';
+                    if (document.getElementById('supabaseEmailInput')) document.getElementById('supabaseEmailInput').value = config.supabase_email || '';
+                    if (document.getElementById('supabasePasswordInput')) document.getElementById('supabasePasswordInput').value = config.supabase_password || '';
                     if (document.getElementById('supabaseUrlInput')) document.getElementById('supabaseUrlInput').value = config.supabase_url || '';
                     if (document.getElementById('supabaseKeyInput')) document.getElementById('supabaseKeyInput').value = config.supabase_key || '';
                     
@@ -1087,7 +1105,9 @@ _supabase.channel('skip-channel')
                     device_id: document.getElementById('deviceIdInput').value.trim() || 'home_desktop_agent',
                     device_name: document.getElementById('deviceNameInput').value.trim() || 'Home Desktop Agent',
                     upm_username: document.getElementById('upmUsernameInput').value.trim(),
-                    upm_password: document.getElementById('upmPasswordInput').value.trim(),
+                    upm_password: document.getElementById('upmPasswordInput').value,
+                    supabase_email: document.getElementById('supabaseEmailInput') ? document.getElementById('supabaseEmailInput').value.trim() : '',
+                    supabase_password: document.getElementById('supabasePasswordInput') ? document.getElementById('supabasePasswordInput').value : '',
                     supabase_url: document.getElementById('supabaseUrlInput').value.trim(),
                     supabase_key: document.getElementById('supabaseKeyInput').value.trim(),
                     auto_clock_enabled: document.getElementById('autoClockToggle') ? document.getElementById('autoClockToggle').checked : true,
@@ -1099,6 +1119,17 @@ _supabase.channel('skip-channel')
                 alert('Device & Schedule Settings saved successfully!');
             }
         }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (window.electronAPI && window.electronAPI.getAppVersion) {
+                const version = await window.electronAPI.getAppVersion();
+                const badge = document.getElementById('appVersionBadge');
+                if (badge && version) {
+                    badge.textContent = `v${version}`;
+                }
+            }
+            await loadDeviceConfigUI();
+        });
 
         async function loadLocalSettings() {
             await loadDeviceConfigUI();

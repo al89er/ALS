@@ -1,7 +1,8 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const fs = require('fs');
+const envPath = fs.existsSync(path.join(__dirname, 'bundled.env')) ? path.join(__dirname, 'bundled.env') : path.join(__dirname, '.env');
+require('dotenv').config({ path: envPath });
+const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
 const { initSupabase, supabase } = require('./supabase-client');
 const scheduler = require('./scheduler');
 
@@ -71,7 +72,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ipcMain.handle('get-env-variables', () => {
-    return { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY };
+    return { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY };
+  });
+
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
   });
 
   ipcMain.handle('read-cache', () => {

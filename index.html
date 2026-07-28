@@ -478,8 +478,9 @@
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <label style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Device:</label>
                 <select id="deviceSelect" onchange="onDeviceChange(this.value)" style="background: rgba(0,0,0,0.4); color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; outline: none; cursor: pointer;">
-                    <option value="home_desktop_agent">Home Desktop Agent (Default)</option>
+                    <option value="home_desktop_agent">Office PC (home_desktop_agent)</option>
                 </select>
+                <button onclick="handleSignOut()" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; margin-left: 0.5rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'">Logout</button>
             </div>
             <div class="tab-menu">
                 <button class="tab-btn active" onclick="switchTab('control')">Control</button>
@@ -974,24 +975,11 @@
 
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
+            
             if (session) {
                 const urlParamDeviceId = new URLSearchParams(window.location.search).get('device_id');
                 if (urlParamDeviceId) {
                     activeDeviceId = urlParamDeviceId;
-                } else if (session.user && session.user.email) {
-                    // Check if user email exists in device_status, otherwise fall back to home_desktop_agent
-                    const { data: userDevice } = await _supabase
-                        .from('device_status')
-                        .select('id, device_id')
-                        .or(`id.eq.${session.user.email},device_id.eq.${session.user.email}`)
-                        .maybeSingle();
-
-                    if (userDevice) {
-                        activeDeviceId = session.user.email;
-                    } else {
-                        // Desktop agent hasn't updated device_id yet: keep legacy home_desktop_agent
-                        activeDeviceId = 'home_desktop_agent';
-                    }
                 }
                 loginOverlay.style.display = 'none';
                 appContainer.style.display = 'block';

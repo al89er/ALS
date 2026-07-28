@@ -8,5 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveDeviceConfig: (config) => ipcRenderer.invoke('save-device-config', config),
     openBrowser: () => ipcRenderer.invoke('open-browser'),
     requestManualProof: () => ipcRenderer.invoke('request-manual-proof'),
-    getEnvVariables: () => ipcRenderer.invoke('get-env-variables')
+    getEnvVariables: () => ipcRenderer.invoke('get-env-variables'),
+    getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });

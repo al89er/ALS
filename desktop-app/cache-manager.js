@@ -138,17 +138,19 @@ function getAppEdition() {
 }
 
 const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || 'https://pvutxjfkskzgccawfibu.supabase.co';
-const DEFAULT_SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjI1Njg5MywiZXhwIjoyMDk3ODMyODkzfQ.j41U6Fm1ykBbgabpkhdxyp5G9-X-bvGmEOSkTYHGhtI';
+const DEFAULT_SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw';
 
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
 const DEFAULT_DEVICE_CONFIG = {
-  device_id: process.env.DEVICE_ID || process.env.UPM_USERNAME || 'home_desktop_agent',
-  device_name: process.env.DEVICE_NAME || process.env.UPM_USERNAME || 'Home Desktop Agent',
+  device_id: process.env.DEVICE_ID || 'home_desktop_agent',
+  device_name: process.env.DEVICE_NAME || 'Home Desktop Agent',
   upm_username: process.env.UPM_USERNAME || '',
   upm_password: process.env.UPM_PASSWORD || '',
   supabase_url: DEFAULT_SUPABASE_URL,
   supabase_key: DEFAULT_SUPABASE_KEY,
+  supabase_email: getAppEdition() === 'lite' ? '' : (process.env.SUPABASE_EMAIL || ''),
+  supabase_password: getAppEdition() === 'lite' ? '' : (process.env.SUPABASE_PASSWORD || ''),
   auto_clock_enabled: true,
   clock_in_base_time: '07:45',
   clock_out_base_time: '17:05',
@@ -164,14 +166,16 @@ function getDeviceConfig() {
   try {
     const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    const fallbackId = parsed.device_id || process.env.DEVICE_ID || parsed.upm_username || process.env.UPM_USERNAME || 'home_desktop_agent';
+    const fallbackId = parsed.device_id || process.env.DEVICE_ID || 'home_desktop_agent';
     return {
       device_id: fallbackId,
-      device_name: parsed.device_name || process.env.DEVICE_NAME || parsed.upm_username || 'Home Desktop Agent',
+      device_name: parsed.device_name || process.env.DEVICE_NAME || 'Home Desktop Agent',
       upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
       upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
       supabase_url: parsed.supabase_url || DEFAULT_SUPABASE_URL,
       supabase_key: parsed.supabase_key || DEFAULT_SUPABASE_KEY,
+      supabase_email: parsed.supabase_email || (edition === 'lite' ? '' : (process.env.SUPABASE_EMAIL || '')),
+      supabase_password: parsed.supabase_password || (edition === 'lite' ? '' : (process.env.SUPABASE_PASSWORD || '')),
       auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
       clock_in_base_time: parsed.clock_in_base_time || '07:45',
       clock_out_base_time: parsed.clock_out_base_time || '17:05',

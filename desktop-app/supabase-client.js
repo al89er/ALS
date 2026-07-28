@@ -335,8 +335,26 @@ function startCommandListener() {
     });
 }
 
-function initSupabase() {
+async function initSupabase() {
   console.log('[SUPABASE] Initializing Supabase client with Multi-Device support...');
+  
+  const config = cacheManager.getDeviceConfig();
+  if (config.supabase_email && config.supabase_password) {
+    console.log(`[SUPABASE] Authenticating as ${config.supabase_email}...`);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: config.supabase_email,
+      password: config.supabase_password
+    });
+    
+    if (error) {
+      console.error('[SUPABASE] Authentication failed! Check your credentials in Settings.', error.message);
+    } else {
+      console.log('[SUPABASE] Authentication successful.');
+    }
+  } else {
+    console.warn('[SUPABASE] No Supabase email/password configured. Assuming anonymous/service role, but RLS may block access.');
+  }
+
   startHeartbeat();
   startCommandListener();
 }
