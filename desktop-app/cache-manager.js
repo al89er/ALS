@@ -20,6 +20,20 @@ function resolveCacheFile() {
 
 const CACHE_FILE = resolveCacheFile();
 
+// Attempt to migrate old 'desktop-app' cache if we are in 'ALS-Full' and it's empty
+try {
+  const { app } = require('electron');
+  if (app && typeof app.getPath === 'function') {
+    if (!fs.existsSync(CACHE_FILE) && getAppEdition() !== 'lite') {
+      const oldCacheFile = path.join(app.getPath('appData'), 'desktop-app', 'local_cache.json');
+      if (fs.existsSync(oldCacheFile)) {
+        fs.copyFileSync(oldCacheFile, CACHE_FILE);
+        console.log('[CACHE] Migrated old cache to new ALS-Full directory');
+      }
+    }
+  }
+} catch (e) {}
+
 const DEFAULT_CACHE = {
   system_config: {
     target_url: 'https://perakamwaktu3.upm.edu.my/',
@@ -142,9 +156,23 @@ const DEFAULT_SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1N
 
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
+// Attempt to migrate old 'desktop-app' config if we are in 'ALS-Full' and it's empty
+try {
+  const { app } = require('electron');
+  if (app && typeof app.getPath === 'function') {
+    if (!fs.existsSync(SETTINGS_FILE) && getAppEdition() !== 'lite') {
+      const oldSettingsFile = path.join(app.getPath('appData'), 'desktop-app', 'local_settings.json');
+      if (fs.existsSync(oldSettingsFile)) {
+        fs.copyFileSync(oldSettingsFile, SETTINGS_FILE);
+        console.log('[CACHE] Migrated old settings to new ALS-Full directory');
+      }
+    }
+  }
+} catch (e) {}
+
 const DEFAULT_DEVICE_CONFIG = {
-  device_id: process.env.DEVICE_ID || 'home_desktop_agent',
-  device_name: process.env.DEVICE_NAME || 'Home Desktop Agent',
+  device_id: process.env.DEVICE_ID || (getAppEdition() === 'lite' ? 'lite_desktop_agent' : 'home_desktop_agent'),
+  device_name: process.env.DEVICE_NAME || (getAppEdition() === 'lite' ? 'Lite Desktop Agent' : 'Home Desktop Agent'),
   upm_username: process.env.UPM_USERNAME || '',
   upm_password: process.env.UPM_PASSWORD || '',
   supabase_url: DEFAULT_SUPABASE_URL,
@@ -166,10 +194,10 @@ function getDeviceConfig() {
   try {
     const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    const fallbackId = parsed.device_id || process.env.DEVICE_ID || 'home_desktop_agent';
+    const fallbackId = parsed.device_id || process.env.DEVICE_ID || (edition === 'lite' ? 'lite_desktop_agent' : 'home_desktop_agent');
     return {
       device_id: fallbackId,
-      device_name: parsed.device_name || process.env.DEVICE_NAME || 'Home Desktop Agent',
+      device_name: parsed.device_name || process.env.DEVICE_NAME || (edition === 'lite' ? 'Lite Desktop Agent' : 'Home Desktop Agent'),
       upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
       upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
       supabase_url: parsed.supabase_url || DEFAULT_SUPABASE_URL,
