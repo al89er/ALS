@@ -159,7 +159,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
       let cpContext;
       try {
-        cpContext = await chromium.launch({ headless: true });
+        cpContext = await chromium.launch({ channel: 'msedge', headless: true });
         const cpPage = await cpContext.newPage();
         await cpPage.goto('http://neverssl.com', { waitUntil: 'networkidle', timeout: 20000 });
         
@@ -207,6 +207,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
       userDataDir = path.join(require('os').homedir(), '.als_upm_session');
     }
     context = await chromium.launchPersistentContext(userDataDir, {
+      channel: 'msedge',
       headless: !config.showBrowser,
       viewport: { width: 1280, height: 720 }
     });
@@ -401,6 +402,7 @@ async function openDebugBrowser(supabase) {
   }
   console.log('[PLAYWRIGHT] Opening standalone debug browser...');
   const context = await chromium.launchPersistentContext(userDataDir, {
+    channel: 'msedge',
     headless: false,
     viewport: { width: 1280, height: 720 }
   });
