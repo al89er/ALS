@@ -3,6 +3,13 @@ const fs = require('fs');
 const envPath = fs.existsSync(path.join(__dirname, 'bundled.env')) ? path.join(__dirname, 'bundled.env') : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
 const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
+
+// Isolate user data between Full and Lite editions to prevent settings crossover
+const getAppEdition = require('./cache-manager').getAppEdition;
+const edition = getAppEdition();
+const appDataPath = path.join(app.getPath('appData'), edition === 'lite' ? 'ALS-Lite' : 'ALS-Full');
+app.setPath('userData', appDataPath);
+
 const { initSupabase, supabase } = require('./supabase-client');
 const scheduler = require('./scheduler');
 
