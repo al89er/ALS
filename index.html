@@ -685,7 +685,9 @@
 
                     // If activeDeviceId is stale/not found, auto-target the most recently seen device
                     if (!foundActive && data.length > 0) {
-                        const mostRecent = data[0].device_id || data[0].id;
+                        // If home_desktop_agent exists, prioritize it for the Admin!
+                        const homeAgent = data.find(d => (d.device_id || d.id) === 'home_desktop_agent');
+                        const mostRecent = homeAgent ? 'home_desktop_agent' : (data[0].device_id || data[0].id);
                         onDeviceChange(mostRecent);
                     }
                 } else {
