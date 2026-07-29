@@ -1060,9 +1060,9 @@
             window.location.reload();
         }
 
-        function bindChannels() {
+        async function bindChannels() {
             if (_supabase.removeAllChannels) {
-                _supabase.removeAllChannels();
+                await _supabase.removeAllChannels();
             }
 
             _supabase.channel(`heartbeat-${activeDeviceId}`)
