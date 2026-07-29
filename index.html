@@ -922,21 +922,29 @@
         // 5. TODAY'S DATA (PROOF & SCHEDULE)
         // ==========================================
         async function fetchTodaysData() {
-            const todayStr = new Date().toLocaleDateString('en-CA');
-            
-            const [sysRes, proofRes, schedRes] = await Promise.all([
-                _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
-                _supabase.from('todays_proof').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle(),
-                _supabase.from('daily_schedules').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle()
-            ]);
-            
-            if (proofRes.data) updateProofUI(proofRes.data);
-            else updateProofUI(null);
-            
-            if (schedRes.data) {
-                updateScheduleUI(schedRes.data);
-            } else {
-                updateScheduleUI(null);
+            try {
+                const d = new Date();
+                const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                
+                const [sysRes, proofRes, schedRes] = await Promise.all([
+                    _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
+                    _supabase.from('todays_proof').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle(),
+                    _supabase.from('daily_schedules').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle()
+                ]);
+                
+                if (proofRes.error) console.error('[FETCH] Proof Error:', proofRes.error);
+                if (schedRes.error) console.error('[FETCH] Sched Error:', schedRes.error);
+
+                if (proofRes.data) updateProofUI(proofRes.data);
+                else updateProofUI(null);
+                
+                if (schedRes.data) {
+                    updateScheduleUI(schedRes.data);
+                } else {
+                    updateScheduleUI(null);
+                }
+            } catch (err) {
+                console.error('[FETCH] Fatal Error in fetchTodaysData:', err);
             }
         }
 
@@ -956,7 +964,8 @@
 
         function updateScheduleUI(sched) {
             if (!sched) {
-                const todayStr = new Date().toLocaleDateString('en-CA');
+                const d = new Date();
+                const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                 const dateObj = new Date(todayStr + "T12:00:00");
                 const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
                 schedDate.innerText = dateObj.toLocaleDateString('en-US', options) + ' (Pending)';
