@@ -8,7 +8,8 @@
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <!-- PWA Requirements -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0b0f19">
+    <meta name="theme-color" content="#1e293b">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icon.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -465,7 +466,7 @@
     <div id="loginOverlay" style="position: fixed; inset: 0; background: var(--bg-color); z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
         <div style="background: rgba(30, 41, 59, 0.6); padding: 2.5rem; border-radius: 16px; border: 1px solid var(--border-color); width: 90%; max-width: 400px; text-align: center; backdrop-filter: blur(12px);">
             <h1 style="margin-bottom: 0.5rem; font-size: 1.5rem; color: #fff;">ALS Authorization</h1>
-            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem;">Please sign in to access the dashboard. <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 4px;">v1.4.2</span></p>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem;">Please sign in to access the dashboard. <span style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 4px;">v1.5.0</span></p>
             <form id="loginForm" onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 1rem;">
                 <input type="email" id="emailInput" placeholder="Email" required style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); outline: none;">
                 <input type="password" id="passwordInput" placeholder="Password" required style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); outline: none;">
@@ -482,7 +483,7 @@
         <div class="nav-container">
             <div class="brand">
                 ALS Hub
-                <span style="font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 6px; letter-spacing: 0.5px;">v1.4.2</span>
+                <span style="font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 6px; letter-spacing: 0.5px;">v1.5.0</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -994,6 +995,16 @@
         const appContainer = document.getElementById('appContainer');
         const loginError = document.getElementById('loginError');
         const loginBtn = document.getElementById('loginBtn');
+
+        _supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+                window.location.reload();
+            } else if (event === 'TOKEN_REFRESH_FAILED') {
+                _supabase.auth.signOut().then(() => {
+                    window.location.reload();
+                });
+            }
+        });
 
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
