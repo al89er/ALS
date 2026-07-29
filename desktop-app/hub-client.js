@@ -42,7 +42,13 @@ function initHubAccounts() {
     if (!account.supabase_email || !account.supabase_password) continue;
 
     console.log(`[HUB] Initializing isolated client for ${account.device_id}...`);
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: true,
+        detectSessionInUrl: false
+      }
+    });
     
     supabase.auth.signInWithPassword({
       email: account.supabase_email,
