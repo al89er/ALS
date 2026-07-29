@@ -168,6 +168,14 @@ app.whenReady().then(() => {
     return cacheManager.getHubAccounts();
   });
   
+  ipcMain.handle('get-hub-account-status', async (event, deviceId) => {
+    if (edition === 'hub') {
+      const hubClient = require('./hub-client');
+      return await hubClient.getHubAccountStatus(deviceId);
+    }
+    return null;
+  });
+  
   ipcMain.handle('save-hub-account', (event, account) => {
     const cacheManager = require('./cache-manager');
     return cacheManager.saveHubAccount(account);

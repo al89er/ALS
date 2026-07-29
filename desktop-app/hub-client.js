@@ -115,6 +115,33 @@ function startHubCommandListener(supabase, account) {
     .subscribe();
 }
 
+async function getHubAccountStatus(deviceId) {
+  const client = activeClients.get(deviceId);
+  if (!client) {
+    return { status: null, proof: null, logs: [] };
+  }
+
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  
+  try {
+    const [statusRes, proofRes, logsRes] = await Promise.all([
+      client.from('device_status').select('current_status, last_seen').eq('device_id', deviceId).maybeSingle(),
+      client.from('todays_proof').select('*').eq('device_id', deviceId).eq('date', todayStr).maybeSingle(),
+      client.from('logs').select('*').eq('device_id', deviceId).order('created_at', { ascending: false }).limit(20)
+    ]);
+
+    return {
+      status: statusRes.data || null,
+      proof: proofRes.data || null,
+      logs: logsRes.data || []
+    };
+  } catch (err) {
+    console.error(`[HUB] Error fetching status for ${deviceId}:`, err);
+    return { status: null, proof: null, logs: [] };
+  }
+}
+
 module.exports = {
-  initHubAccounts
+  initHubAccounts,
+  getHubAccountStatus
 };

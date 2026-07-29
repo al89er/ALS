@@ -16,8 +16,14 @@
         button:hover { background: #2563eb; }
         button.danger { background: #ef4444; }
         button.danger:hover { background: #dc2626; }
-        .account-list { display: grid; gap: 10px; }
-        .account-item { display: flex; justify-content: space-between; align-items: center; background: #333; padding: 10px 15px; border-radius: 4px; }
+        .account-list { display: flex; flex-direction: column; gap: 15px; }
+        .account-item { background: #333; padding: 15px; border-radius: 6px; border: 1px solid #444; }
+        .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .account-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; color: #bbb; background: #222; padding: 10px; border-radius: 4px; }
+        .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: #555; color: white; margin-left: 10px; }
+        .status-online { background: #10b981; }
+        .status-offline { background: #ef4444; }
+        .logs-box { margin-top: 10px; background: #1a1a1a; padding: 10px; border-radius: 4px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px; color: #888; }
         .tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #333; }
         .tab { padding: 10px 20px; cursor: pointer; color: #888; font-weight: 500; }
         .tab.active { color: #fff; border-bottom: 2px solid #3b82f6; }
@@ -37,7 +43,10 @@
 
         <div id="accounts" class="tab-content active">
             <div class="card">
-                <h2>Managed Accounts</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 style="margin: 0;">Managed Accounts</h2>
+                    <button onclick="loadAccounts()" style="background: #444;">Refresh Status</button>
+                </div>
                 <div class="account-list" id="accountList">
                     <!-- Accounts injected here -->
                 </div>
@@ -101,20 +110,50 @@
             const accounts = await window.electronAPI.getHubAccounts();
             const list = document.getElementById('accountList');
             list.innerHTML = '';
+            
             if (accounts.length === 0) {
                 list.innerHTML = '<div style="color:#888;">No accounts configured.</div>';
+                return;
             }
-            accounts.forEach(acc => {
+
+            for (const acc of accounts) {
+                const data = await window.electronAPI.getHubAccountStatus(acc.device_id);
+                const isOnline = data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                const badgeClass = isOnline ? 'status-online' : 'status-offline';
+                const statusText = data.status ? data.status.current_status : 'UNKNOWN';
+                
+                let proofText = 'No proof today';
+                if (data.proof) {
+                    proofText = `IN: ${data.proof.clock_in || '--:--'} | OUT: ${data.proof.clock_out || '--:--'}`;
+                }
+
+                let logsHtml = '';
+                if (data.logs && data.logs.length > 0) {
+                    logsHtml = data.logs.map(log => `<div>[${new Date(log.created_at).toLocaleString()}] [${log.status}] ${log.message}</div>`).join('');
+                } else {
+                    logsHtml = '<div>No recent logs found.</div>';
+                }
+
                 list.innerHTML += `
                     <div class="account-item">
-                        <div>
-                            <strong>${acc.device_id}</strong><br>
-                            <small style="color:#aaa;">${acc.supabase_email}</small>
+                        <div class="account-header">
+                            <div>
+                                <strong>${acc.device_id}</strong>
+                                <span class="status-badge ${badgeClass}">${statusText}</span><br>
+                                <small style="color:#aaa;">${acc.supabase_email}</small>
+                            </div>
+                            <button class="danger" onclick="removeAccount('${acc.device_id}')">Remove</button>
                         </div>
-                        <button class="danger" onclick="removeAccount('${acc.device_id}')">Remove</button>
+                        <div class="account-details">
+                            <div><strong>Today's Proof:</strong><br>${proofText}</div>
+                            <div><strong>Last Seen:</strong><br>${data.status && data.status.last_seen ? new Date(data.status.last_seen).toLocaleString() : 'Never'}</div>
+                        </div>
+                        <div class="logs-box">
+                            ${logsHtml}
+                        </div>
                     </div>
                 `;
-            });
+            }
         }
 
         async function saveAccount() {
