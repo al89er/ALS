@@ -432,9 +432,6 @@
             .grid-2 {
                 grid-template-columns: 1fr;
             }
-            .btn-group {
-                flex-direction: column;
-            }
             .nav-container {
                 flex-direction: column;
                 height: auto;
@@ -991,14 +988,16 @@
                     activeDeviceId = urlParamDeviceId;
                 }
                 
-                // Hide System Status card for non-admin users
+                // Hide System Status card and Skips Tab for non-admin users
                 const systemStatusPanel = document.getElementById('systemStatusPanel');
-                if (systemStatusPanel) {
-                    if (session.user.email !== 'muhammadafif@upm.edu.my') {
-                        systemStatusPanel.style.display = 'none';
-                    } else {
-                        systemStatusPanel.style.display = 'block';
-                    }
+                const skipTabBtn = document.querySelector('.tab-btn[onclick="switchTab(\'skips\')"]');
+                
+                if (session.user.email !== 'muhammadafif@upm.edu.my') {
+                    if (systemStatusPanel) systemStatusPanel.style.display = 'none';
+                    if (skipTabBtn) skipTabBtn.style.display = 'none';
+                } else {
+                    if (systemStatusPanel) systemStatusPanel.style.display = 'block';
+                    if (skipTabBtn) skipTabBtn.style.display = 'flex';
                 }
 
                 loginOverlay.style.display = 'none';
