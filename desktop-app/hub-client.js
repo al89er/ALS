@@ -118,7 +118,52 @@ function startHubCommandListener(supabase, account) {
         processQueue();
       }
     )
-    .subscribe();
+    .subscribe((status) => {
+      console.log(`[HUB] Command listener subscription status for ${account.device_id}: ${status}`);
+      if (status === 'SUBSCRIBED') {
+        recoverPendingCommands(supabase, account);
+      }
+    });
+}
+
+async function recoverPendingCommands(supabase, account) {
+  try {
+    const { data: pendingCommands, error } = await supabase
+      .from('commands')
+      .select('id, action, created_at, device_id')
+      .eq('status', 'pending')
+      .eq('device_id', account.device_id)
+      .order('created_at', { ascending: true })
+      .limit(20);
+
+    if (error) {
+      console.error(`[HUB] Error fetching pending commands for ${account.device_id}:`, error.message);
+      return;
+    }
+
+    if (pendingCommands && pendingCommands.length > 0) {
+      console.log(`[HUB] Found ${pendingCommands.length} pending commands for ${account.device_id}. Recovering...`);
+      for (const cmd of pendingCommands) {
+        commandQueue.push(async () => {
+          try {
+            await supabase.from('commands').update({ status: 'processing', updated_at: new Date().toISOString() }).eq('id', cmd.id);
+            if (cmd.action === 'clock_in' || cmd.action === 'clock_out') {
+              await executeClockAction(cmd.action, supabase, { source: 'hub_manual', hubAccount: account });
+            } else if (cmd.action === 'manual_proof_sync') {
+              await manualFetchProof(supabase, { source: 'hub_manual', hubAccount: account });
+            }
+            await supabase.from('commands').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', cmd.id);
+          } catch (err) {
+            console.error(`[HUB] Command execution failed for ${account.device_id}:`, err);
+            await supabase.from('commands').update({ status: 'failed', updated_at: new Date().toISOString() }).eq('id', cmd.id);
+          }
+        });
+      }
+      processQueue();
+    }
+  } catch (err) {
+    console.error(`[HUB] Unexpected error during command recovery for ${account.device_id}:`, err.message);
+  }
 }
 
 async function getHubAccountStatus(deviceId) {

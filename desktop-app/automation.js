@@ -202,9 +202,15 @@ async function executeClockAction(actionType, supabase, options = {}) {
     console.log('[PLAYWRIGHT] Launching persistent browser context (headless: ' + !config.showBrowser + ')...');
     let userDataDir;
     try {
-      userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+      const basePath = require('electron').app.getPath('userData');
+      userDataDir = (options && options.hubAccount) 
+        ? path.join(basePath, `upm_session_${options.hubAccount.device_id}`) 
+        : path.join(basePath, 'upm_session');
     } catch (e) {
-      userDataDir = path.join(require('os').homedir(), '.als_upm_session');
+      const basePath = require('os').homedir();
+      userDataDir = (options && options.hubAccount) 
+        ? path.join(basePath, `.als_upm_session_${options.hubAccount.device_id}`) 
+        : path.join(basePath, '.als_upm_session');
     }
     context = await chromium.launchPersistentContext(userDataDir, {
       channel: 'msedge',
@@ -425,9 +431,15 @@ async function manualFetchProof(supabase, options = {}) {
     console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
     let userDataDir;
     try {
-      userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+      const basePath = require('electron').app.getPath('userData');
+      userDataDir = (options && options.hubAccount) 
+        ? path.join(basePath, `upm_session_${options.hubAccount.device_id}`) 
+        : path.join(basePath, 'upm_session');
     } catch (e) {
-      userDataDir = path.join(require('os').homedir(), '.als_upm_session');
+      const basePath = require('os').homedir();
+      userDataDir = (options && options.hubAccount) 
+        ? path.join(basePath, `.als_upm_session_${options.hubAccount.device_id}`) 
+        : path.join(basePath, '.als_upm_session');
     }
     context = await chromium.launchPersistentContext(userDataDir, {
       headless: !config.showBrowser,
