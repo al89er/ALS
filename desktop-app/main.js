@@ -56,7 +56,12 @@ global.updateTrayTooltip = function() {
 
     const skipText = isSkipped ? ' (Skipped)' : '';
 
-    const tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
+    let tooltipText = '';
+    if (edition === 'lite') {
+      tooltipText = `[LITE] Connectivity: ${global.connectivityState}\nProof In: ${inProof} | Out: ${outProof}`;
+    } else {
+      tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
+    }
 
     tray.setToolTip(tooltipText);
   } catch (err) {

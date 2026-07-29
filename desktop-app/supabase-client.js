@@ -252,7 +252,7 @@ async function reconcileCache() {
 }
 
 function startHeartbeat() {
-  setInterval(async () => {
+  const ping = async () => {
     try {
       const deviceId = getDeviceId();
       const deviceName = getDeviceName();
@@ -287,7 +287,10 @@ function startHeartbeat() {
       global.connectivityState = 'Offline';
       if (global.updateTrayTooltip) global.updateTrayTooltip();
     }
-  }, 30000);
+  };
+
+  ping(); // Fire immediately on startup
+  setInterval(ping, 30000);
 }
 
 function startCommandListener() {

@@ -1121,7 +1121,7 @@ _supabase.channel('skip-channel')
                     random_period_minutes: document.getElementById('randomPeriodInput') ? parseInt(document.getElementById('randomPeriodInput').value, 10) || 0 : 5
                 };
                 await window.electronAPI.saveDeviceConfig(config);
-                alert('Device & Schedule Settings saved successfully!');
+                alert('Device & Schedule Settings saved successfully! Please restart the app from the system tray for the new credentials to take effect.');
             }
         }
 
