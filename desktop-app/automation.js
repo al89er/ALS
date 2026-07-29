@@ -250,6 +250,9 @@ async function executeClockAction(actionType, supabase, options = {}) {
     }
 
     // 4.5 Pre-Flight
+    console.log('[PLAYWRIGHT] Waiting 5 seconds for dashboard elements to fully render...');
+    await page.waitForTimeout(5000);
+
     console.log('[PLAYWRIGHT] Running Pre-Flight Dashboard Verification...');
     let isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
     if (isAlreadyDone) {
@@ -469,6 +472,9 @@ async function manualFetchProof(supabase, options = {}) {
       await page.click('button[type="submit"], input[type="submit"]');
       await page.waitForNavigation();
     }
+
+    console.log('[PLAYWRIGHT] Waiting 5 seconds for dashboard elements to fully render...');
+    await page.waitForTimeout(5000);
 
     console.log('[PLAYWRIGHT] Scraping DOM for proof...');
     const proofData = await page.evaluate(() => {

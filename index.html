@@ -686,9 +686,7 @@
                     // If activeDeviceId is stale/not found, auto-target the most recently seen device
                     if (!foundActive && data.length > 0) {
                         const mostRecent = data[0].device_id || data[0].id;
-                        activeDeviceId = mostRecent;
-                        select.value = mostRecent;
-                        fetchInitialStatus();
+                        onDeviceChange(mostRecent);
                     }
                 } else {
                     const opt = document.createElement('option');
@@ -705,6 +703,8 @@
 
         function onDeviceChange(newDeviceId) {
             activeDeviceId = newDeviceId;
+            const select = document.getElementById('deviceSelect');
+            if (select) select.value = newDeviceId;
             const url = new URL(window.location);
             url.searchParams.set('device_id', newDeviceId);
             window.history.replaceState({}, '', url);
