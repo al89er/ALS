@@ -490,6 +490,16 @@ async function manualFetchProof(supabase, options = {}) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
+    if (proofData.clockIn === '--:--' && proofData.clockOut === '--:--') {
+       let debugDump = '';
+       for (const frame of page.frames()) {
+          try {
+              debugDump += await frame.content() + '\n\n';
+          } catch(e) {}
+       }
+       await remoteLog(supabase, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`);
+    }
+    
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
