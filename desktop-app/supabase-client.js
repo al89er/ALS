@@ -228,7 +228,7 @@ async function reconcileCache() {
       clock_out: payload.clock_out,
       device_id: deviceId,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'date' });
+    }, { onConflict: 'date, device_id' });
     
     if (!error) {
       console.log('[SUPABASE] todays_proof reconciliation successful.');

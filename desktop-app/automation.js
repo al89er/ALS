@@ -365,12 +365,14 @@ async function executeClockAction(actionType, supabase, options = {}) {
     const standardDate = new Date().toLocaleDateString('en-CA');
 
     try {
+      const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
       const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: postProofData.clockIn,
         clock_out: postProofData.clockOut,
+        device_id: targetDeviceId,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'date' });
+      }, { onConflict: 'date, device_id' });
       if (error) throw error;
       cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
     } catch (err) {
@@ -485,12 +487,14 @@ async function manualFetchProof(supabase, options = {}) {
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
+      const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
       const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: proofData.clockIn,
         clock_out: proofData.clockOut,
+        device_id: targetDeviceId,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'date' });
+      }, { onConflict: 'date, device_id' });
       if (error) throw error;
       cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
     } catch (err) {
