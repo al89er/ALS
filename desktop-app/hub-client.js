@@ -98,7 +98,7 @@ function startHubCommandListener(supabase, account) {
             
             if (cmd.action === 'clock_in' || cmd.action === 'clock_out') {
               await executeClockAction(cmd.action, supabase, { source: 'hub_manual', hubAccount: account });
-            } else if (cmd.action === 'fetch_proof') {
+            } else if (cmd.action === 'manual_proof_sync') {
               await manualFetchProof(supabase, { source: 'hub_manual', hubAccount: account });
             }
             
