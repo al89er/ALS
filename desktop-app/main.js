@@ -57,7 +57,9 @@ global.updateTrayTooltip = function() {
     const skipText = isSkipped ? ' (Skipped)' : '';
 
     let tooltipText = '';
-    if (edition === 'lite') {
+    if (edition === 'hub') {
+      tooltipText = `[HUB] Active Accounts: ${cacheManager.getHubAccounts().length}`;
+    } else if (edition === 'lite') {
       tooltipText = `[LITE] Connectivity: ${global.connectivityState}\nProof In: ${inProof} | Out: ${outProof}`;
     } else {
       tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
@@ -81,7 +83,11 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile('desktop-ui.html');
+  if (edition === 'hub') {
+    mainWindow.loadFile('hub-ui.html');
+  } else {
+    mainWindow.loadFile('desktop-ui.html');
+  }
 
   // Intercept visual closure window event 'close'
   mainWindow.on('close', (event) => {
@@ -157,6 +163,21 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('get-hub-accounts', () => {
+    const cacheManager = require('./cache-manager');
+    return cacheManager.getHubAccounts();
+  });
+  
+  ipcMain.handle('save-hub-account', (event, account) => {
+    const cacheManager = require('./cache-manager');
+    return cacheManager.saveHubAccount(account);
+  });
+  
+  ipcMain.handle('remove-hub-account', (event, deviceId) => {
+    const cacheManager = require('./cache-manager');
+    return cacheManager.removeHubAccount(deviceId);
+  });
+
   // Native OS Auto-Launch on boot
   app.setLoginItemSettings({
     openAtLogin: true,
@@ -166,8 +187,13 @@ app.whenReady().then(() => {
   createWindow();
 
   // Initialize Supabase handshake, heartbeat, and listeners
-  initSupabase();
-  scheduler.init(supabase);
+  if (edition === 'hub') {
+    const hubClient = require('./hub-client');
+    hubClient.initHubAccounts();
+  } else {
+    initSupabase();
+    scheduler.init(supabase);
+  }
 
   // Setup System Tray
   const { nativeImage } = require('electron');

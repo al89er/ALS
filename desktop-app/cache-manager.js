@@ -227,6 +227,48 @@ function saveDeviceConfig(config) {
   }
 }
 
+function resolveHubAccountsFile() {
+  try {
+    const { app } = require('electron');
+    if (app && typeof app.getPath === 'function') {
+      return path.join(app.getPath('userData'), 'hub_accounts.json');
+    }
+  } catch (error) {}
+  return path.join(require('os').homedir(), '.als_hub_accounts.json');
+}
+
+function getHubAccounts() {
+  const file = resolveHubAccountsFile();
+  if (!fs.existsSync(file)) return [];
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    return [];
+  }
+}
+
+function saveHubAccount(account) {
+  const file = resolveHubAccountsFile();
+  const accounts = getHubAccounts();
+  const existingIndex = accounts.findIndex(a => a.device_id === account.device_id);
+  if (existingIndex >= 0) {
+    accounts[existingIndex] = { ...accounts[existingIndex], ...account };
+  } else {
+    accounts.push(account);
+  }
+  fs.writeFileSync(file, JSON.stringify(accounts, null, 2));
+  return accounts;
+}
+
+function removeHubAccount(deviceId) {
+  const file = resolveHubAccountsFile();
+  let accounts = getHubAccounts();
+  accounts = accounts.filter(a => a.device_id !== deviceId);
+  fs.writeFileSync(file, JSON.stringify(accounts, null, 2));
+  return accounts;
+}
+
 module.exports = {
   readCache,
   writeCache,
@@ -240,6 +282,8 @@ module.exports = {
   clearOfflineLogs,
   getDeviceConfig,
   saveDeviceConfig,
-  getAppEdition
+  getAppEdition,
+  getHubAccounts,
+  saveHubAccount,
+  removeHubAccount
 };
-

@@ -223,9 +223,15 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
     if (isLoginPage) {
       console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
-      const deviceConfig = cacheManager.getDeviceConfig();
-      const username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
-      const password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
+      let username, password;
+      if (options && options.hubAccount) {
+        username = options.hubAccount.upm_username;
+        password = options.hubAccount.upm_password;
+      } else {
+        const deviceConfig = cacheManager.getDeviceConfig();
+        username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
+        password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
+      }
       
       if (!username || !password) {
         console.warn('[PLAYWRIGHT] Missing UPM Username or Password in device settings!');
@@ -411,7 +417,7 @@ async function openDebugBrowser(supabase) {
   return true;
 }
 
-async function manualFetchProof(supabase) {
+async function manualFetchProof(supabase, options = {}) {
   let context;
   try {
     const config = await getSystemConfig(supabase);
@@ -435,8 +441,17 @@ async function manualFetchProof(supabase) {
 
     if (isLoginPage) {
       console.log('[PLAYWRIGHT] Login context detected. Injecting credentials...');
-      await page.fill('input[type="text"]', process.env.UPM_USERNAME);
-      await page.fill('input[type="password"]', process.env.UPM_PASSWORD);
+      let username, password;
+      if (options && options.hubAccount) {
+        username = options.hubAccount.upm_username;
+        password = options.hubAccount.upm_password;
+      } else {
+        const deviceConfig = cacheManager.getDeviceConfig();
+        username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
+        password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
+      }
+      await page.fill('input[type="text"]', username);
+      await page.fill('input[type="password"]', password);
       await page.click('button[type="submit"], input[type="submit"]');
       await page.waitForNavigation();
     }
