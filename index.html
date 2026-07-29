@@ -77,6 +77,13 @@
             height: 70px;
         }
 
+        .nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         .brand {
             font-size: 1.25rem;
             font-weight: 700;
@@ -438,6 +445,15 @@
                 padding: 1rem;
                 gap: 1rem;
             }
+            .nav-controls {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .nav-controls label {
+                width: 100%;
+                text-align: center;
+                margin-bottom: -0.25rem;
+            }
         }
     </style>
 </head>
@@ -472,12 +488,12 @@
                     <span id="statusText">Connecting...</span>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="nav-controls">
                 <label style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600;">Device:</label>
-                <select id="deviceSelect" onchange="onDeviceChange(this.value)" style="background: rgba(0,0,0,0.4); color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; outline: none; cursor: pointer;">
+                <select id="deviceSelect" onchange="onDeviceChange(this.value)" style="background: rgba(0,0,0,0.4); color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; outline: none; cursor: pointer; flex: 1; max-width: 250px;">
                     <option value="home_desktop_agent">Office PC (home_desktop_agent)</option>
                 </select>
-                <button onclick="handleSignOut()" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; transition: all 0.2s; margin-left: 0.5rem;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'">Logout</button>
+                <button onclick="handleSignOut()" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.15)'">Logout</button>
             </div>
             <div class="tab-menu">
                 <button class="tab-btn active" onclick="switchTab('control')">Control</button>
