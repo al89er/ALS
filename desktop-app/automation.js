@@ -24,9 +24,15 @@ async function sendTelegramAlert(message) {
   }
 }
 
-async function remoteLog(supabase, action, status, message) {
+async function remoteLog(supabase, action, status, message, deviceId = null) {
   try {
-    const { error } = await supabase.from('logs').insert({ action, status, message });
+    const payload = { action, status, message };
+    if (deviceId) {
+      payload.device_id = deviceId;
+    } else {
+      try { payload.device_id = cacheManager.getDeviceId(); } catch(e) {}
+    }
+    const { error } = await supabase.from('logs').insert(payload);
     if (error) {
         console.error('[SUPABASE LOG ERROR]', error.message);
     }
@@ -243,9 +249,9 @@ async function executeClockAction(actionType, supabase, options = {}) {
         console.warn('[PLAYWRIGHT] Missing UPM Username or Password in device settings!');
       }
 
-      await page.fill('input[type="text"]', username);
-      await page.fill('input[type="password"]', password);
-      await page.click('button[type="submit"], input[type="submit"]');
+      await page.fill('#username', username ? username.trim() : '');
+      await page.fill('#password', password ? password.trim() : '');
+      await page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login');
       await page.waitForNavigation();
     }
 
@@ -434,6 +440,7 @@ async function manualFetchProof(supabase, options = {}) {
     const config = await getSystemConfig(supabase);
 
     console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
+    const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
     let userDataDir;
     try {
       const basePath = require('electron').app.getPath('userData');
@@ -467,9 +474,9 @@ async function manualFetchProof(supabase, options = {}) {
         username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
         password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
       }
-      await page.fill('input[type="text"]', username);
-      await page.fill('input[type="password"]', password);
-      await page.click('button[type="submit"], input[type="submit"]');
+      await page.fill('#username', username ? username.trim() : '');
+      await page.fill('#password', password ? password.trim() : '');
+      await page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login');
       await page.waitForNavigation();
     }
 
@@ -497,13 +504,12 @@ async function manualFetchProof(supabase, options = {}) {
               debugDump += await frame.content() + '\n\n';
           } catch(e) {}
        }
-       await remoteLog(supabase, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`);
+       await remoteLog(supabase, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`, targetDeviceId);
     }
     
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
-      const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
       const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: proofData.clockIn,
@@ -520,14 +526,14 @@ async function manualFetchProof(supabase, options = {}) {
 
     if (global.updateTrayTooltip) global.updateTrayTooltip();
 
-    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`);
+    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`, targetDeviceId);
     
     await context.close();
     return true;
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Manual proof sync failed: ${error.message}`);
-    await remoteLog(supabase, 'manual_proof_sync', 'failed', `Failed to sync proof manually: ${error.message}`);
+    await remoteLog(supabase, 'manual_proof_sync', 'failed', `Failed to sync proof manually: ${error.message}`, options && options.hubAccount ? options.hubAccount.device_id : null);
     if (context) await context.close();
     throw error;
   }
