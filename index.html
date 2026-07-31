@@ -456,7 +456,7 @@
                 margin-bottom: -0.25rem;
             }
         }
-        
+
         /* --- PROOF SYNC MODAL --- */
         #proofSyncModalOverlay {
             position: fixed;
@@ -663,7 +663,7 @@
                     <div style="margin-top: 1rem; text-align: right; font-size: 0.75rem; color: var(--text-secondary);">
                         Last Synced: <span id="proofUpdated">--:--</span>
                     </div>
-                    <button id="syncProofBtn" class="btn" style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;" onclick="startProofSyncModal()">Sync Proof Now</button>
+                    <button id="syncProofBtn" class="btn" style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;" onclick="startAttendanceModal('manual_proof_sync')">Sync Proof Now</button>
                 </div>
 
                 <!-- System Status / Schedule -->
@@ -695,8 +695,8 @@
                     <span class="panel-subtitle">Bypass scheduler and execute immediately</span>
                 </div>
                 <div class="btn-group">
-                    <button class="btn btn-primary" onclick="forceCommand('clock_in')">Force Clock IN</button>
-                    <button class="btn btn-secondary" onclick="forceCommand('clock_out')">Force Clock OUT</button>
+                    <button id="clockInBtn" class="btn btn-primary" onclick="startAttendanceModal('clock_in')">Force Clock IN</button>
+                    <button id="clockOutBtn" class="btn btn-secondary" onclick="startAttendanceModal('clock_out')">Force Clock OUT</button>
                 </div>
             </div>
 
@@ -943,28 +943,38 @@
         // 3. MANUAL COMMANDS & PROOF MODAL
         // ==========================================
 
-        const proofSyncState = {
+        const attendanceModalState = {
             phase: 'idle', // idle, requesting, waiting, success, empty, error, timeout
-            timeoutId: null
+            operation: null, // 'manual_proof_sync', 'clock_in', 'clock_out'
+            timeoutId: null,
+            previousSnapshot: null
         };
 
-        function closeProofSyncModal() {
+        function closeAttendanceModal() {
             const overlay = document.getElementById('proofSyncModalOverlay');
             overlay.classList.remove('active');
-            proofSyncState.phase = 'idle';
-            if (proofSyncState.timeoutId) {
-                clearTimeout(proofSyncState.timeoutId);
-                proofSyncState.timeoutId = null;
+            attendanceModalState.phase = 'idle';
+            if (attendanceModalState.timeoutId) {
+                clearTimeout(attendanceModalState.timeoutId);
+                attendanceModalState.timeoutId = null;
             }
+
+            // Restore all buttons
             const syncBtn = document.getElementById('syncProofBtn');
-            if (syncBtn) {
-                syncBtn.disabled = false;
-                syncBtn.focus();
-            }
+            const inBtn = document.getElementById('clockInBtn');
+            const outBtn = document.getElementById('clockOutBtn');
+            if (syncBtn) syncBtn.disabled = false;
+            if (inBtn) inBtn.disabled = false;
+            if (outBtn) outBtn.disabled = false;
+
+            // Restore focus
+            if (attendanceModalState.operation === 'clock_in' && inBtn) inBtn.focus();
+            else if (attendanceModalState.operation === 'clock_out' && outBtn) outBtn.focus();
+            else if (syncBtn) syncBtn.focus();
         }
 
-        function renderProofSyncModal(phase, title, subtitle, showLoader = false, iconClass = null, iconChar = '', showRetry = false) {
-            proofSyncState.phase = phase;
+        function renderAttendanceModal(phase, title, subtitle, showLoader = false, iconClass = null, iconChar = '', showRetry = false) {
+            attendanceModalState.phase = phase;
             const overlay = document.getElementById('proofSyncModalOverlay');
 
             document.getElementById('proofModalTitle').innerText = title;
@@ -984,10 +994,13 @@
                 actionsArea.style.display = 'flex';
                 let html = '';
                 if (showRetry) {
-                    const retryText = phase === 'timeout' ? 'Check again' : 'Try again';
-                    html += `<button class="btn btn-primary" onclick="startProofSyncModal()">${retryText}</button>`;
+                    if (phase === 'timeout' || phase === 'empty') {
+                        html += `<button class="btn btn-primary" onclick="startAttendanceModal('manual_proof_sync')">Check proof again</button>`;
+                    } else {
+                        html += `<button class="btn btn-primary" onclick="startAttendanceModal(attendanceModalState.operation)">Try again</button>`;
+                    }
                 }
-                html += `<button class="btn" style="background: rgba(255,255,255,0.1);" onclick="closeProofSyncModal()">Close</button>`;
+                html += `<button class="btn" style="background: rgba(255,255,255,0.1);" onclick="closeAttendanceModal()">Close</button>`;
                 actionsArea.innerHTML = html;
             } else {
                 actionsArea.style.display = 'none';
@@ -997,44 +1010,114 @@
             overlay.classList.add('active');
         }
 
-        async function startProofSyncModal() {
-            if (proofSyncState.phase === 'requesting' || proofSyncState.phase === 'waiting') return;
+        async function startAttendanceModal(operation) {
+            if (attendanceModalState.phase === 'requesting' || attendanceModalState.phase === 'waiting') return;
 
+            attendanceModalState.operation = operation;
+            attendanceModalState.previousSnapshot = window.currentProofData ? { ...window.currentProofData } : null;
+
+            // Disable all buttons to prevent concurrent commands
             const syncBtn = document.getElementById('syncProofBtn');
+            const inBtn = document.getElementById('clockInBtn');
+            const outBtn = document.getElementById('clockOutBtn');
             if (syncBtn) syncBtn.disabled = true;
+            if (inBtn) inBtn.disabled = true;
+            if (outBtn) outBtn.disabled = true;
 
-            renderProofSyncModal('requesting', 'Syncing proof...', 'Requesting the latest attendance record', true);
+            let title, subtitle;
+            if (operation === 'clock_in') {
+                title = 'Clocking in...'; subtitle = 'Sending the clock-in command';
+            } else if (operation === 'clock_out') {
+                title = 'Clocking out...'; subtitle = 'Sending the clock-out command';
+            } else {
+                title = 'Syncing proof...'; subtitle = 'Requesting the latest attendance record';
+            }
 
-            if (proofSyncState.timeoutId) clearTimeout(proofSyncState.timeoutId);
+            renderAttendanceModal('requesting', title, subtitle, true);
+
+            if (attendanceModalState.timeoutId) clearTimeout(attendanceModalState.timeoutId);
 
             const { error } = await _supabase
                 .from('commands')
-                .insert([{ action: 'manual_proof_sync', status: 'pending', device_id: activeDeviceId }]);
+                .insert([{ action: operation, status: 'pending', device_id: activeDeviceId }]);
 
             if (error) {
-                renderProofSyncModal('error', 'Unable to sync proof', `The latest attendance proof could not be retrieved.\n${error.message}`, false, 'proof-modal-icon-error', '✕', true);
+                const errTitle = operation === 'manual_proof_sync' ? 'Unable to sync proof' : `Unable to ${operation.replace('_', ' ')}`;
+                const errSub = operation === 'manual_proof_sync' ? 'The latest attendance proof could not be retrieved.' : `The ${operation.replace('_', '-')} command could not be completed.`;
+                renderAttendanceModal('error', errTitle, `${errSub}\n${error.message}`, false, 'proof-modal-icon-error', '✕', true);
                 return;
             }
 
-            renderProofSyncModal('waiting', 'Waiting for proof...', 'Checking for the latest attendance record', true);
+            if (operation === 'clock_in') {
+                title = 'Confirming clock-in...'; subtitle = 'Checking Masa Hadir';
+            } else if (operation === 'clock_out') {
+                title = 'Confirming clock-out...'; subtitle = 'Checking Masa Keluar';
+            } else {
+                title = 'Waiting for proof...'; subtitle = 'Checking for the latest attendance record';
+            }
 
-            proofSyncState.timeoutId = setTimeout(() => {
-                if (proofSyncState.phase === 'waiting') {
-                    renderProofSyncModal('timeout', 'Proof is taking longer than expected', 'The request may still be processing', false, 'proof-modal-icon-error', '!', true);
+            renderAttendanceModal('waiting', title, subtitle, true);
+
+            attendanceModalState.timeoutId = setTimeout(() => {
+                if (attendanceModalState.phase === 'waiting') {
+                    const tTitle = operation === 'manual_proof_sync' ? 'Proof is taking longer than expected' : 'Command sent, proof not confirmed';
+                    const tSub = operation === 'manual_proof_sync' ? 'The request may still be processing' : 'The attendance command was sent, but updated proof has not been confirmed';
+                    renderAttendanceModal('timeout', tTitle, tSub, false, 'proof-modal-icon-error', '!', true);
                 }
             }, 45000);
         }
 
-        function triggerProofModalSuccess(proofData) {
-            if (proofSyncState.phase !== 'waiting') return;
+        function triggerAttendanceModalSuccess(proofData) {
+            if (attendanceModalState.phase !== 'waiting') return;
 
-            if (proofSyncState.timeoutId) {
-                clearTimeout(proofSyncState.timeoutId);
-                proofSyncState.timeoutId = null;
-            }
+            let isConfirmed = false;
+            let successTitle = 'Proof updated';
+            let successSubtitle = 'Latest attendance proof has been loaded';
 
             if (proofData) {
-                renderProofSyncModal('success', 'Proof updated', 'Latest attendance proof has been loaded', false, 'proof-modal-icon-success', '✓');
+                const prev = attendanceModalState.previousSnapshot;
+                const isNewUpdate = prev ? (new Date(proofData.updated_at).getTime() > new Date(prev.updated_at).getTime()) : true;
+
+                if (attendanceModalState.operation === 'clock_in') {
+                    const hasValidTime = proofData.clock_in && proofData.clock_in !== '--:--' && proofData.clock_in !== '?';
+                    const isTimeChanged = prev ? (proofData.clock_in !== prev.clock_in) : true;
+
+                    if (hasValidTime && (isTimeChanged || isNewUpdate)) {
+                        isConfirmed = true;
+                        if (isTimeChanged || !prev) {
+                            successTitle = 'Clock-in confirmed';
+                            successSubtitle = `Recorded at ${proofData.clock_in}`;
+                        } else {
+                            successTitle = 'Already clocked in';
+                            successSubtitle = `Today's clock-in was recorded at ${proofData.clock_in}`;
+                        }
+                    }
+                } else if (attendanceModalState.operation === 'clock_out') {
+                    const hasValidTime = proofData.clock_out && proofData.clock_out !== '--:--' && proofData.clock_out !== '?';
+                    const isTimeChanged = prev ? (proofData.clock_out !== prev.clock_out) : true;
+
+                    if (hasValidTime && (isTimeChanged || isNewUpdate)) {
+                        isConfirmed = true;
+                        if (isTimeChanged || !prev) {
+                            successTitle = 'Clock-out confirmed';
+                            successSubtitle = `Recorded at ${proofData.clock_out}`;
+                        } else {
+                            successTitle = 'Already clocked out';
+                            successSubtitle = `Today's clock-out was recorded at ${proofData.clock_out}`;
+                        }
+                    }
+                } else {
+                    isConfirmed = true;
+                }
+            }
+
+            if (isConfirmed) {
+                if (attendanceModalState.timeoutId) {
+                    clearTimeout(attendanceModalState.timeoutId);
+                    attendanceModalState.timeoutId = null;
+                }
+
+                renderAttendanceModal('success', successTitle, successSubtitle, false, 'proof-modal-icon-success', '✓');
 
                 const proofCard = document.getElementById('proofCardContainer');
                 if (proofCard) {
@@ -1044,10 +1127,16 @@
                 }
 
                 setTimeout(() => {
-                    if (proofSyncState.phase === 'success') closeProofSyncModal();
+                    if (attendanceModalState.phase === 'success') closeAttendanceModal();
                 }, 1500);
-            } else {
-                renderProofSyncModal('empty', 'No proof available yet', 'The attendance system did not return a proof record', false, 'proof-modal-icon-error', '!', true);
+            } else if (attendanceModalState.operation === 'manual_proof_sync') {
+                if (attendanceModalState.timeoutId) {
+                    clearTimeout(attendanceModalState.timeoutId);
+                    attendanceModalState.timeoutId = null;
+                }
+                if (!proofData) {
+                    renderAttendanceModal('empty', 'No proof available yet', 'The attendance system did not return a proof record', false, 'proof-modal-icon-error', '!', true);
+                }
             }
         }
 
@@ -1193,19 +1282,21 @@
         }
 
         function updateProofUI(proof) {
+            window.currentProofData = proof ? { ...proof } : null;
+
             if (!proof) {
                 proofDate.innerText = '--:--';
                 proofIn.innerText = '--:--';
                 proofOut.innerText = '--:--';
                 proofUpdated.innerText = '--:--';
-                triggerProofModalSuccess(null);
+                triggerAttendanceModalSuccess(null);
                 return;
             }
             proofDate.innerText = proof.date || '--:--';
             proofIn.innerText = proof.clock_in || '--:--';
             proofOut.innerText = proof.clock_out || '--:--';
             proofUpdated.innerText = proof.updated_at ? new Date(proof.updated_at).toLocaleTimeString() : '--:--';
-            triggerProofModalSuccess(proof);
+            triggerAttendanceModalSuccess(proof);
         }
 
         function updateScheduleUI(sched) {
