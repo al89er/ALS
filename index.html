@@ -44,7 +44,7 @@
             background-color: var(--bg-color);
             color: var(--text-primary);
             font-family: var(--font-family);
-            background-image: 
+            background-image:
                 radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
                 radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
             background-attachment: fixed;
@@ -455,13 +455,146 @@
                 text-align: center;
                 margin-bottom: -0.25rem;
             }
+        /* --- PROOF SYNC MODAL --- */
+        #proofSyncModalOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(11, 15, 25, 0.85);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #proofSyncModalOverlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .proof-modal {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 360px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            transform: translateY(20px) scale(0.95);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        #proofSyncModalOverlay.active .proof-modal {
+            transform: translateY(0) scale(1);
+        }
+
+        /* Medical Double-Helix Loader (CSS) */
+        .dna-loader {
+            width: 60px;
+            height: 60px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        @media (prefers-reduced-motion: no-preference) {
+            .dna-loader::before, .dna-loader::after {
+                content: '';
+                position: absolute;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                animation: dna-spin 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            }
+            .dna-loader::before {
+                background-color: var(--accent-blue);
+                box-shadow: 0 0 10px var(--accent-blue);
+                left: 10px;
+            }
+            .dna-loader::after {
+                background-color: var(--accent-purple);
+                box-shadow: 0 0 10px var(--accent-purple);
+                right: 10px;
+                animation-delay: -0.75s;
+            }
+            @keyframes dna-spin {
+                0%, 100% { transform: scale(1) translateY(0); z-index: 1; opacity: 1; }
+                25% { transform: scale(1.3) translateY(10px); z-index: 2; opacity: 0.8; }
+                50% { transform: scale(1) translateY(20px); z-index: 1; opacity: 0.5; }
+                75% { transform: scale(0.7) translateY(10px); z-index: 0; opacity: 0.8; }
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .dna-loader::before {
+                content: '...';
+                color: var(--accent-blue);
+                font-size: 2rem;
+                letter-spacing: 2px;
+                animation: pulse 2s infinite;
+            }
+        }
+
+        .proof-modal-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.25rem;
+        }
+
+        .proof-modal-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .proof-modal-actions {
+            display: flex;
+            gap: 1rem;
+            width: 100%;
+            margin-top: 0.5rem;
+        }
+
+        .proof-modal-icon-success {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(16, 185, 129, 0.15);
+            border: 2px solid var(--status-online);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--status-online);
+            font-size: 2rem;
+        }
+
+        .proof-modal-icon-error {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.15);
+            border: 2px solid var(--status-offline);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--status-offline);
+            font-size: 2rem;
         }
     </style>
 </head>
 
 <body>
 
-    
+
     <!-- ==================== LOGIN OVERLAY ==================== -->
     <div id="loginOverlay" style="position: fixed; inset: 0; background: var(--bg-color); z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
         <div style="background: rgba(30, 41, 59, 0.6); padding: 2.5rem; border-radius: 16px; border: 1px solid var(--border-color); width: 90%; max-width: 400px; text-align: center; backdrop-filter: blur(12px);">
@@ -507,10 +640,10 @@
     <main>
         <!-- ==================== CONTROL TAB ==================== -->
         <div id="tab-control" class="tab-content active">
-            
+
             <div class="grid-2">
                 <!-- Today's Proof -->
-                <div class="panel">
+                <div class="panel" id="proofCardContainer">
                     <div class="panel-header">
                         <h2 class="panel-title">Today's Proof</h2>
                         <span class="panel-subtitle" id="proofDate">--:--</span>
@@ -528,7 +661,7 @@
                     <div style="margin-top: 1rem; text-align: right; font-size: 0.75rem; color: var(--text-secondary);">
                         Last Synced: <span id="proofUpdated">--:--</span>
                     </div>
-                    <button class="btn" style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;" onclick="forceCommand('manual_proof_sync')">Sync Proof Now</button>
+                    <button id="syncProofBtn" class="btn" style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;" onclick="startProofSyncModal()">Sync Proof Now</button>
                 </div>
 
                 <!-- System Status / Schedule -->
@@ -634,13 +767,13 @@
         // DOM Elements
         const statusBadge = document.getElementById('statusBadge');
         const statusText = document.getElementById('statusText');
-        
+
         // Control Tab
         const proofDate = document.getElementById('proofDate');
         const proofIn = document.getElementById('proofIn');
         const proofOut = document.getElementById('proofOut');
         const proofUpdated = document.getElementById('proofUpdated');
-        
+
         const schedDate = document.getElementById('schedDate');
         const schedIn = document.getElementById('schedIn');
         const schedOut = document.getElementById('schedOut');
@@ -662,7 +795,7 @@
                 const select = document.getElementById('deviceSelect');
                 if (select) {
                     select.innerHTML = '';
-                    
+
                     if (data && data.length > 0) {
                         const deviceMap = new Map();
                     let foundActive = false;
@@ -763,10 +896,10 @@
             const div = document.createElement('div');
             let statusClass = '';
             let statusLabel = log.status || 'INFO';
-            
+
             if (log.status === 'success' || log.status === 'completed') statusClass = 'log-status-success';
             else if (log.status === 'error' || log.status === 'failed') statusClass = 'log-status-failed';
-            
+
             div.className = `log-entry ${statusClass}`;
             const dateStr = new Date(log.created_at).toLocaleString();
 
@@ -805,8 +938,117 @@
         }
 
         // ==========================================
-        // 3. MANUAL COMMANDS
+        // 3. MANUAL COMMANDS & PROOF MODAL
         // ==========================================
+
+        const proofSyncState = {
+            phase: 'idle', // idle, requesting, waiting, success, empty, error, timeout
+            timeoutId: null
+        };
+
+        function closeProofSyncModal() {
+            const overlay = document.getElementById('proofSyncModalOverlay');
+            overlay.classList.remove('active');
+            proofSyncState.phase = 'idle';
+            if (proofSyncState.timeoutId) {
+                clearTimeout(proofSyncState.timeoutId);
+                proofSyncState.timeoutId = null;
+            }
+            const syncBtn = document.getElementById('syncProofBtn');
+            if (syncBtn) {
+                syncBtn.disabled = false;
+                syncBtn.focus();
+            }
+        }
+
+        function renderProofSyncModal(phase, title, subtitle, showLoader = false, iconClass = null, iconChar = '', showRetry = false) {
+            proofSyncState.phase = phase;
+            const overlay = document.getElementById('proofSyncModalOverlay');
+
+            document.getElementById('proofModalTitle').innerText = title;
+            document.getElementById('proofModalSubtitle').innerText = subtitle;
+
+            const iconArea = document.getElementById('proofModalIconArea');
+            if (showLoader) {
+                iconArea.innerHTML = '<div class="dna-loader"></div>';
+            } else if (iconClass) {
+                iconArea.innerHTML = `<div class="${iconClass}">${iconChar}</div>`;
+            } else {
+                iconArea.innerHTML = '';
+            }
+
+            const actionsArea = document.getElementById('proofModalActionsArea');
+            if (showRetry || phase === 'error' || phase === 'timeout' || phase === 'empty') {
+                actionsArea.style.display = 'flex';
+                let html = '';
+                if (showRetry) {
+                    const retryText = phase === 'timeout' ? 'Check again' : 'Try again';
+                    html += `<button class="btn btn-primary" onclick="startProofSyncModal()">${retryText}</button>`;
+                }
+                html += `<button class="btn" style="background: rgba(255,255,255,0.1);" onclick="closeProofSyncModal()">Close</button>`;
+                actionsArea.innerHTML = html;
+            } else {
+                actionsArea.style.display = 'none';
+                actionsArea.innerHTML = '';
+            }
+
+            overlay.classList.add('active');
+        }
+
+        async function startProofSyncModal() {
+            if (proofSyncState.phase === 'requesting' || proofSyncState.phase === 'waiting') return;
+
+            const syncBtn = document.getElementById('syncProofBtn');
+            if (syncBtn) syncBtn.disabled = true;
+
+            renderProofSyncModal('requesting', 'Syncing proof...', 'Requesting the latest attendance record', true);
+
+            if (proofSyncState.timeoutId) clearTimeout(proofSyncState.timeoutId);
+
+            const { error } = await _supabase
+                .from('commands')
+                .insert([{ action: 'manual_proof_sync', status: 'pending', device_id: activeDeviceId }]);
+
+            if (error) {
+                renderProofSyncModal('error', 'Unable to sync proof', `The latest attendance proof could not be retrieved.\n${error.message}`, false, 'proof-modal-icon-error', '✕', true);
+                return;
+            }
+
+            renderProofSyncModal('waiting', 'Waiting for proof...', 'Checking for the latest attendance record', true);
+
+            proofSyncState.timeoutId = setTimeout(() => {
+                if (proofSyncState.phase === 'waiting') {
+                    renderProofSyncModal('timeout', 'Proof is taking longer than expected', 'The request may still be processing', false, 'proof-modal-icon-error', '!', true);
+                }
+            }, 45000);
+        }
+
+        function triggerProofModalSuccess(proofData) {
+            if (proofSyncState.phase !== 'waiting') return;
+
+            if (proofSyncState.timeoutId) {
+                clearTimeout(proofSyncState.timeoutId);
+                proofSyncState.timeoutId = null;
+            }
+
+            if (proofData) {
+                renderProofSyncModal('success', 'Proof updated', 'Latest attendance proof has been loaded', false, 'proof-modal-icon-success', '✓');
+
+                const proofCard = document.getElementById('proofCardContainer');
+                if (proofCard) {
+                    proofCard.style.transition = 'box-shadow 0.5s ease';
+                    proofCard.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.4)';
+                    setTimeout(() => { proofCard.style.boxShadow = ''; }, 2000);
+                }
+
+                setTimeout(() => {
+                    if (proofSyncState.phase === 'success') closeProofSyncModal();
+                }, 1500);
+            } else {
+                renderProofSyncModal('empty', 'No proof available yet', 'The attendance system did not return a proof record', false, 'proof-modal-icon-error', '!', true);
+            }
+        }
+
         async function forceCommand(actionType) {
             const { error } = await _supabase
                 .from('commands')
@@ -835,7 +1077,7 @@
 
         function renderCalendar() {
             calendarGrid.innerHTML = '';
-            
+
             const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             daysOfWeek.forEach(day => {
                 const header = document.createElement('div');
@@ -846,7 +1088,7 @@
 
             const year = currentNavDate.getFullYear();
             const month = currentNavDate.getMonth();
-            
+
             document.getElementById('currentMonthLabel').innerText = currentNavDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
             let firstDay = new Date(year, month, 1).getDay();
@@ -869,7 +1111,7 @@
                 let classes = 'calendar-tile';
                 if (skipDaysArray.includes(dateString)) classes += ' active';
                 if (dateString === todayStr) classes += ' today';
-                
+
                 tile.className = classes;
                 tile.onclick = () => toggleDate(dateString);
 
@@ -925,19 +1167,19 @@
             try {
                 const d = new Date();
                 const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                
+
                 const [sysRes, proofRes, schedRes] = await Promise.all([
                     _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
                     _supabase.from('todays_proof').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle(),
                     _supabase.from('daily_schedules').select('*').eq('date', todayStr).or(`device_id.eq.${activeDeviceId},device_id.is.null`).maybeSingle()
                 ]);
-                
+
                 if (proofRes.error) console.error('[FETCH] Proof Error:', proofRes.error);
                 if (schedRes.error) console.error('[FETCH] Sched Error:', schedRes.error);
 
                 if (proofRes.data) updateProofUI(proofRes.data);
                 else updateProofUI(null);
-                
+
                 if (schedRes.data) {
                     updateScheduleUI(schedRes.data);
                 } else {
@@ -954,12 +1196,14 @@
                 proofIn.innerText = '--:--';
                 proofOut.innerText = '--:--';
                 proofUpdated.innerText = '--:--';
+                triggerProofModalSuccess(null);
                 return;
             }
             proofDate.innerText = proof.date || '--:--';
             proofIn.innerText = proof.clock_in || '--:--';
             proofOut.innerText = proof.clock_out || '--:--';
             proofUpdated.innerText = proof.updated_at ? new Date(proof.updated_at).toLocaleTimeString() : '--:--';
+            triggerProofModalSuccess(proof);
         }
 
         function updateScheduleUI(sched) {
@@ -978,7 +1222,7 @@
             const dateObj = new Date(sched.date + "T12:00:00");
             const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
             schedDate.innerText = dateObj.toLocaleDateString('en-US', options);
-            
+
             if (sched.skipped) {
                 schedIn.innerText = '--:--';
                 schedOut.innerText = '--:--';
@@ -1019,17 +1263,17 @@
 
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
-            
+
             if (session) {
                 const urlParamDeviceId = new URLSearchParams(window.location.search).get('device_id');
                 if (urlParamDeviceId) {
                     activeDeviceId = urlParamDeviceId;
                 }
-                
+
                 // Hide System Status card and Skips Tab for non-admin users
                 const systemStatusPanel = document.getElementById('systemStatusPanel');
                 const skipTabBtn = document.querySelector('.tab-btn[onclick="switchTab(\'skips\')"]');
-                
+
                 if (session.user.email !== 'muhammadafif@upm.edu.my') {
                     if (systemStatusPanel) systemStatusPanel.style.display = 'none';
                     if (skipTabBtn) skipTabBtn.style.display = 'none';
@@ -1051,12 +1295,12 @@
             e.preventDefault();
             const email = document.getElementById('emailInput').value;
             const password = document.getElementById('passwordInput').value;
-            
+
             loginBtn.innerText = 'Signing In...';
             loginError.style.display = 'none';
 
             const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
-            
+
             if (error) {
                 loginError.innerText = error.message;
                 loginError.style.display = 'block';
@@ -1140,6 +1384,22 @@
         checkSession();
 
     </script>
+    <!-- ==================== PROOF SYNC MODAL ==================== -->
+    <div id="proofSyncModalOverlay" role="dialog" aria-modal="true" aria-labelledby="proofModalTitle" aria-describedby="proofModalSubtitle">
+        <div class="proof-modal">
+            <div id="proofModalIconArea">
+                <!-- Injected via JS -->
+            </div>
+            <div aria-live="polite" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                <h2 id="proofModalTitle" class="proof-modal-title">Syncing proof...</h2>
+                <p id="proofModalSubtitle" class="proof-modal-subtitle">Requesting the latest attendance record</p>
+            </div>
+            <div id="proofModalActionsArea" class="proof-modal-actions" style="display: none;">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
 </body>
 
 </html>
