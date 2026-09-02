@@ -4,6 +4,10 @@ if (process.env.NODE_ENV !== 'test') {
 }
 const { createClient } = require('@supabase/supabase-js');
 const { executeClockAction, manualFetchProof } = require('./automation'); // Import Playwright logic
+const {
+  DEFAULT_SUPABASE_URL,
+  resolveSupabasePublishableKey
+} = require('./supabase-config');
 
 const runtimeDependencies = {
   executeClockAction,
@@ -32,14 +36,18 @@ function getDeviceName() {
 
 function getEffectiveSupabaseConfig() {
   const config = cacheManager.getDeviceConfig();
-  const url = config.supabase_url || process.env.SUPABASE_URL || 'https://placeholder.supabase.co';
-  const key = config.supabase_key || process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder';
+  const url = config.supabase_url || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const key = resolveSupabasePublishableKey({
+    runtimeKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+    compatibilityKey: process.env.SUPABASE_ANON_KEY,
+    savedKey: config.supabase_key
+  });
   return { url, key };
 }
 
 const activeConfig = getEffectiveSupabaseConfig();
-if (!process.env.SUPABASE_URL && activeConfig.url.includes('placeholder')) {
-  console.warn('Missing Supabase URL or Service Role Key in environment/settings.');
+if (!activeConfig.url) {
+  console.warn('Missing Supabase URL in environment/settings.');
 }
 
 const supabase = createClient(activeConfig.url, activeConfig.key);
@@ -355,7 +363,7 @@ async function initSupabase() {
       console.log('[SUPABASE] Authentication successful.');
     }
   } else {
-    console.warn('[SUPABASE] No Supabase email/password configured. Assuming anonymous/service role, but RLS may block access.');
+    console.warn('[SUPABASE] No Supabase email/password configured. Unauthenticated requests may be blocked by RLS.');
   }
 
   startHeartbeat();

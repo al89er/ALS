@@ -573,7 +573,7 @@
                                 <input type="text" id="supabaseUrlInput" style="padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff; font-family: var(--font-family); font-size: 0.85rem; outline: none;" />
                             </div>
                             <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-                                <label style="font-size: 0.8rem; color: var(--text-secondary);">Supabase Key</label>
+                                <label style="font-size: 0.8rem; color: var(--text-secondary);">Supabase Publishable Key</label>
                                 <input type="password" id="supabaseKeyInput" style="padding: 0.6rem 0.8rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.3); color: #fff; font-family: var(--font-family); font-size: 0.85rem; outline: none;" />
                             </div>
                         </div>
@@ -701,7 +701,7 @@
 
         async function initDesktopClient() {
             const env = await window.electronAPI.getEnvVariables();
-            _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+            _supabase = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_PUBLISHABLE_KEY);
             
             const config = await window.electronAPI.getDeviceConfig();
             if (config && config.edition === 'lite') {

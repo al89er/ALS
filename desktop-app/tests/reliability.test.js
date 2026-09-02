@@ -12,6 +12,10 @@ process.env.ALS_CACHE_FILE = path.join(
   testCacheDir,
   'local_cache.json'
 );
+process.env.ALS_SETTINGS_FILE = path.join(
+  testCacheDir,
+  'local_settings.json'
+);
 
 const test = require('node:test');
 const assert = require('node:assert');

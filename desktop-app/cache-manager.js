@@ -1,5 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+const {
+  DEFAULT_SUPABASE_URL,
+  resolveSupabasePublishableKey,
+  isSupabasePublishableKey
+} = require('./supabase-config');
 
 function resolveCacheFile() {
   if (process.env.ALS_CACHE_FILE) {
@@ -151,8 +156,28 @@ function getAppEdition() {
   return 'full';
 }
 
-const DEFAULT_SUPABASE_URL = process.env.SUPABASE_URL || 'https://pvutxjfkskzgccawfibu.supabase.co';
-const DEFAULT_SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2dXR4amZrc2t6Z2NjYXdmaWJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNTY4OTMsImV4cCI6MjA5NzgzMjg5M30.FtyD9_XkLKUlBFgt5_I1cZZFhxFLRRpi9yAUbCxDJgw';
+function createDeviceConfig(parsed = {}, env = process.env, edition = getAppEdition()) {
+  const fallbackId = parsed.device_id || env.DEVICE_ID || (edition === 'lite' ? 'lite_desktop_agent' : 'home_desktop_agent');
+  return {
+    device_id: fallbackId,
+    device_name: parsed.device_name || env.DEVICE_NAME || (edition === 'lite' ? 'Lite Desktop Agent' : 'Home Desktop Agent'),
+    upm_username: parsed.upm_username || env.UPM_USERNAME || '',
+    upm_password: parsed.upm_password || env.UPM_PASSWORD || '',
+    supabase_url: parsed.supabase_url || env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+    supabase_key: resolveSupabasePublishableKey({
+      runtimeKey: env.SUPABASE_PUBLISHABLE_KEY,
+      compatibilityKey: env.SUPABASE_ANON_KEY,
+      savedKey: parsed.supabase_key
+    }),
+    supabase_email: parsed.supabase_email || (edition === 'lite' ? '' : (env.SUPABASE_EMAIL || '')),
+    supabase_password: parsed.supabase_password || (edition === 'lite' ? '' : (env.SUPABASE_PASSWORD || '')),
+    auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
+    clock_in_base_time: parsed.clock_in_base_time || '07:45',
+    clock_out_base_time: parsed.clock_out_base_time || '17:05',
+    random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5,
+    edition
+  };
+}
 
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
@@ -170,21 +195,7 @@ try {
   }
 } catch (e) {}
 
-const DEFAULT_DEVICE_CONFIG = {
-  device_id: process.env.DEVICE_ID || (getAppEdition() === 'lite' ? 'lite_desktop_agent' : 'home_desktop_agent'),
-  device_name: process.env.DEVICE_NAME || (getAppEdition() === 'lite' ? 'Lite Desktop Agent' : 'Home Desktop Agent'),
-  upm_username: process.env.UPM_USERNAME || '',
-  upm_password: process.env.UPM_PASSWORD || '',
-  supabase_url: DEFAULT_SUPABASE_URL,
-  supabase_key: DEFAULT_SUPABASE_KEY,
-  supabase_email: getAppEdition() === 'lite' ? '' : (process.env.SUPABASE_EMAIL || ''),
-  supabase_password: getAppEdition() === 'lite' ? '' : (process.env.SUPABASE_PASSWORD || ''),
-  auto_clock_enabled: true,
-  clock_in_base_time: '07:45',
-  clock_out_base_time: '17:05',
-  random_period_minutes: 5,
-  edition: getAppEdition()
-};
+const DEFAULT_DEVICE_CONFIG = createDeviceConfig();
 
 function getDeviceConfig() {
   const edition = getAppEdition();
@@ -194,22 +205,21 @@ function getDeviceConfig() {
   try {
     const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    const fallbackId = parsed.device_id || process.env.DEVICE_ID || (edition === 'lite' ? 'lite_desktop_agent' : 'home_desktop_agent');
-    return {
-      device_id: fallbackId,
-      device_name: parsed.device_name || process.env.DEVICE_NAME || (edition === 'lite' ? 'Lite Desktop Agent' : 'Home Desktop Agent'),
-      upm_username: parsed.upm_username || process.env.UPM_USERNAME || '',
-      upm_password: parsed.upm_password || process.env.UPM_PASSWORD || '',
-      supabase_url: parsed.supabase_url || DEFAULT_SUPABASE_URL,
-      supabase_key: parsed.supabase_key || DEFAULT_SUPABASE_KEY,
-      supabase_email: parsed.supabase_email || (edition === 'lite' ? '' : (process.env.SUPABASE_EMAIL || '')),
-      supabase_password: parsed.supabase_password || (edition === 'lite' ? '' : (process.env.SUPABASE_PASSWORD || '')),
-      auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
-      clock_in_base_time: parsed.clock_in_base_time || '07:45',
-      clock_out_base_time: parsed.clock_out_base_time || '17:05',
-      random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5,
-      edition: edition
-    };
+    const resolved = createDeviceConfig(parsed, process.env, edition);
+
+    if (parsed.supabase_key && !isSupabasePublishableKey(parsed.supabase_key)) {
+      try {
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify({
+          ...parsed,
+          supabase_key: resolved.supabase_key
+        }, null, 2));
+        console.log('[CACHE] Replaced obsolete saved Supabase key with the publishable key.');
+      } catch (migrationError) {
+        console.warn('[CACHE] Could not persist the Supabase key migration:', migrationError.message);
+      }
+    }
+
+    return resolved;
   } catch (err) {
     return { ...DEFAULT_DEVICE_CONFIG, edition };
   }
@@ -218,7 +228,11 @@ function getDeviceConfig() {
 function saveDeviceConfig(config) {
   try {
     const current = getDeviceConfig();
-    const updated = { ...current, ...config };
+    const merged = { ...current, ...config };
+    const updated = {
+      ...merged,
+      ...createDeviceConfig(merged, process.env, getAppEdition())
+    };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
     return updated;
   } catch (err) {
@@ -285,5 +299,8 @@ module.exports = {
   getAppEdition,
   getHubAccounts,
   saveHubAccount,
-  removeHubAccount
+  removeHubAccount,
+  __test: {
+    createDeviceConfig
+  }
 };

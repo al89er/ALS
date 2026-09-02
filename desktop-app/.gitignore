@@ -1,5 +1,9 @@
 node_modules/
 .env
+bundled.env
+debug_*.js
+patch.js
+test_upsert.js
 upm_session/
 dist/
 releases/

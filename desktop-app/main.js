@@ -101,7 +101,11 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ipcMain.handle('get-env-variables', () => {
-    return { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY };
+    const config = require('./cache-manager').getDeviceConfig();
+    return {
+      SUPABASE_URL: config.supabase_url,
+      SUPABASE_PUBLISHABLE_KEY: config.supabase_key
+    };
   });
 
   ipcMain.handle('get-app-version', () => {
