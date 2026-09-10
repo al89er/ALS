@@ -626,7 +626,7 @@
                 <div style="display: flex; flex-direction: column; gap: 1rem;">
                     <div style="display: flex; flex-direction: column; gap: 0.5rem;">
                         <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Target UPM URL</label>
-                        <input type="text" id="targetUrlInput" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        <input type="text" id="targetUrlInput" placeholder="https://perakamwaktu.upm.edu.my/" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
                         <input type="checkbox" id="showBrowserCheck" style="width: 1.2rem; height: 1.2rem; accent-color: var(--accent-blue);" />
@@ -1140,19 +1140,20 @@ _supabase.channel('skip-channel')
             await loadDeviceConfigUI();
             if (window.electronAPI) {
                 const settings = await window.electronAPI.readSettings();
-                document.getElementById('targetUrlInput').value = settings.targetUrl || '';
+                document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
                 document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
             }
         }
 
         async function saveLocalSettings() {
             if (window.electronAPI) {
+                const urlInput = document.getElementById('targetUrlInput').value.trim();
                 const settings = {
-                    targetUrl: document.getElementById('targetUrlInput').value,
+                    targetUrl: urlInput || 'https://perakamwaktu.upm.edu.my/',
                     showBrowser: document.getElementById('showBrowserCheck').checked
                 };
                 await window.electronAPI.saveSettings(settings);
-                alert('Local Engine settings saved securely via Supabase DB.');
+                alert('Local Engine settings saved successfully.');
                 fetchTodaysData();
             }
         }

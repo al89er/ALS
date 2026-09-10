@@ -41,7 +41,7 @@ try {
 
 const DEFAULT_CACHE = {
   system_config: {
-    target_url: 'https://perakamwaktu3.upm.edu.my/',
+    target_url: 'https://perakamwaktu.upm.edu.my/',
     show_browser: false,
     synced: true
   },
@@ -171,6 +171,8 @@ function createDeviceConfig(parsed = {}, env = process.env, edition = getAppEdit
     }),
     supabase_email: parsed.supabase_email || (edition === 'lite' ? '' : (env.SUPABASE_EMAIL || '')),
     supabase_password: parsed.supabase_password || (edition === 'lite' ? '' : (env.SUPABASE_PASSWORD || '')),
+    target_url: parsed.target_url || env.TARGET_URL || 'https://perakamwaktu.upm.edu.my/',
+    show_browser: typeof parsed.show_browser === 'boolean' ? parsed.show_browser : false,
     auto_clock_enabled: typeof parsed.auto_clock_enabled === 'boolean' ? parsed.auto_clock_enabled : true,
     clock_in_base_time: parsed.clock_in_base_time || '07:45',
     clock_out_base_time: parsed.clock_out_base_time || '17:05',
@@ -283,6 +285,27 @@ function removeHubAccount(deviceId) {
   return accounts;
 }
 
+function getEngineConfig() {
+  const devConfig = getDeviceConfig();
+  const cache = readCache();
+  const target_url = devConfig.target_url || (cache.system_config && cache.system_config.target_url) || 'https://perakamwaktu.upm.edu.my/';
+  const show_browser = typeof devConfig.show_browser === 'boolean'
+    ? devConfig.show_browser
+    : (cache.system_config && typeof cache.system_config.show_browser === 'boolean' ? cache.system_config.show_browser : false);
+  return { target_url, show_browser };
+}
+
+function saveEngineConfig(config = {}) {
+  const target_url = config.target_url || config.targetUrl || 'https://perakamwaktu.upm.edu.my/';
+  const show_browser = typeof config.show_browser === 'boolean'
+    ? config.show_browser
+    : (typeof config.showBrowser === 'boolean' ? config.showBrowser : false);
+  
+  saveDeviceConfig({ target_url, show_browser });
+  mergeSystemConfig({ target_url, show_browser }, false);
+  return { target_url, show_browser };
+}
+
 module.exports = {
   readCache,
   writeCache,
@@ -296,6 +319,8 @@ module.exports = {
   clearOfflineLogs,
   getDeviceConfig,
   saveDeviceConfig,
+  getEngineConfig,
+  saveEngineConfig,
   getAppEdition,
   getHubAccounts,
   saveHubAccount,

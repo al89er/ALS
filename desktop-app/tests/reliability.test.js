@@ -422,4 +422,36 @@ test('Reliability Improvements', async (t) => {
     assert.strictEqual(cacheManager.getDeviceConfig().edition, 'lite');
     delete process.env.ALS_EDITION;
   });
+
+  await t.test('Engine settings local-first persistence & Playwright URL resolution', async () => {
+    // 1. Verify default engine URL
+    const defaultEngine = cacheManager.getEngineConfig();
+    assert.strictEqual(defaultEngine.target_url, 'https://perakamwaktu.upm.edu.my/');
+    assert.strictEqual(defaultEngine.show_browser, false);
+
+    // 2. Save custom engine configuration locally
+    cacheManager.saveEngineConfig({
+      targetUrl: 'https://custom-portal.upm.edu.my/',
+      showBrowser: true
+    });
+
+    const updatedEngine = cacheManager.getEngineConfig();
+    assert.strictEqual(updatedEngine.target_url, 'https://custom-portal.upm.edu.my/');
+    assert.strictEqual(updatedEngine.show_browser, true);
+
+    // 3. Verify Playwright respects custom local config even when Supabase returns RLS error or null
+    mockSupabase.maybeSingle = async () => ({ data: null, error: new Error('RLS: permission denied') });
+    
+    let resolvedUrl = null;
+    mockPage.goto = async (url) => { resolvedUrl = url; };
+    
+    await automation.executeClockAction('clock_in', mockSupabase, {});
+    assert.strictEqual(resolvedUrl, 'https://custom-portal.upm.edu.my/', 'Playwright must navigate to locally configured URL');
+
+    // Restore default
+    cacheManager.saveEngineConfig({
+      targetUrl: 'https://perakamwaktu.upm.edu.my/',
+      showBrowser: false
+    });
+  });
 });

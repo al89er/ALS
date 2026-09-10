@@ -5,19 +5,20 @@ const { chromium } = require('playwright');
 const path = require('path');
 const cacheManager = require('./cache-manager');
 
-async function sendTelegramAlert(message) {
+async function sendTelegramAlert(message, deviceId = 'home_desktop_agent') {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) {
     console.warn('[TELEGRAM] Token or Chat ID missing. Skipping alert.');
     return;
   }
+  const formattedMessage = message.replace('[ALS Desktop]', `[ALS Desktop: ${deviceId}]`);
   try {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: message })
+      body: JSON.stringify({ chat_id: chatId, text: formattedMessage })
     });
   } catch (err) {
     console.error('[TELEGRAM] Error sending alert:', err.message);
@@ -30,7 +31,7 @@ async function remoteLog(supabase, action, status, message, deviceId = null) {
     if (deviceId) {
       payload.device_id = deviceId;
     } else {
-      try { payload.device_id = cacheManager.getDeviceId(); } catch(e) {}
+      try { payload.device_id = cacheManager.getDeviceConfig().device_id; } catch(e) {}
     }
     const { error } = await supabase.from('logs').insert(payload);
     if (error) {
@@ -41,8 +42,9 @@ async function remoteLog(supabase, action, status, message, deviceId = null) {
   }
 }
 
-async function checkDashboardStatus(page, actionType, supabase) {
+async function checkDashboardStatus(page, actionType, supabase, targetDeviceId) {
   try {
+    const devId = targetDeviceId || (cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig()?.device_id : null) || 'home_desktop_agent';
     const proofData = await page.evaluate(() => {
       const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
       let twm = '--:--', wm = '?', wk = '?';
@@ -75,7 +77,7 @@ async function checkDashboardStatus(page, actionType, supabase) {
 
       if (global.updateTrayTooltip) global.updateTrayTooltip();
 
-      await remoteLog(supabase, actionType, 'skipped', 'Manual entry verified');
+      await remoteLog(supabase, actionType, 'skipped', 'Manual entry verified', devId);
 
       return true;
     }
@@ -88,22 +90,27 @@ async function checkDashboardStatus(page, actionType, supabase) {
 }
 
 async function getSystemConfig(supabase) {
+  const localConfig = cacheManager.getEngineConfig ? cacheManager.getEngineConfig() : null;
+  const localTargetUrl = localConfig?.target_url || cacheManager.getDeviceConfig()?.target_url || cacheManager.readCache()?.system_config?.target_url || 'https://perakamwaktu.upm.edu.my/';
+  const localShowBrowser = localConfig ? localConfig.show_browser : (cacheManager.getDeviceConfig()?.show_browser ?? cacheManager.readCache()?.system_config?.show_browser ?? false);
+  const isCustomLocal = localConfig && localConfig.target_url && localConfig.target_url !== 'https://perakamwaktu.upm.edu.my/';
+
   try {
     const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
     if (error) throw error;
     
-    const targetUrl = data?.target_url || 'https://perakamwaktu3.upm.edu.my/';
-    const showBrowser = data?.show_browser || false;
+    const targetUrl = isCustomLocal ? localTargetUrl : (data?.target_url || localTargetUrl);
+    const showBrowser = isCustomLocal ? localShowBrowser : (typeof data?.show_browser === 'boolean' ? data.show_browser : localShowBrowser);
     
     cacheManager.mergeSystemConfig({ target_url: targetUrl, show_browser: showBrowser }, true);
     
     return { targetUrl, showBrowser };
   } catch (err) {
-    console.warn('[PLAYWRIGHT] Supabase offline! Fetching config from local cache.');
+    console.warn('[PLAYWRIGHT] Supabase offline or unavailable! Fetching config from local cache/settings.');
     const cache = cacheManager.readCache();
     return {
-      targetUrl: cache.system_config.target_url || 'https://perakamwaktu3.upm.edu.my/',
-      showBrowser: cache.system_config.show_browser || false
+      targetUrl: localTargetUrl || cache?.system_config?.target_url || 'https://perakamwaktu.upm.edu.my/',
+      showBrowser: localShowBrowser
     };
   }
 }
@@ -133,6 +140,7 @@ async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
 }
 
 async function executeClockAction(actionType, supabase, options = {}) {
+  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
   let context;
   try {
     const config = await getSystemConfig(supabase);
@@ -152,7 +160,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
       console.warn('[PLAYWRIGHT] Captive Portal detected! Attempting autonomous bypass...');
       global.connectivityState = 'Captive Portal Flag';
       if (global.updateTrayTooltip) global.updateTrayTooltip();
-      await remoteLog(supabase, 'network_check', 'warning', 'Captive portal intercepted the connection. Attempting bypass.');
+      await remoteLog(supabase, 'network_check', 'warning', 'Captive portal intercepted the connection. Attempting bypass.', targetDeviceId);
       
       try {
         const { error } = await supabase.from('device_status').upsert({
@@ -186,7 +194,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
           const postText = await postFetch.text();
           if (postText.includes('<html')) {
             console.log('[PLAYWRIGHT] Captive Portal bypassed successfully!');
-            await remoteLog(supabase, 'network_check', 'success', 'Captive portal bypassed successfully.');
+            await remoteLog(supabase, 'network_check', 'success', 'Captive portal bypassed successfully.', targetDeviceId);
             global.connectivityState = 'Connected to Supabase';
             if (global.updateTrayTooltip) global.updateTrayTooltip();
           } else {
@@ -197,7 +205,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
         }
       } catch (cpErr) {
         console.error('[PLAYWRIGHT] Captive Portal bypass failed:', cpErr.message);
-        await sendTelegramAlert(`🚨 [ALS Desktop] CAPTIVE PORTAL BYPASS FAILED! Cannot execute ${actionType.toUpperCase()}. Reason: ${cpErr.message}`);
+        await sendTelegramAlert(`🚨 [ALS Desktop] CAPTIVE PORTAL BYPASS FAILED! Cannot execute ${actionType.toUpperCase()}. Reason: ${cpErr.message}`, targetDeviceId);
         throw new Error('CAPTIVE_PORTAL');
       } finally {
         if (cpContext) await cpContext.close();
@@ -251,8 +259,10 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
       await page.fill('#username', username ? username.trim() : '');
       await page.fill('#password', password ? password.trim() : '');
-      await page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login');
-      await page.waitForNavigation();
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+        page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login')
+      ]);
     }
 
     // 4.5 Pre-Flight
@@ -260,10 +270,10 @@ async function executeClockAction(actionType, supabase, options = {}) {
     await page.waitForTimeout(5000);
 
     console.log('[PLAYWRIGHT] Running Pre-Flight Dashboard Verification...');
-    let isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
+    let isAlreadyDone = await checkDashboardStatus(page, actionType, supabase, targetDeviceId);
     if (isAlreadyDone) {
       console.log(`[PLAYWRIGHT] Manual action detected, skipping automated click for ${actionType}`);
-      await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`);
+      await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId);
       await context.close();
       return true;
     }
@@ -273,10 +283,10 @@ async function executeClockAction(actionType, supabase, options = {}) {
       await waitUntilTarget(page, options.targetAt);
 
       console.log('[PLAYWRIGHT] Target time reached. Running final pre-flight check...');
-      isAlreadyDone = await checkDashboardStatus(page, actionType, supabase);
+      isAlreadyDone = await checkDashboardStatus(page, actionType, supabase, targetDeviceId);
       if (isAlreadyDone) {
         console.log(`[PLAYWRIGHT] Manual action detected during wait, skipping automated click for ${actionType}`);
-        await sendTelegramAlert(`✅ [ALS Desktop] Final Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`);
+        await sendTelegramAlert(`✅ [ALS Desktop] Final Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId);
         await context.close();
         return true;
       }
@@ -374,7 +384,6 @@ async function executeClockAction(actionType, supabase, options = {}) {
     const standardDate = new Date().toLocaleDateString('en-CA');
 
     try {
-      const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
       const { error } = await supabase.from('todays_proof').upsert({
         date: standardDate,
         clock_in: postProofData.clockIn,
@@ -396,18 +405,18 @@ async function executeClockAction(actionType, supabase, options = {}) {
       ? `source=${source}; target=${options.targetAt}; actual=${actualClickAt.toISOString()}; drift_ms=${driftMs}`
       : `source=${source}; actual=${actualClickAt.toISOString()}`;
 
-    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`);
-    await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`);
+    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`, targetDeviceId);
+    await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`, targetDeviceId);
 
     await context.close();
     return true;
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Execution failed: ${error.message}`);
-    await remoteLog(supabase, actionType, 'failed', `Error during execution: ${error.message}`);
+    await remoteLog(supabase, actionType, 'failed', `Error during execution: ${error.message}`, targetDeviceId);
 
     if (error.message !== 'CAPTIVE_PORTAL') {
-      await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`);
+      await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`, targetDeviceId);
     }
 
     if (context) await context.close();
@@ -435,12 +444,12 @@ async function openDebugBrowser(supabase) {
 }
 
 async function manualFetchProof(supabase, options = {}) {
+  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
   let context;
   try {
     const config = await getSystemConfig(supabase);
 
     console.log('[PLAYWRIGHT] Launching persistent browser for MANUAL PROOF SYNC...');
-    const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceId();
     let userDataDir;
     try {
       const basePath = require('electron').app.getPath('userData');
@@ -476,8 +485,10 @@ async function manualFetchProof(supabase, options = {}) {
       }
       await page.fill('#username', username ? username.trim() : '');
       await page.fill('#password', password ? password.trim() : '');
-      await page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login');
-      await page.waitForNavigation();
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
+        page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login')
+      ]);
     }
 
     console.log('[PLAYWRIGHT] Waiting 5 seconds for dashboard elements to fully render...');

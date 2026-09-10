@@ -35,7 +35,7 @@
     <div class="container">
         <div style="display: flex; align-items: baseline; gap: 15px;">
             <h1>ALS Server Hub</h1>
-            <span style="background: #3b82f6; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff;">v1.5.4</span>
+            <span id="hubVersionBadge" style="background: #3b82f6; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff;">v1.5.7</span>
         </div>
         
         <div class="tabs">
@@ -95,6 +95,23 @@
                     <input type="password" id="supabaseKey">
                 </div>
                 <button onclick="saveGlobalSettings()">Save Settings</button>
+            </div>
+
+            <div class="card">
+                <h2>Local Engine Parameters</h2>
+                <p style="font-size: 13px; color: #aaa; margin-top: -5px; margin-bottom: 15px;">Configure Playwright automation parameters for all hub-managed accounts.</p>
+                <div class="form-group">
+                    <label>Target UPM Portal URL</label>
+                    <input type="text" id="targetUrlInput" placeholder="https://perakamwaktu.upm.edu.my/">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="showBrowserCheck" style="width: auto; margin: 0; accent-color: #3b82f6;">
+                    <label for="showBrowserCheck" style="margin: 0; cursor: pointer;">Show Browser Window (Debug Mode)</label>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button onclick="saveEngineSettings()">Save Engine Settings</button>
+                    <button onclick="testLaunchBrowser()" style="background: #444;">Test Launch Browser</button>
+                </div>
             </div>
         </div>
     </div>
@@ -211,6 +228,12 @@
             const config = await window.electronAPI.getDeviceConfig();
             document.getElementById('supabaseUrl').value = config.supabase_url || '';
             document.getElementById('supabaseKey').value = config.supabase_key || '';
+
+            if (window.electronAPI.readSettings) {
+                const settings = await window.electronAPI.readSettings();
+                document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
+                document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
+            }
         }
 
         async function saveGlobalSettings() {
@@ -219,12 +242,39 @@
                 supabase_url: document.getElementById('supabaseUrl').value.trim(),
                 supabase_key: document.getElementById('supabaseKey').value.trim()
             });
-            alert('Global settings saved!');
+            alert('Global database settings saved!');
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
+        async function saveEngineSettings() {
+            if (!window.electronAPI || !window.electronAPI.saveSettings) return;
+            const urlInput = document.getElementById('targetUrlInput').value.trim();
+            const settings = {
+                targetUrl: urlInput || 'https://perakamwaktu.upm.edu.my/',
+                showBrowser: document.getElementById('showBrowserCheck').checked
+            };
+            await window.electronAPI.saveSettings(settings);
+            alert('Local Engine settings saved successfully!');
+        }
+
+        async function testLaunchBrowser() {
+            if (!window.electronAPI || !window.electronAPI.openBrowser) return;
+            try {
+                await window.electronAPI.openBrowser();
+            } catch (err) {
+                alert('Failed to launch browser: ' + (err.message || err));
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
             loadAccounts();
             loadGlobalSettings();
+            if (window.electronAPI && window.electronAPI.getAppVersion) {
+                const version = await window.electronAPI.getAppVersion();
+                const badge = document.getElementById('hubVersionBadge');
+                if (badge && version) {
+                    badge.textContent = `v${version}`;
+                }
+            }
         });
     </script>
 </body>

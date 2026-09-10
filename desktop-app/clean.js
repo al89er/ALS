@@ -10,7 +10,10 @@ const distDir = path.join(__dirname, 'dist');
 try {
   if (process.platform === 'win32') {
     execSync('taskkill /F /IM "ALS Automation Engine.exe" /T', { stdio: 'ignore' });
+    execSync('taskkill /F /IM "ALS Server Hub.exe" /T', { stdio: 'ignore' });
     execSync('taskkill /F /IM "electron.exe" /T', { stdio: 'ignore' });
+    execSync('taskkill /F /IM "7za.exe" /T', { stdio: 'ignore' });
+    execSync('taskkill /F /IM "makensis.exe" /T', { stdio: 'ignore' });
   }
 } catch (e) {}
 

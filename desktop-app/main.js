@@ -118,10 +118,27 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('read-settings', async () => {
-    const { data } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+    const cacheManager = require('./cache-manager');
+    const local = cacheManager.getEngineConfig ? cacheManager.getEngineConfig() : {
+      target_url: 'https://perakamwaktu.upm.edu.my/',
+      show_browser: false
+    };
+
+    if (edition !== 'hub' && supabase && typeof supabase.from === 'function') {
+      try {
+        const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).maybeSingle();
+        if (!error && data && data.target_url && !local.target_url) {
+          return {
+            targetUrl: data.target_url,
+            showBrowser: typeof data.show_browser === 'boolean' ? data.show_browser : local.show_browser
+          };
+        }
+      } catch (e) {}
+    }
+
     return {
-      targetUrl: data?.target_url || 'https://perakamwaktu.upm.edu.my/',
-      showBrowser: data?.show_browser || false
+      targetUrl: local.target_url || 'https://perakamwaktu.upm.edu.my/',
+      showBrowser: local.show_browser || false
     };
   });
 
@@ -137,11 +154,36 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('save-settings', async (event, settings) => {
-    await supabase.from('system_config').upsert({
-      id: 1,
-      target_url: settings.targetUrl,
-      show_browser: settings.showBrowser
-    });
+    const cacheManager = require('./cache-manager');
+    const targetUrl = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
+    const showBrowser = !!settings.showBrowser;
+
+    // 1. Save locally first (authoritative local configuration)
+    if (cacheManager.saveEngineConfig) {
+      cacheManager.saveEngineConfig({ targetUrl, showBrowser });
+    } else {
+      cacheManager.saveDeviceConfig({ target_url: targetUrl, show_browser: showBrowser });
+      cacheManager.mergeSystemConfig({ target_url: targetUrl, show_browser: showBrowser }, false);
+    }
+
+    // 2. Best-effort sync to Supabase system_config (if client initialized)
+    if (supabase && typeof supabase.from === 'function') {
+      try {
+        const { error } = await supabase.from('system_config').upsert({
+          id: 1,
+          target_url: targetUrl,
+          show_browser: showBrowser
+        });
+        if (error) {
+          console.warn('[SUPABASE] Could not sync system_config to cloud (fail-closed RLS or permissions):', error.message);
+        } else {
+          cacheManager.mergeSystemConfig({ target_url: targetUrl, show_browser: showBrowser }, true);
+        }
+      } catch (cloudErr) {
+        console.warn('[SUPABASE] Failed to upsert system_config:', cloudErr.message);
+      }
+    }
+
     return true;
   });
 

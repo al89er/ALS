@@ -1,6 +1,6 @@
 {
   "name": "desktop-app",
-  "version": "1.5.4",
+  "version": "1.5.7",
   "description": "ALS Automation Engine",
   "main": "main.js",
   "scripts": {
@@ -16,7 +16,8 @@
   "build": {
     "appId": "com.als.dashboard",
     "productName": "ALS Automation Engine",
-    "artifactName": "ALS-${edition}-Setup-${version}.${ext}",
+    "compression": "normal",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": [
       "**/*",
       "bundled.env",

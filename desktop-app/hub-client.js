@@ -46,7 +46,8 @@ function initHubAccounts() {
       auth: {
         persistSession: false,
         autoRefreshToken: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: false,
+        storageKey: `hub-auth-${account.device_id}`
       }
     });
     
