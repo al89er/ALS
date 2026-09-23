@@ -31,6 +31,8 @@ ALS operates on a hybrid Local/Cloud architecture to bypass CORS limitations whi
 - **Remote Execution**: Hit a button on your phone, and the command streams through Supabase down to your local desktop to boot Playwright and execute instantly.
 - **Manual Proof Sync**: A safe, read-only remote macro that allows users to scrape dashboard proof data without triggering click events.
 - **Calendar Skips**: Interactive 14-day UI grid allowing users to halt the local automation engine on specific dates (holidays/leave). Weekends are skipped automatically.
+- **Modular Hot-Updates**: 2-Tier architecture decoupling business logic, schedulers, and UI from the heavy ~90MB Electron binary. Individual modules (~150KB total) can be hot-updated and verified cryptographically over-the-air without re-running installers. See [Modular Hot-Update Guide](docs/MODULAR_AUTO_UPDATE_GUIDE.md).
+- **Multi-Account Server Hub**: Dedicated Hub edition orchestrating multiple employee accounts concurrently with isolated browser contexts, heartbeat recovery, and atomic queue claiming.
 - **Telegram Webhooks**: Native push notifications for success states, failures, and captive portal interceptions.
 
 ## 🚀 Setup & Installation

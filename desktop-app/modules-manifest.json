@@ -1,0 +1,71 @@
+{
+  "version": "1.6.1",
+  "name": "ALS Modular Engine",
+  "updatedAt": "2026-09-23T03:48:20.550Z",
+  "modules": {
+    "automation": {
+      "file": "automation.js",
+      "version": "1.5.8",
+      "type": "engine",
+      "sizeBytes": 32803,
+      "sha256": "943e82a39e6d859700a4b9d98cb16e383097c3842498811978f7bbf22774bcb8",
+      "description": "Playwright automation engine, multi-device clocking, and proof capture"
+    },
+    "hub-client": {
+      "file": "hub-client.js",
+      "version": "1.5.8",
+      "type": "engine",
+      "sizeBytes": 13163,
+      "sha256": "87a4be6dd6db0637144a5d94f618769b4f814cbb7528931a68a7a2310e344709",
+      "description": "Multi-account hub orchestrator, heartbeat recovery, and atomic queue"
+    },
+    "scheduler": {
+      "file": "scheduler.js",
+      "version": "1.5.8",
+      "type": "engine",
+      "sizeBytes": 19140,
+      "sha256": "4978584176387dc371764479c1a9a498d3cc95558732b311d98e5f6e58c4ad2c",
+      "description": "Daily schedule generator, node-cron triggers, and missed action recovery"
+    },
+    "supabase-client": {
+      "file": "supabase-client.js",
+      "version": "1.5.8",
+      "type": "network",
+      "sizeBytes": 14590,
+      "sha256": "36dd68788283233778a066cfd95a16ca1b0dc2f099db1ae0f5f52b63c6ec2f85",
+      "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
+    },
+    "cache-manager": {
+      "file": "cache-manager.js",
+      "version": "1.5.8",
+      "type": "storage",
+      "sizeBytes": 10578,
+      "sha256": "5ae405d6cfc3d67e5a2835605bfc31033a5496ab4520bc72e1c2324596221769",
+      "description": "Local JSON cache, settings persistence, and hub accounts manager"
+    },
+    "tray-manager": {
+      "file": "tray-manager.js",
+      "version": "1.5.8",
+      "type": "ui",
+      "sizeBytes": 3288,
+      "sha256": "e40f11848eec61a58e7d9a54cb274e7ad76dbb618a0969448aed7298cba056bf",
+      "description": "Modular Windows system tray tooltip and context menu formatter"
+    },
+    "hub-ui": {
+      "file": "hub-ui.html",
+      "version": "1.6.0",
+      "type": "ui",
+      "sizeBytes": 86785,
+      "sha256": "a3834c832548557bd61483e62bb5c0d4007215b5cba92b4ec11e95f45771b82f",
+      "description": "ALS Server Hub administrative UI"
+    },
+    "desktop-ui": {
+      "file": "desktop-ui.html",
+      "version": "1.6.1",
+      "type": "ui",
+      "sizeBytes": 67972,
+      "sha256": "98a7091ba00ed0d65e52b0e4b54199441f480a0ebc74a3ba174fc4c96a35f0fe",
+      "description": "ALS Single Agent desktop interface"
+    }
+  }
+}

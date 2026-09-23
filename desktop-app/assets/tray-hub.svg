@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Base ALS Logo in cyan/ice blue to distinguish from single agent -->
+  <circle cx="13" cy="13" r="11" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" />
+  <path d="M 13 2 L 4 24 M 13 2 L 22 24 M 1.5 17 L 24.5 15" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- Server Hub Badge: Solid Amber Gold circle with dark border and bold 'H' -->
+  <circle cx="23" cy="23" r="7.5" fill="#f59e0b" stroke="#0b0f19" stroke-width="1.8" />
+  <text x="23" y="27" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="10" font-weight="900" fill="#0b0f19" text-anchor="middle">H</text>
+</svg>

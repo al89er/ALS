@@ -1,6 +1,6 @@
 {
   "name": "desktop-app",
-  "version": "1.5.7",
+  "version": "1.5.8",
   "description": "ALS Automation Engine",
   "main": "main.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "build:lite": "npm run clean && node prebuild.js lite && electron-builder --win --config.extraMetadata.edition=Lite --config.appId=com.als.dashboard.lite \"--config.productName=ALS Automation Engine Lite\" --config.artifactName=\"ALS-Lite-Setup-${version}.exe\" --config.directories.output=C:\\Temp\\ALS-build && node postbuild.js",
     "build:hub": "npm run clean && node prebuild.js hub && electron-builder --win --config.extraMetadata.edition=Hub --config.appId=com.als.dashboard.hub \"--config.productName=ALS Server Hub\" --config.artifactName=\"ALS-Hub-Setup-${version}.exe\" --config.directories.output=C:\\Temp\\ALS-build && node postbuild.js",
     "build:all": "npm run build:full && npm run build:lite && npm run build:hub",
+    "update-manifest": "node update-manifest.js",
     "test": "node --test tests/*.test.js"
   },
   "build": {

@@ -66,8 +66,9 @@ async function checkDashboardStatus(page, actionType, supabase, targetDeviceId) 
           date: standardDate,
           clock_in: proofData.clockIn,
           clock_out: proofData.clockOut,
+          device_id: devId,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'date' });
+        }, { onConflict: 'date, device_id' });
         if (error) throw error;
         cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
       } catch (err) {
@@ -217,9 +218,17 @@ async function executeClockAction(actionType, supabase, options = {}) {
     let userDataDir;
     try {
       const basePath = require('electron').app.getPath('userData');
-      userDataDir = (options && options.hubAccount) 
-        ? path.join(basePath, `upm_session_${options.hubAccount.device_id}`) 
-        : path.join(basePath, 'upm_session');
+      if (options && options.hubAccount) {
+        const primarySession = path.join(basePath, `upm_session_${options.hubAccount.device_id}`);
+        if (!fs.existsSync(primarySession)) {
+          const legacySession = path.join(require('electron').app.getPath('appData'), 'ALS-Full', `upm_session_${options.hubAccount.device_id}`);
+          userDataDir = fs.existsSync(legacySession) ? legacySession : primarySession;
+        } else {
+          userDataDir = primarySession;
+        }
+      } else {
+        userDataDir = path.join(basePath, 'upm_session');
+      }
     } catch (e) {
       const basePath = require('os').homedir();
       userDataDir = (options && options.hubAccount) 
@@ -383,16 +392,65 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
     const standardDate = new Date().toLocaleDateString('en-CA');
 
+    // Resolve authenticated client for targetDeviceId if possible
+    let clientToUse = supabase;
+    let hubAccount = options && options.hubAccount;
+    if (!hubAccount && targetDeviceId) {
+      const accounts = cacheManager.getHubAccounts();
+      hubAccount = accounts.find(a => a.device_id === targetDeviceId);
+    }
+    if (hubAccount && hubAccount.supabase_email && hubAccount.supabase_password) {
+      try {
+        let needNewClient = !clientToUse || !clientToUse.auth;
+        if (!needNewClient) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (!userData?.user || userData.user.email !== hubAccount.supabase_email) {
+            needNewClient = true;
+          }
+        }
+        if (needNewClient) {
+          const { createClient } = require('@supabase/supabase-js');
+          const envVars = cacheManager.getDeviceConfig();
+          if (envVars.supabase_url && envVars.supabase_key) {
+            const authClient = createClient(envVars.supabase_url, envVars.supabase_key, {
+              auth: { persistSession: false }
+            });
+            const { data: authData, error: signInErr } = await authClient.auth.signInWithPassword({
+              email: hubAccount.supabase_email,
+              password: hubAccount.supabase_password
+            });
+            if (!signInErr && authData?.user) {
+              clientToUse = authClient;
+            }
+          }
+        }
+      } catch (authErr) {
+        console.warn('[AUTOMATION] Self-auth check warning in executeClockAction:', authErr.message);
+      }
+    }
+
     try {
-      const { error } = await supabase.from('todays_proof').upsert({
-        date: standardDate,
-        clock_in: postProofData.clockIn,
-        clock_out: postProofData.clockOut,
-        device_id: targetDeviceId,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'date, device_id' });
-      if (error) throw error;
-      cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
+      if (clientToUse && typeof clientToUse.from === 'function') {
+        let authUserId;
+        if (clientToUse.auth) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (userData && userData.user) authUserId = userData.user.id;
+        }
+        const proofPayload = {
+          date: standardDate,
+          clock_in: postProofData.clockIn,
+          clock_out: postProofData.clockOut,
+          device_id: targetDeviceId,
+          updated_at: new Date().toISOString()
+        };
+        if (authUserId) proofPayload.user_id = authUserId;
+
+        const { error } = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
+        if (error) throw error;
+        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
+      } else {
+        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: false });
+      }
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
       cacheManager.queueOfflineProof({ date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
@@ -405,7 +463,31 @@ async function executeClockAction(actionType, supabase, options = {}) {
       ? `source=${source}; target=${options.targetAt}; actual=${actualClickAt.toISOString()}; drift_ms=${driftMs}`
       : `source=${source}; actual=${actualClickAt.toISOString()}`;
 
-    await remoteLog(supabase, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`, targetDeviceId);
+    try {
+      if (clientToUse && typeof clientToUse.from === 'function') {
+        let authUserId;
+        if (clientToUse.auth) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (userData && userData.user) authUserId = userData.user.id;
+        }
+        const cmdPayload = {
+          device_id: targetDeviceId,
+          action: actionType,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        if (authUserId) cmdPayload.user_id = authUserId;
+
+        await clientToUse.from('commands').insert(cmdPayload);
+      }
+    } catch (cmdErr) {
+      console.warn('[PLAYWRIGHT] Could not record command history:', cmdErr.message);
+    }
+
+    if (clientToUse && typeof clientToUse.from === 'function') {
+      await remoteLog(clientToUse, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`, targetDeviceId);
+    }
     await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`, targetDeviceId);
 
     await context.close();
@@ -424,15 +506,26 @@ async function executeClockAction(actionType, supabase, options = {}) {
   }
 }
 
-async function openDebugBrowser(supabase) {
+async function openDebugBrowser(supabase, options = {}) {
   const config = await getSystemConfig(supabase);
   let userDataDir;
   try {
-    userDataDir = path.join(require('electron').app.getPath('userData'), 'upm_session');
+    const basePath = require('electron').app.getPath('userData');
+    if (options && options.hubAccount) {
+      const primarySession = path.join(basePath, `upm_session_${options.hubAccount.device_id}`);
+      if (!fs.existsSync(primarySession)) {
+        const legacySession = path.join(require('electron').app.getPath('appData'), 'ALS-Full', `upm_session_${options.hubAccount.device_id}`);
+        userDataDir = fs.existsSync(legacySession) ? legacySession : primarySession;
+      } else {
+        userDataDir = primarySession;
+      }
+    } else {
+      userDataDir = path.join(basePath, 'upm_session');
+    }
   } catch (e) {
     userDataDir = path.join(require('os').homedir(), '.als_upm_session');
   }
-  console.log('[PLAYWRIGHT] Opening standalone debug browser...');
+  console.log('[PLAYWRIGHT] Opening standalone debug browser at:', userDataDir);
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'msedge',
     headless: false,
@@ -444,7 +537,7 @@ async function openDebugBrowser(supabase) {
 }
 
 async function manualFetchProof(supabase, options = {}) {
-  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
+  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : (options && options.deviceId ? options.deviceId : cacheManager.getDeviceConfig().device_id);
   let context;
   try {
     const config = await getSystemConfig(supabase);
@@ -453,9 +546,17 @@ async function manualFetchProof(supabase, options = {}) {
     let userDataDir;
     try {
       const basePath = require('electron').app.getPath('userData');
-      userDataDir = (options && options.hubAccount) 
-        ? path.join(basePath, `upm_session_${options.hubAccount.device_id}`) 
-        : path.join(basePath, 'upm_session');
+      if (options && options.hubAccount) {
+        const primarySession = path.join(basePath, `upm_session_${options.hubAccount.device_id}`);
+        if (!fs.existsSync(primarySession)) {
+          const legacySession = path.join(require('electron').app.getPath('appData'), 'ALS-Full', `upm_session_${options.hubAccount.device_id}`);
+          userDataDir = fs.existsSync(legacySession) ? legacySession : primarySession;
+        } else {
+          userDataDir = primarySession;
+        }
+      } else {
+        userDataDir = path.join(basePath, 'upm_session');
+      }
     } catch (e) {
       const basePath = require('os').homedir();
       userDataDir = (options && options.hubAccount) 
@@ -508,6 +609,43 @@ async function manualFetchProof(supabase, options = {}) {
 
     console.log(`[PLAYWRIGHT] Manual Proof Extracted: ${JSON.stringify(proofData)}`);
     
+    // Resolve authenticated Supabase client for this device
+    let clientToUse = supabase;
+    let hubAccount = options && options.hubAccount;
+    if (!hubAccount && targetDeviceId) {
+      const accounts = cacheManager.getHubAccounts();
+      hubAccount = accounts.find(a => a.device_id === targetDeviceId);
+    }
+    if (hubAccount && hubAccount.supabase_email && hubAccount.supabase_password) {
+      try {
+        let needNewClient = !clientToUse || !clientToUse.auth;
+        if (!needNewClient) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (!userData?.user || userData.user.email !== hubAccount.supabase_email) {
+            needNewClient = true;
+          }
+        }
+        if (needNewClient) {
+          const { createClient } = require('@supabase/supabase-js');
+          const envVars = cacheManager.getDeviceConfig();
+          if (envVars.supabase_url && envVars.supabase_key) {
+            const authClient = createClient(envVars.supabase_url, envVars.supabase_key, {
+              auth: { persistSession: false }
+            });
+            const { data: authData, error: signInErr } = await authClient.auth.signInWithPassword({
+              email: hubAccount.supabase_email,
+              password: hubAccount.supabase_password
+            });
+            if (!signInErr && authData?.user) {
+              clientToUse = authClient;
+            }
+          }
+        }
+      } catch (authErr) {
+        console.warn('[AUTOMATION] Self-auth check warning:', authErr.message);
+      }
+    }
+
     if (proofData.clockIn === '--:--' && proofData.clockOut === '--:--') {
        let debugDump = '';
        for (const frame of page.frames()) {
@@ -515,32 +653,80 @@ async function manualFetchProof(supabase, options = {}) {
               debugDump += await frame.content() + '\n\n';
           } catch(e) {}
        }
-       await remoteLog(supabase, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`, targetDeviceId);
+       if (clientToUse && typeof clientToUse.from === 'function') {
+         await remoteLog(clientToUse, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`, targetDeviceId);
+       }
     }
     
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     try {
-      const { error } = await supabase.from('todays_proof').upsert({
-        date: standardDate,
-        clock_in: proofData.clockIn,
-        clock_out: proofData.clockOut,
-        device_id: targetDeviceId,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'date, device_id' });
-      if (error) throw error;
-      cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+      if (clientToUse && typeof clientToUse.from === 'function') {
+        let authUserId;
+        if (clientToUse.auth) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (userData && userData.user) authUserId = userData.user.id;
+        }
+        const proofPayload = {
+          date: standardDate,
+          clock_in: proofData.clockIn,
+          clock_out: proofData.clockOut,
+          device_id: targetDeviceId,
+          updated_at: new Date().toISOString()
+        };
+        if (authUserId) proofPayload.user_id = authUserId;
+
+        const { error } = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
+        if (error) {
+          console.error('[PLAYWRIGHT] Supabase upsert error:', error.message || error);
+          throw error;
+        }
+        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: true });
+      } else {
+        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut, synced: false });
+      }
     } catch (err) {
-      console.error('[PLAYWRIGHT] Supabase offline! Queueing manual proof to local cache.');
+      console.error('[PLAYWRIGHT] Supabase error during proof save:', err.message);
       cacheManager.queueOfflineProof({ date: standardDate, clock_in: proofData.clockIn, clock_out: proofData.clockOut });
+    }
+
+    try {
+      if (clientToUse && typeof clientToUse.from === 'function') {
+        let authUserId;
+        if (clientToUse.auth) {
+          const { data: userData } = await clientToUse.auth.getUser();
+          if (userData && userData.user) authUserId = userData.user.id;
+        }
+        const cmdPayload = {
+          device_id: targetDeviceId,
+          action: 'manual_proof_sync',
+          status: 'completed',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        if (authUserId) cmdPayload.user_id = authUserId;
+
+        const { error: cmdErr } = await clientToUse.from('commands').insert(cmdPayload);
+        if (cmdErr) {
+          console.warn('[PLAYWRIGHT] Supabase commands insert error:', cmdErr.message || cmdErr);
+        }
+      }
+    } catch (cmdErr) {
+      console.warn('[PLAYWRIGHT] Could not record command history:', cmdErr.message);
     }
 
     if (global.updateTrayTooltip) global.updateTrayTooltip();
 
-    await remoteLog(supabase, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`, targetDeviceId);
+    if (clientToUse && typeof clientToUse.from === 'function') {
+      await remoteLog(clientToUse, 'manual_proof_sync', 'success', `Proof fetched manually. Date: ${standardDate}, IN: ${proofData.clockIn}, OUT: ${proofData.clockOut}`, targetDeviceId);
+    }
     
     await context.close();
-    return true;
+    return {
+      date: standardDate,
+      clockIn: proofData.clockIn,
+      clockOut: proofData.clockOut
+    };
 
   } catch (error) {
     console.error(`[PLAYWRIGHT] Manual proof sync failed: ${error.message}`);
@@ -550,7 +736,10 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
+const VERSION = '1.5.8';
+
 module.exports = {
+  VERSION,
   executeClockAction,
   openDebugBrowser,
   manualFetchProof,

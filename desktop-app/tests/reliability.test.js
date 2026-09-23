@@ -64,6 +64,7 @@ const mockSupabase = {
   from: () => mockSupabase,
   update: () => mockSupabase,
   eq: () => mockSupabase,
+  or: () => mockSupabase,
   select: () => mockSupabase,
   maybeSingle: async () => ({ data: mockSupabase._commandData, error: mockSupabase._commandError }),
   insert: async (payload) => {
@@ -383,6 +384,7 @@ test('Reliability Improvements', async (t) => {
     };
 
     await scheduler.init(mockSupabase);
+    scheduler.stop();
     mockSupabase.select = originalSelect;
 
     const updatedCache = cacheManager.readCache();

@@ -1,184 +1,1760 @@
 <!DOCTYPE html>
-<html>
+<!-- VERSION: 1.6.0 -->
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ALS Server Hub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALS Server Hub Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #1a1a1a; color: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        h1 { font-weight: 600; font-size: 24px; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .card { background: #2a2a2a; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
-        .form-group input { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #333; color: #fff; box-sizing: border-box; }
-        button { background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: 500; }
-        button:hover { background: #2563eb; }
-        button.danger { background: #ef4444; }
-        button.danger:hover { background: #dc2626; }
-        .account-list { display: flex; flex-direction: column; gap: 15px; }
-        .account-item { background: #333; padding: 15px; border-radius: 6px; border: 1px solid #444; }
-        .account-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .account-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; color: #bbb; background: #222; padding: 10px; border-radius: 4px; }
-        .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; background: #555; color: white; margin-left: 10px; }
-        .status-online { background: #10b981; }
-        .status-offline { background: #ef4444; }
-        .logs-box { margin-top: 10px; background: #1a1a1a; padding: 10px; border-radius: 4px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px; color: #888; }
-        .tabs { display: flex; margin-bottom: 20px; border-bottom: 1px solid #333; }
-        .tab { padding: 10px 20px; cursor: pointer; color: #888; font-weight: 500; }
-        .tab.active { color: #fff; border-bottom: 2px solid #3b82f6; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(22, 27, 34, 0.85);
+            --bg-surface-elevated: rgba(30, 36, 48, 0.9);
+            --bg-card: rgba(26, 32, 44, 0.7);
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-focus: #3b82f6;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --primary-glow: rgba(59, 130, 246, 0.25);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.25);
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --badge-bg: rgba(255, 255, 255, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 10% 15%, rgba(59, 130, 246, 0.08), transparent 35%),
+                radial-gradient(circle at 90% 85%, rgba(16, 185, 129, 0.06), transparent 35%);
+            background-attachment: fixed;
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+            overflow-y: overlay;
+        }
+
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        /* App Header */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .header-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .version-tag {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #93c5fd;
+            padding: 3px 8px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .hub-realtime-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            padding: 6px 14px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .pulse-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+            position: relative;
+        }
+
+        .pulse-indicator::after {
+            content: '';
+            position: absolute;
+            top: -3px;
+            left: -3px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--success);
+            opacity: 0.4;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.6); opacity: 0.8; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        /* KPI Banner */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px 18px;
+            backdrop-filter: blur(12px);
+            transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+
+        .kpi-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+
+        /* Tabs Navigation */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            background: rgba(59, 130, 246, 0.15);
+            font-weight: 600;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 22px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Filter & Search Bar */
+        .filter-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .filter-pill {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .filter-pill:hover {
+            color: var(--text-secondary);
+        }
+
+        .filter-pill.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .search-box-wrap {
+            display: flex;
+            align-items: center;
+            position: relative;
+            flex-grow: 1;
+            max-width: 320px;
+        }
+
+        .search-box-wrap input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 7px 12px 7px 32px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .search-box-wrap input:focus {
+            border-color: var(--primary);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--text-muted);
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        /* Account Cards */
+        .account-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .account-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 18px;
+            transition: all 0.2s ease;
+        }
+
+        .account-card:hover {
+            border-color: rgba(255, 255, 255, 0.16);
+            background: var(--bg-surface-elevated);
+        }
+
+        .acc-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 14px;
+        }
+
+        .acc-identity {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .acc-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .acc-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .acc-email {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
+        .status-badge.online {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-badge.offline {
+            background: rgba(239, 68, 68, 0.12);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Proof Grid */
+        .proof-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+            font-size: 12px;
+        }
+
+        .proof-col-label {
+            color: var(--text-muted);
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+
+        .proof-val {
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+        }
+
+        .proof-val.in { color: #34d399; }
+        .proof-val.out { color: #60a5fa; }
+        .proof-val.empty { color: var(--text-muted); }
+
+        /* Action Buttons Row */
+        .acc-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-action:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-action.primary {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.35);
+            color: #93c5fd;
+        }
+
+        .btn-action.primary:hover {
+            background: rgba(59, 130, 246, 0.25);
+            color: #bfdbfe;
+        }
+
+        .btn-action.danger {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+        }
+
+        .btn-action.danger:hover {
+            background: rgba(239, 68, 68, 0.22);
+            color: #fecaca;
+        }
+
+        .btn-action:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Collapsible Logs Drawer */
+        .logs-drawer {
+            margin-top: 14px;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 10px;
+        }
+
+        .logs-toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            padding: 4px 0;
+            transition: color 0.15s ease;
+        }
+
+        .logs-toggle-btn:hover {
+            color: var(--text-secondary);
+        }
+
+        .logs-content {
+            display: none;
+            margin-top: 8px;
+            background: #06090e;
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 10px;
+            max-height: 140px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .logs-content.open {
+            display: block;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .log-time { color: var(--text-muted); }
+        .log-status-success { color: #34d399; font-weight: 500; }
+        .log-status-failed { color: #f87171; font-weight: 500; }
+        .log-status-info { color: #60a5fa; }
+        .log-msg { color: #cbd5e1; word-break: break-all; }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            padding: 9px 12px;
+            font-size: 13px;
+            color: #fff;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .form-group input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 2px var(--primary-glow);
+        }
+
+        /* Generic Buttons */
+        .btn-main {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-main:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            border: 1px solid var(--border-subtle);
+            padding: 9px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        /* Toast Container & Notification */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: rgba(22, 27, 34, 0.95);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 12px 18px;
+            color: #fff;
+            font-size: 13px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(16px);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+            max-width: 400px;
+            pointer-events: auto;
+            animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .toast.toast-success { border-color: rgba(16, 185, 129, 0.4); }
+        .toast.toast-error { border-color: rgba(239, 68, 68, 0.4); }
+        .toast.toast-info { border-color: rgba(59, 130, 246, 0.4); }
+
+        .toast-icon { font-size: 16px; }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 14px;
+            padding: 24px;
+            width: 90%;
+            max-width: 440px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        .modal-body {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Spinning loader animation */
+        .spin {
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Floating Sync Progress Dock */
+        .sync-progress-dock {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 360px;
+            max-width: calc(100vw - 48px);
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            border-radius: 14px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(59, 130, 246, 0.2);
+            backdrop-filter: blur(16px);
+            z-index: 9998;
+            overflow: hidden;
+            animation: slideUpDock 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: width 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        @keyframes slideUpDock {
+            from { transform: translateY(40px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .sync-progress-dock.minimized {
+            width: 250px;
+        }
+
+        .sync-progress-dock.minimized .dock-body {
+            display: none;
+        }
+
+        .dock-header {
+            padding: 12px 16px;
+            background: rgba(30, 41, 59, 0.7);
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dock-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dock-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .dock-badge {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 2px 7px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .dock-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dock-btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+
+        .dock-btn-icon:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .dock-body {
+            padding: 14px 16px;
+        }
+
+        .dock-subtext {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dock-progress-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-bottom: 14px;
+        }
+
+        .dock-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            border-radius: 9999px;
+            transition: width 0.3s ease;
+        }
+
+        .dock-account-list {
+            max-height: 160px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .dock-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.25);
+            font-size: 12px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .dock-item.active {
+            border-color: rgba(59, 130, 246, 0.5);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .dock-item.success {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .dock-item.failed {
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .dock-item-name {
+            font-weight: 500;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dock-item-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dock-footer {
+            display: flex;
+            justify-content: flex-end;
+            padding-top: 8px;
+            border-top: 1px solid var(--border-subtle);
+        }
+
+        .dock-cancel-btn {
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .dock-cancel-btn:hover {
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.1);
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div style="display: flex; align-items: baseline; gap: 15px;">
-            <h1>ALS Server Hub</h1>
-            <span id="hubVersionBadge" style="background: #3b82f6; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: #fff;">v1.5.7</span>
-        </div>
-        
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('accounts')">Accounts</div>
-            <div class="tab" onclick="switchTab('add')">Add Account</div>
-            <div class="tab" onclick="switchTab('settings')">Global Settings</div>
+    <div id="toast-container"></div>
+
+    <!-- Non-Intrusive Floating Sync Progress Dock -->
+    <div id="syncProgressDock" class="sync-progress-dock" style="display: none;">
+        <div class="dock-header">
+            <div class="dock-title-group">
+                <span id="dockSpinner" class="spin" style="font-size: 14px;">🔄</span>
+                <span id="dockTitle" class="dock-title">Syncing All Proofs</span>
+                <span id="dockProgressBadge" class="dock-badge">0 / 0</span>
+            </div>
+            <div class="dock-controls">
+                <button class="dock-btn-icon" onclick="toggleDockMinimize()" id="btnDockMinimize" title="Minimize / Expand">_</button>
+                <button class="dock-btn-icon" onclick="closeProgressDock()" id="btnDockClose" title="Close" style="display: none;">✕</button>
+            </div>
         </div>
 
+        <div id="dockBody" class="dock-body">
+            <div class="dock-subtext" id="dockStatusSubtext">Preparing sequential synchronization...</div>
+
+            <!-- Progress Bar -->
+            <div class="dock-progress-track">
+                <div class="dock-progress-fill" id="dockProgressFill" style="width: 0%;"></div>
+            </div>
+
+            <!-- Per-Account checklist item list -->
+            <div class="dock-account-list" id="dockAccountList">
+                <!-- Checklist items injected dynamically -->
+            </div>
+
+            <!-- Footer actions (Abort / Cancel) -->
+            <div class="dock-footer" id="dockFooter">
+                <button class="dock-cancel-btn" onclick="abortSyncAll()" id="btnAbortSync">Cancel Remaining</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-card">
+            <div class="modal-title" id="modalTitle">Confirm Action</div>
+            <div class="modal-body" id="modalBody">Are you sure you want to proceed?</div>
+            <div class="modal-actions">
+                <button class="btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+                <button class="btn-main" id="modalConfirmBtn" style="background: var(--danger);">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-title-group">
+                <span style="font-size: 24px;">⚡</span>
+                <h1 class="app-title">ALS Server Hub</h1>
+                <span class="version-tag" id="hubVersionBadge">v1.6.0</span>
+            </div>
+            <div class="hub-realtime-status">
+                <div class="pulse-indicator"></div>
+                <span>Realtime Active</span>
+            </div>
+        </header>
+
+        <!-- KPI Banner -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Total Accounts</div>
+                <div class="kpi-value"><span id="kpiTotalAccounts">0</span></div>
+                <div class="kpi-sub">Provisioned profiles</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Online Status</div>
+                <div class="kpi-value"><span id="kpiOnlineAccounts" style="color: var(--success);">0</span><span class="kpi-sub" id="kpiOnlineRatio">/ 0</span></div>
+                <div class="kpi-sub">Active Realtime sessions</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Clock IN Today</div>
+                <div class="kpi-value"><span id="kpiClockInCount" style="color: #60a5fa;">0</span><span class="kpi-sub" id="kpiClockInRatio">/ 0</span></div>
+                <div class="kpi-sub">Verified morning punches</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Clock OUT Today</div>
+                <div class="kpi-value"><span id="kpiClockOutCount" style="color: #a78bfa;">0</span><span class="kpi-sub" id="kpiClockOutRatio">/ 0</span></div>
+                <div class="kpi-sub">Verified evening punches</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('accounts')">Managed Accounts</button>
+            <button class="tab-btn" onclick="switchTab('add')">Add / Edit Account</button>
+            <button class="tab-btn" onclick="switchTab('settings')">Global Settings</button>
+            <button class="tab-btn" onclick="switchTab('updates')">Modular Updates</button>
+        </div>
+
+        <!-- Tab 1: Managed Accounts -->
         <div id="accounts" class="tab-content active">
             <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h2 style="margin: 0;">Managed Accounts</h2>
-                    <button onclick="loadAccounts()" style="background: #444;">Refresh Status</button>
+                <div class="filter-bar">
+                    <div class="filter-pills">
+                        <button class="filter-pill active" onclick="setFilter('all', this)">All (<span id="countFilterAll">0</span>)</button>
+                        <button class="filter-pill" onclick="setFilter('online', this)">Online (<span id="countFilterOnline">0</span>)</button>
+                        <button class="filter-pill" onclick="setFilter('needs_proof', this)">Needs Proof (<span id="countFilterProof">0</span>)</button>
+                        <button class="filter-pill" onclick="setFilter('offline', this)">Offline (<span id="countFilterOffline">0</span>)</button>
+                    </div>
+                    <div class="search-box-wrap">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="accountSearchInput" placeholder="Filter by device ID or email..." oninput="handleSearch(this.value)">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-main" onclick="syncAllProofs()" id="btnSyncAllProofs" style="padding: 7px 14px; font-size: 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #93c5fd;">
+                            <span>⚡</span> Sync All Proofs
+                        </button>
+                        <button class="btn-secondary" onclick="loadAccounts(true)" id="btnRefreshAccounts" style="padding: 7px 14px; font-size: 12px;">
+                            <span id="refreshIcon">🔄</span> Refresh
+                        </button>
+                    </div>
                 </div>
+
                 <div class="account-list" id="accountList">
-                    <!-- Accounts injected here -->
+                    <!-- Dynamic Account Cards Injected Here -->
                 </div>
             </div>
         </div>
 
+        <!-- Tab 2: Add / Edit Account -->
         <div id="add" class="tab-content">
             <div class="card">
-                <h2>Add New Account</h2>
+                <div class="card-header-row">
+                    <div>
+                        <h2 class="card-title" id="formAccountTitle">Provision New Account</h2>
+                        <p class="card-desc">Assign employee credentials to an isolated persistent profile.</p>
+                    </div>
+                    <button class="btn-secondary" id="btnCancelEdit" style="display: none;" onclick="cancelEditAccount()">Cancel Edit</button>
+                </div>
+
                 <div class="form-group">
-                    <label>Device ID</label>
-                    <input type="text" id="deviceId" placeholder="e.g. user_office_pc">
+                    <label>Device ID (Unique Identifier)</label>
+                    <input type="text" id="deviceId" placeholder="e.g. AMIR, FARIHAH, LUQMAN">
                 </div>
                 <div class="form-group">
-                    <label>UPM Username</label>
-                    <input type="text" id="upmUsername">
+                    <label>UPM Portal Username</label>
+                    <input type="text" id="upmUsername" placeholder="e.g. employee username">
                 </div>
                 <div class="form-group">
-                    <label>UPM Password</label>
-                    <input type="password" id="upmPassword">
+                    <label>UPM Portal Password</label>
+                    <input type="password" id="upmPassword" placeholder="••••••••">
                 </div>
                 <div class="form-group">
-                    <label>Supabase Email</label>
-                    <input type="email" id="supabaseEmail">
+                    <label>Supabase User Email</label>
+                    <input type="email" id="supabaseEmail" placeholder="employee@domain.com">
                 </div>
                 <div class="form-group">
-                    <label>Supabase Password</label>
-                    <input type="password" id="supabasePassword">
+                    <label>Supabase User Password</label>
+                    <input type="password" id="supabasePassword" placeholder="••••••••">
                 </div>
-                <button onclick="saveAccount()">Save Account</button>
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button class="btn-main" onclick="saveAccount()" id="btnSaveAccount">💾 Save Account</button>
+                </div>
             </div>
         </div>
 
+        <!-- Tab 3: Global Settings -->
         <div id="settings" class="tab-content">
             <div class="card">
-                <h2>Global Database Settings</h2>
+                <div class="card-header-row">
+                    <div>
+                        <h2 class="card-title">Global Database Configuration</h2>
+                        <p class="card-desc">Central Supabase credentials used by all managed accounts.</p>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Supabase URL</label>
-                    <input type="text" id="supabaseUrl">
+                    <input type="text" id="supabaseUrl" placeholder="https://xyzcompany.supabase.co">
                 </div>
                 <div class="form-group">
                     <label>Supabase Publishable Key</label>
-                    <input type="password" id="supabaseKey">
+                    <input type="password" id="supabaseKey" placeholder="sbp_... or eyJ...">
                 </div>
-                <button onclick="saveGlobalSettings()">Save Settings</button>
+                <button class="btn-main" onclick="saveGlobalSettings()">Save Database Settings</button>
             </div>
 
             <div class="card">
-                <h2>Local Engine Parameters</h2>
-                <p style="font-size: 13px; color: #aaa; margin-top: -5px; margin-bottom: 15px;">Configure Playwright automation parameters for all hub-managed accounts.</p>
+                <div class="card-header-row">
+                    <div>
+                        <h2 class="card-title">Automation Engine Parameters</h2>
+                        <p class="card-desc">Configure Playwright runtime target for all hub workers.</p>
+                    </div>
+                </div>
                 <div class="form-group">
                     <label>Target UPM Portal URL</label>
                     <input type="text" id="targetUrlInput" placeholder="https://perakamwaktu.upm.edu.my/">
                 </div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
-                    <input type="checkbox" id="showBrowserCheck" style="width: auto; margin: 0; accent-color: #3b82f6;">
-                    <label for="showBrowserCheck" style="margin: 0; cursor: pointer;">Show Browser Window (Debug Mode)</label>
+                <div class="form-group" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="showBrowserCheck" style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;">
+                    <label for="showBrowserCheck" style="margin: 0; cursor: pointer; color: var(--text-primary);">Show Browser Window (Debug Mode)</label>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button onclick="saveEngineSettings()">Save Engine Settings</button>
-                    <button onclick="testLaunchBrowser()" style="background: #444;">Test Launch Browser</button>
+                    <button class="btn-main" onclick="saveEngineSettings()">Save Engine Settings</button>
+                    <button class="btn-secondary" onclick="testLaunchBrowser()">🌐 Test Launch Edge</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 4: Modular Hot-Updates -->
+        <div id="updates" class="tab-content">
+            <div class="card">
+                <div class="card-header-row">
+                    <div>
+                        <h2 class="card-title">Modular Hot-Updates</h2>
+                        <p class="card-desc">Safely hot-swap automation, business logic, and UI modules without reinstalling the app.</p>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-main" id="btnCheckUpdates" onclick="checkForUpdatesUI()">Check for Updates</button>
+                        <button class="btn-main" id="btnUpdateAll" onclick="installAllUpdatesUI()" style="background: var(--success); display: none;">Update All Modules</button>
+                        <button class="btn-main" id="btnRelaunch" onclick="relaunchAppUI()" style="background: var(--warning); color: #000; font-weight: 700; display: none;">⚡ Relaunch Hub</button>
+                    </div>
+                </div>
+
+                <div id="updateNoticeBanner" style="display: none; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px; font-size: 13px;"></div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-subtle); text-align: left; color: var(--text-muted);">
+                            <th style="padding: 10px 8px;">Module Component</th>
+                            <th style="padding: 10px 8px;">Active Version</th>
+                            <th style="padding: 10px 8px;">Runtime Source</th>
+                            <th style="padding: 10px 8px;">Repository Status</th>
+                            <th style="padding: 10px 8px; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modulesTableBody">
+                        <!-- Module rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top: 0; font-size: 14px; color: var(--text-primary); margin-bottom: 10px;">Hot-Update Activity Stream</h3>
+                <div class="logs-content open" id="updateLogBox" style="max-height: 140px;">
+                    <div class="log-entry"><span class="log-time">[SYSTEM]</span> <span class="log-msg">Modular update engine loaded. AST validation and SHA-256 integrity checks enabled.</span></div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        let cachedAccounts = [];
+        let accountStatusMap = {};
+        let currentFilter = 'all';
+        let searchQuery = '';
+        let activeModuleInfo = {};
+        let pendingUpdates = [];
+
+        // Toast notifications
+        function showToast(title, message, type = 'info', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            toast.innerHTML = `
+                <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+                <div>
+                    <div style="font-weight: 600; margin-bottom: 2px;">${title}</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">${message}</div>
+                </div>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 250);
+            }, duration);
+        }
+
+        // Custom Confirmation Modal
+        function showConfirmModal(title, message, confirmBtnText, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = message;
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            confirmBtn.textContent = confirmBtnText;
+            
+            confirmBtn.onclick = () => {
+                closeConfirmModal();
+                onConfirm();
+            };
+
+            modal.classList.add('open');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').classList.remove('open');
+        }
+
+        // Tab Switching
         function switchTab(tabId) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabBtn = document.querySelector(`.tab[onclick="switchTab('${tabId}')"]`);
+            const tabBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
             if (tabBtn) tabBtn.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
+            const target = document.getElementById(tabId);
+            if (target) target.classList.add('active');
             if (tabId === 'accounts') loadAccounts();
         }
 
-        async function loadAccounts() {
+        // Filter & Search
+        function setFilter(filterType, element) {
+            currentFilter = filterType;
+            document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+            if (element) element.classList.add('active');
+            renderAccountList();
+        }
+
+        function handleSearch(val) {
+            searchQuery = (val || '').toLowerCase().trim();
+            renderAccountList();
+        }
+
+        // Load Accounts & Fetch Status
+        async function loadAccounts(manualRefresh = false) {
             if (!window.electronAPI) return;
-            const accounts = await window.electronAPI.getHubAccounts();
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('spin');
+
+            try {
+                cachedAccounts = await window.electronAPI.getHubAccounts() || [];
+                accountStatusMap = {};
+
+                let onlineCount = 0;
+                let clockInCount = 0;
+                let clockOutCount = 0;
+                let needsProofCount = 0;
+
+                for (const acc of cachedAccounts) {
+                    try {
+                        const data = await window.electronAPI.getHubAccountStatus(acc.device_id);
+                        accountStatusMap[acc.device_id] = data;
+
+                        const isOnline = data && data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                        if (isOnline) onlineCount++;
+
+                        const proofIn = data && data.proof && data.proof.clock_in && data.proof.clock_in !== '--:--';
+                        const proofOut = data && data.proof && data.proof.clock_out && data.proof.clock_out !== '--:--';
+
+                        if (proofIn) clockInCount++;
+                        if (proofOut) clockOutCount++;
+                        if (!proofIn || !proofOut) needsProofCount++;
+                    } catch (e) {
+                        console.error(`Error loading status for ${acc.device_id}:`, e);
+                    }
+                }
+
+                // Update KPIs
+                const total = cachedAccounts.length;
+                document.getElementById('kpiTotalAccounts').textContent = total;
+                document.getElementById('kpiOnlineAccounts').textContent = onlineCount;
+                document.getElementById('kpiOnlineRatio').textContent = `/ ${total}`;
+                document.getElementById('kpiClockInCount').textContent = clockInCount;
+                document.getElementById('kpiClockInRatio').textContent = `/ ${total}`;
+                document.getElementById('kpiClockOutCount').textContent = clockOutCount;
+                document.getElementById('kpiClockOutRatio').textContent = `/ ${total}`;
+
+                // Update Filter Counts
+                document.getElementById('countFilterAll').textContent = total;
+                document.getElementById('countFilterOnline').textContent = onlineCount;
+                document.getElementById('countFilterProof').textContent = needsProofCount;
+                document.getElementById('countFilterOffline').textContent = total - onlineCount;
+
+                renderAccountList();
+
+                if (manualRefresh) {
+                    showToast('Accounts Refreshed', `Status synchronized for ${total} accounts.`, 'success', 2500);
+                }
+            } catch (err) {
+                console.error('Failed to load accounts:', err);
+                showToast('Refresh Error', err.message || 'Could not fetch accounts.', 'error');
+            } finally {
+                if (refreshIcon) refreshIcon.classList.remove('spin');
+            }
+        }
+
+        // Sequential Sync All Proofs with Non-Intrusive Dock
+        let isSyncingAll = false;
+        let abortSyncRequested = false;
+        let isDockMinimized = false;
+
+        function toggleDockMinimize() {
+            const dock = document.getElementById('syncProgressDock');
+            const btn = document.getElementById('btnDockMinimize');
+            isDockMinimized = !isDockMinimized;
+            if (isDockMinimized) {
+                dock.classList.add('minimized');
+                btn.textContent = '▢';
+            } else {
+                dock.classList.remove('minimized');
+                btn.textContent = '_';
+            }
+        }
+
+        function closeProgressDock() {
+            const dock = document.getElementById('syncProgressDock');
+            dock.style.opacity = '0';
+            dock.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                dock.style.display = 'none';
+                dock.style.opacity = '1';
+                dock.style.transform = 'translateY(0)';
+            }, 250);
+        }
+
+        function abortSyncAll() {
+            if (isSyncingAll) {
+                abortSyncRequested = true;
+                const btn = document.getElementById('btnAbortSync');
+                btn.disabled = true;
+                btn.textContent = 'Stopping...';
+                document.getElementById('dockStatusSubtext').textContent = 'Stopping after current account...';
+            }
+        }
+
+        async function syncAllProofs() {
+            if (isSyncingAll) {
+                return showToast('Sync Active', 'A batch synchronization is already running.', 'warning');
+            }
+            if (!cachedAccounts || cachedAccounts.length === 0) {
+                return showToast('No Accounts', 'No accounts available to sync.', 'warning');
+            }
+
+            isSyncingAll = true;
+            abortSyncRequested = false;
+
+            const dock = document.getElementById('syncProgressDock');
+            const dockTitle = document.getElementById('dockTitle');
+            const dockSpinner = document.getElementById('dockSpinner');
+            const dockBadge = document.getElementById('dockProgressBadge');
+            const dockFill = document.getElementById('dockProgressFill');
+            const dockSubtext = document.getElementById('dockStatusSubtext');
+            const dockList = document.getElementById('dockAccountList');
+            const btnAbort = document.getElementById('btnAbortSync');
+            const btnClose = document.getElementById('btnDockClose');
+            const btnSyncAll = document.getElementById('btnSyncAllProofs');
+
+            dock.style.display = 'block';
+            dock.classList.remove('minimized');
+            isDockMinimized = false;
+            document.getElementById('btnDockMinimize').textContent = '_';
+            btnClose.style.display = 'none';
+            btnAbort.style.display = 'inline-block';
+            btnAbort.disabled = false;
+            btnAbort.textContent = 'Cancel Remaining';
+            dockSpinner.style.display = 'inline-block';
+            dockTitle.textContent = 'Syncing All Proofs';
+
+            if (btnSyncAll) {
+                btnSyncAll.disabled = true;
+                btnSyncAll.innerHTML = `<span class="spin">🔄</span> Syncing All...`;
+            }
+
+            const total = cachedAccounts.length;
+            dockBadge.textContent = `0 / ${total}`;
+            dockFill.style.width = '0%';
+            dockSubtext.textContent = `Starting batch sync for ${total} account(s)...`;
+
+            // Initialize dock list
+            dockList.innerHTML = cachedAccounts.map(acc => `
+                <div class="dock-item" id="dock-item-${acc.device_id}">
+                    <span class="dock-item-name">
+                        <span id="dock-icon-${acc.device_id}">⏳</span>
+                        <span>${acc.device_id}</span>
+                    </span>
+                    <span class="dock-item-status" id="dock-status-${acc.device_id}">Pending</span>
+                </div>
+            `).join('');
+
+            let completed = 0;
+            let successCount = 0;
+            let failedCount = 0;
+
+            for (let i = 0; i < total; i++) {
+                if (abortSyncRequested) {
+                    dockSubtext.textContent = 'Batch sync stopped by user.';
+                    break;
+                }
+
+                const acc = cachedAccounts[i];
+                const itemEl = document.getElementById(`dock-item-${acc.device_id}`);
+                const iconEl = document.getElementById(`dock-icon-${acc.device_id}`);
+                const statusEl = document.getElementById(`dock-status-${acc.device_id}`);
+
+                if (itemEl) itemEl.className = 'dock-item active';
+                if (iconEl) iconEl.innerHTML = '<span class="spin">🔄</span>';
+                if (statusEl) {
+                    statusEl.textContent = 'Syncing...';
+                    statusEl.style.color = '#93c5fd';
+                }
+
+                dockSubtext.textContent = `[${i + 1}/${total}] Extracting proof for ${acc.device_id}...`;
+                dockBadge.textContent = `${completed} / ${total}`;
+
+                try {
+                    const res = await window.electronAPI.requestManualProof(acc.device_id);
+                    if (res && res.success === false) {
+                        failedCount++;
+                        if (itemEl) itemEl.className = 'dock-item failed';
+                        if (iconEl) iconEl.textContent = '❌';
+                        if (statusEl) {
+                            statusEl.textContent = 'Failed';
+                            statusEl.style.color = '#f87171';
+                        }
+                    } else {
+                        successCount++;
+                        if (itemEl) itemEl.className = 'dock-item success';
+                        if (iconEl) iconEl.textContent = '✅';
+                        
+                        // Immediately apply returned proof if available
+                        if (!accountStatusMap[acc.device_id]) {
+                            accountStatusMap[acc.device_id] = { status: null, proof: null, logs: [] };
+                        }
+                        if (res && res.result) {
+                            accountStatusMap[acc.device_id].proof = {
+                                date: res.result.date,
+                                clock_in: res.result.clockIn,
+                                clock_out: res.result.clockOut,
+                                device_id: acc.device_id
+                            };
+                        }
+                        
+                        // Check updated proof and status values from Supabase
+                        try {
+                            const statusData = await window.electronAPI.getHubAccountStatus(acc.device_id);
+                            if (statusData) {
+                                accountStatusMap[acc.device_id].status = statusData.status || accountStatusMap[acc.device_id].status;
+                                accountStatusMap[acc.device_id].logs = statusData.logs || accountStatusMap[acc.device_id].logs;
+                                if (statusData.proof) {
+                                    accountStatusMap[acc.device_id].proof = statusData.proof;
+                                }
+                            }
+                        } catch (statusErr) {
+                            console.warn('Status fetch error for', acc.device_id, statusErr);
+                        }
+
+                        const p = accountStatusMap[acc.device_id].proof;
+                        if (statusEl && p) {
+                            statusEl.textContent = `IN: ${p.clock_in || '--:--'} | OUT: ${p.clock_out || '--:--'}`;
+                            statusEl.style.color = '#34d399';
+                        } else if (statusEl) {
+                            statusEl.textContent = 'Updated';
+                            statusEl.style.color = '#34d399';
+                        }
+                    }
+                } catch (err) {
+                    failedCount++;
+                    if (itemEl) itemEl.className = 'dock-item failed';
+                    if (iconEl) iconEl.textContent = '❌';
+                    if (statusEl) {
+                        statusEl.textContent = 'Error';
+                        statusEl.style.color = '#f87171';
+                    }
+                }
+
+                completed++;
+                const pct = Math.round((completed / total) * 100);
+                dockFill.style.width = `${pct}%`;
+                dockBadge.textContent = `${completed} / ${total}`;
+
+                // Incrementally update UI view without blocking
+                renderAccountList();
+            }
+
+            isSyncingAll = false;
+            dockSpinner.style.display = 'none';
+            btnAbort.style.display = 'none';
+            btnClose.style.display = 'inline-block';
+
+            if (btnSyncAll) {
+                btnSyncAll.disabled = false;
+                btnSyncAll.innerHTML = `<span>⚡</span> Sync All Proofs`;
+            }
+
+            if (abortSyncRequested) {
+                dockTitle.textContent = 'Sync Cancelled';
+                dockSubtext.textContent = `Processed ${completed} of ${total} accounts.`;
+                showToast('Sync Cancelled', `Processed ${completed}/${total} accounts.`, 'warning', 4000);
+            } else {
+                dockTitle.textContent = 'Sync Complete';
+                dockSubtext.textContent = `Completed! ${successCount} updated, ${failedCount} failed.`;
+                showToast('Batch Sync Complete', `All ${total} accounts processed (${successCount} succeeded).`, 'success', 5000);
+                
+                // Full reload of account metrics
+                await loadAccounts();
+            }
+        }
+
+        // Render Filtered Account Cards
+        function renderAccountList() {
             const list = document.getElementById('accountList');
+            if (!list) return;
             list.innerHTML = '';
-            
-            if (accounts.length === 0) {
-                list.innerHTML = '<div style="color:#888;">No accounts configured.</div>';
+
+            const filtered = cachedAccounts.filter(acc => {
+                const data = accountStatusMap[acc.device_id] || {};
+                const isOnline = data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                const hasProofIn = data.proof && data.proof.clock_in && data.proof.clock_in !== '--:--';
+                const hasProofOut = data.proof && data.proof.clock_out && data.proof.clock_out !== '--:--';
+                const needsProof = !hasProofIn || !hasProofOut;
+
+                if (currentFilter === 'online' && !isOnline) return false;
+                if (currentFilter === 'offline' && isOnline) return false;
+                if (currentFilter === 'needs_proof' && !needsProof) return false;
+
+                if (searchQuery) {
+                    const matchId = (acc.device_id || '').toLowerCase().includes(searchQuery);
+                    const matchEmail = (acc.supabase_email || '').toLowerCase().includes(searchQuery);
+                    const matchUpm = (acc.upm_username || '').toLowerCase().includes(searchQuery);
+                    if (!matchId && !matchEmail && !matchUpm) return false;
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+                        <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
+                        <div style="font-size: 14px; font-weight: 500;">No matching accounts found</div>
+                        <div style="font-size: 12px; margin-top: 4px;">Try adjusting your filter or adding a new account.</div>
+                    </div>
+                `;
                 return;
             }
 
-            for (const acc of accounts) {
-                const data = await window.electronAPI.getHubAccountStatus(acc.device_id);
+            for (const acc of filtered) {
+                const data = accountStatusMap[acc.device_id] || {};
                 const isOnline = data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
-                const badgeClass = isOnline ? 'status-online' : 'status-offline';
-                const statusText = data.status ? data.status.current_status : 'UNKNOWN';
-                
-                let proofText = 'No proof today';
-                if (data.proof) {
-                    proofText = `IN: ${data.proof.clock_in || '--:--'} | OUT: ${data.proof.clock_out || '--:--'}`;
-                }
+                const statusBadgeClass = isOnline ? 'online' : 'offline';
+                const statusLabel = isOnline ? 'ONLINE' : 'OFFLINE';
 
-                let logsHtml = '';
+                const proofDate = data.proof && data.proof.date ? data.proof.date : 'Today';
+                const clockInVal = data.proof && data.proof.clock_in && data.proof.clock_in !== '--:--' 
+                    ? `<span class="proof-val in">${data.proof.clock_in}</span>` 
+                    : `<span class="proof-val empty">--:--</span>`;
+                const clockOutVal = data.proof && data.proof.clock_out && data.proof.clock_out !== '--:--' 
+                    ? `<span class="proof-val out">${data.proof.clock_out}</span>` 
+                    : `<span class="proof-val empty">--:--</span>`;
+
+                const lastSeenStr = data.status && data.status.last_seen 
+                    ? new Date(data.status.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+                    : 'Never';
+
+                let logsHtml = '<div style="color: var(--text-muted);">No activity recorded today.</div>';
                 if (data.logs && data.logs.length > 0) {
-                    logsHtml = data.logs.map(log => `<div>[${new Date(log.created_at).toLocaleString()}] [${log.status}] ${log.message}</div>`).join('');
-                } else {
-                    logsHtml = '<div>No recent logs found.</div>';
+                    logsHtml = data.logs.slice(0, 10).map(log => {
+                        const time = new Date(log.created_at).toLocaleTimeString();
+                        const isSuccess = log.status === 'success';
+                        const isFailed = log.status === 'failed' || log.status === 'error';
+                        const statusClass = isSuccess ? 'log-status-success' : (isFailed ? 'log-status-failed' : 'log-status-info');
+                        return `
+                            <div class="log-entry">
+                                <span class="log-time">[${time}]</span>
+                                <span class="${statusClass}">[${(log.status || 'INFO').toUpperCase()}]</span>
+                                <span class="log-msg">${log.message || ''}</span>
+                            </div>
+                        `;
+                    }).join('');
                 }
 
-                list.innerHTML += `
-                    <div class="account-item">
-                        <div class="account-header">
+                const card = document.createElement('div');
+                card.className = 'account-card';
+                card.innerHTML = `
+                    <div class="acc-top">
+                        <div class="acc-identity">
+                            <div class="acc-icon">💻</div>
                             <div>
-                                <strong>${acc.device_id}</strong>
-                                <span class="status-badge ${badgeClass}">${statusText}</span><br>
-                                <small style="color:#aaa;">${acc.supabase_email}</small>
-                            </div>
-                            <div>
-                                <button onclick="editAccount('${acc.device_id}')" style="margin-right: 5px;">Edit</button>
-                                <button class="danger" onclick="removeAccount('${acc.device_id}')">Remove</button>
+                                <div class="acc-title">
+                                    <span>${acc.device_id}</span>
+                                    <span class="status-badge ${statusBadgeClass}">
+                                        <span class="badge-dot"></span>
+                                        ${statusLabel}
+                                    </span>
+                                </div>
+                                <div class="acc-email">Supabase: ${acc.supabase_email || 'Not configured'} • UPM: ${acc.upm_username || 'Not configured'}</div>
                             </div>
                         </div>
-                        <div class="account-details">
-                            <div><strong>Today's Proof:</strong><br>${proofText}</div>
-                            <div><strong>Last Seen:</strong><br>${data.status && data.status.last_seen ? new Date(data.status.last_seen).toLocaleString() : 'Never'}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); text-align: right;">
+                            <div>Last Heartbeat</div>
+                            <div style="font-weight: 500; color: var(--text-secondary);">${lastSeenStr}</div>
                         </div>
-                        <div class="logs-box">
+                    </div>
+
+                    <div class="proof-grid">
+                        <div>
+                            <div class="proof-col-label">Date Tracked</div>
+                            <div class="proof-val" style="color: var(--text-secondary);">${proofDate}</div>
+                        </div>
+                        <div>
+                            <div class="proof-col-label">Clock IN Punch</div>
+                            <div>${clockInVal}</div>
+                        </div>
+                        <div>
+                            <div class="proof-col-label">Clock OUT Punch</div>
+                            <div>${clockOutVal}</div>
+                        </div>
+                    </div>
+
+                    <div class="acc-actions">
+                        <button class="btn-action primary" onclick="syncProofAccount('${acc.device_id}', this)">
+                            <span>🔄</span> Sync Proof
+                        </button>
+                        <button class="btn-action" onclick="openAccountBrowser('${acc.device_id}', this)">
+                            <span>🌐</span> Open Edge Session
+                        </button>
+                        <button class="btn-action" onclick="manualClockAction('${acc.device_id}', 'clock_in', this)">
+                            <span>⏱️</span> Clock In
+                        </button>
+                        <button class="btn-action" onclick="manualClockAction('${acc.device_id}', 'clock_out', this)">
+                            <span>🚪</span> Clock Out
+                        </button>
+                        <button class="btn-action" onclick="editAccount('${acc.device_id}')">
+                            <span>✏️</span> Edit
+                        </button>
+                        <button class="btn-action danger" onclick="confirmRemoveAccount('${acc.device_id}')">
+                            <span>🗑️</span> Remove
+                        </button>
+                    </div>
+
+                    <div class="logs-drawer">
+                        <button class="logs-toggle-btn" onclick="toggleLogs('${acc.device_id}')">
+                            <span id="chevron-${acc.device_id}">▸</span> View Recent Activity Stream (${(data.logs || []).length})
+                        </button>
+                        <div class="logs-content" id="logs-box-${acc.device_id}">
                             ${logsHtml}
                         </div>
                     </div>
                 `;
+                list.appendChild(card);
             }
         }
+
+        function toggleLogs(deviceId) {
+            const box = document.getElementById(`logs-box-${deviceId}`);
+            const chevron = document.getElementById(`chevron-${deviceId}`);
+            if (!box) return;
+            if (box.classList.contains('open')) {
+                box.classList.remove('open');
+                if (chevron) chevron.textContent = '▸';
+            } else {
+                box.classList.add('open');
+                if (chevron) chevron.textContent = '▾';
+            }
+        }
+
+        // Quick Actions per Account
+        async function syncProofAccount(deviceId, btn) {
+            if (!window.electronAPI || !window.electronAPI.requestManualProof) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spin">🔄</span> Syncing...`;
+            showToast('Proof Sync Started', `Syncing punch records for ${deviceId} via Edge...`, 'info', 3000);
+
+            try {
+                const res = await window.electronAPI.requestManualProof(deviceId);
+                if (res && res.success === false) {
+                    showToast('Sync Failed', res.error || 'Failed to extract proof.', 'error', 5000);
+                } else {
+                    if (res && res.result) {
+                        if (!accountStatusMap[deviceId]) accountStatusMap[deviceId] = { status: null, proof: null, logs: [] };
+                        accountStatusMap[deviceId].proof = {
+                            date: res.result.date,
+                            clock_in: res.result.clockIn,
+                            clock_out: res.result.clockOut,
+                            device_id: deviceId
+                        };
+                    }
+                    showToast('Proof Synchronized', `Updated today's proof for ${deviceId}.`, 'success', 4000);
+                    await loadAccounts();
+                }
+            } catch (err) {
+                showToast('Sync Error', err.message || 'Operation failed.', 'error', 5000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        async function openAccountBrowser(deviceId, btn) {
+            if (!window.electronAPI || !window.electronAPI.openBrowser) return;
+            const origText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spin">⏳</span> Opening...`;
+            showToast('Launching Session', `Opening isolated Edge session for profile [${deviceId}]...`, 'info', 3000);
+
+            try {
+                await window.electronAPI.openBrowser(deviceId);
+                showToast('Session Active', `Browser window opened for ${deviceId}.`, 'success', 3000);
+            } catch (err) {
+                showToast('Browser Launch Failed', err.message || 'Could not open Edge browser.', 'error', 5000);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+            }
+        }
+
+        async function manualClockAction(deviceId, action, btn) {
+            if (!window.electronAPI || !window.electronAPI.triggerHubAction) return;
+            const actionLabel = action === 'clock_in' ? 'Clock IN' : 'Clock OUT';
+
+            showConfirmModal(
+                `Trigger ${actionLabel}?`,
+                `Are you sure you want to execute an immediate ${actionLabel} automation punch for ${deviceId}?`,
+                `Yes, ${actionLabel}`,
+                async () => {
+                    const origText = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = `<span class="spin">⚡</span> Punching...`;
+                    showToast(`${actionLabel} Triggered`, `Executing Playwright automation for ${deviceId}...`, 'info', 4000);
+
+                    try {
+                        const res = await window.electronAPI.triggerHubAction(deviceId, action);
+                        if (res && res.success) {
+                            showToast(`${actionLabel} Success`, `Successfully completed ${actionLabel} for ${deviceId}!`, 'success', 5000);
+                            await loadAccounts();
+                        } else {
+                            showToast(`${actionLabel} Failed`, (res && res.error) || 'Failed to complete clock action.', 'error', 6000);
+                        }
+                    } catch (err) {
+                        showToast('Execution Error', err.message || 'Failed to trigger action.', 'error', 5000);
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = origText;
+                    }
+                }
+            );
+        }
+
+        // Add / Edit Account Management
+        let isEditing = false;
 
         async function saveAccount() {
             if (!window.electronAPI) return;
@@ -189,24 +1765,33 @@
                 supabase_email: document.getElementById('supabaseEmail').value.trim(),
                 supabase_password: document.getElementById('supabasePassword').value,
             };
-            if (!account.device_id) return alert('Device ID is required!');
-            
-            await window.electronAPI.saveHubAccount(account);
-            alert('Account saved! Please restart the Hub app for the listener to initialize.');
-            document.getElementById('deviceId').value = '';
-            document.getElementById('upmUsername').value = '';
-            document.getElementById('upmPassword').value = '';
-            document.getElementById('supabaseEmail').value = '';
-            document.getElementById('supabasePassword').value = '';
-            switchTab('accounts');
+
+            if (!account.device_id) {
+                return showToast('Validation Error', 'Device ID is required.', 'warning');
+            }
+            if (!account.supabase_email) {
+                return showToast('Validation Error', 'Supabase User Email is required.', 'warning');
+            }
+
+            try {
+                await window.electronAPI.saveHubAccount(account);
+                showToast('Account Saved', `Account profile for ${account.device_id} saved successfully!`, 'success');
+                cancelEditAccount();
+                switchTab('accounts');
+            } catch (err) {
+                showToast('Save Error', err.message || 'Could not save account.', 'error');
+            }
         }
 
         async function editAccount(deviceId) {
             if (!window.electronAPI) return;
-            const accounts = await window.electronAPI.getHubAccounts();
-            const account = accounts.find(a => a.device_id === deviceId);
+            const account = cachedAccounts.find(a => a.device_id === deviceId);
             if (account) {
+                isEditing = true;
+                document.getElementById('formAccountTitle').textContent = `Edit Account: ${deviceId}`;
+                document.getElementById('btnCancelEdit').style.display = 'inline-block';
                 document.getElementById('deviceId').value = account.device_id || '';
+                document.getElementById('deviceId').disabled = true;
                 document.getElementById('upmUsername').value = account.upm_username || '';
                 document.getElementById('upmPassword').value = account.upm_password || '';
                 document.getElementById('supabaseEmail').value = account.supabase_email || '';
@@ -215,34 +1800,64 @@
             }
         }
 
-        async function removeAccount(deviceId) {
-            if (confirm('Are you sure you want to remove ' + deviceId + '?')) {
-                await window.electronAPI.removeHubAccount(deviceId);
-                loadAccounts();
-                alert('Account removed! Please restart the Hub app.');
-            }
+        function cancelEditAccount() {
+            isEditing = false;
+            document.getElementById('formAccountTitle').textContent = 'Provision New Account';
+            document.getElementById('btnCancelEdit').style.display = 'none';
+            document.getElementById('deviceId').disabled = false;
+            document.getElementById('deviceId').value = '';
+            document.getElementById('upmUsername').value = '';
+            document.getElementById('upmPassword').value = '';
+            document.getElementById('supabaseEmail').value = '';
+            document.getElementById('supabasePassword').value = '';
         }
 
+        function confirmRemoveAccount(deviceId) {
+            showConfirmModal(
+                'Remove Account',
+                `Are you sure you want to remove ${deviceId}? Its credentials will be unlinked from this Hub.`,
+                'Remove Account',
+                async () => {
+                    try {
+                        await window.electronAPI.removeHubAccount(deviceId);
+                        showToast('Account Removed', `${deviceId} was removed from the Hub.`, 'success');
+                        await loadAccounts();
+                    } catch (err) {
+                        showToast('Remove Error', err.message || 'Failed to remove account.', 'error');
+                    }
+                }
+            );
+        }
+
+        // Global Settings
         async function loadGlobalSettings() {
             if (!window.electronAPI) return;
-            const config = await window.electronAPI.getDeviceConfig();
-            document.getElementById('supabaseUrl').value = config.supabase_url || '';
-            document.getElementById('supabaseKey').value = config.supabase_key || '';
+            try {
+                const config = await window.electronAPI.getDeviceConfig();
+                document.getElementById('supabaseUrl').value = config.supabase_url || '';
+                document.getElementById('supabaseKey').value = config.supabase_key || '';
 
-            if (window.electronAPI.readSettings) {
-                const settings = await window.electronAPI.readSettings();
-                document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
-                document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
+                if (window.electronAPI.readSettings) {
+                    const settings = await window.electronAPI.readSettings();
+                    document.getElementById('targetUrlInput').value = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
+                    document.getElementById('showBrowserCheck').checked = settings.showBrowser || false;
+                }
+            } catch (err) {
+                console.error('Failed to load global settings:', err);
             }
         }
 
         async function saveGlobalSettings() {
             if (!window.electronAPI) return;
-            await window.electronAPI.saveDeviceConfig({
-                supabase_url: document.getElementById('supabaseUrl').value.trim(),
-                supabase_key: document.getElementById('supabaseKey').value.trim()
-            });
-            alert('Global database settings saved!');
+            try {
+                await window.electronAPI.saveDeviceConfig({
+                    supabase_url: document.getElementById('supabaseUrl').value.trim(),
+                    supabase_key: document.getElementById('supabaseKey').value.trim()
+                });
+                showToast('Settings Saved', 'Global database credentials updated.', 'success');
+            } catch (err) {
+                showToast('Save Error', err.message || 'Could not save database settings.', 'error');
+            }
         }
 
         async function saveEngineSettings() {
@@ -252,28 +1867,261 @@
                 targetUrl: urlInput || 'https://perakamwaktu.upm.edu.my/',
                 showBrowser: document.getElementById('showBrowserCheck').checked
             };
-            await window.electronAPI.saveSettings(settings);
-            alert('Local Engine settings saved successfully!');
+            try {
+                await window.electronAPI.saveSettings(settings);
+                showToast('Engine Settings Saved', 'Playwright automation parameters saved.', 'success');
+            } catch (err) {
+                showToast('Save Error', err.message || 'Could not save engine settings.', 'error');
+            }
         }
 
         async function testLaunchBrowser() {
             if (!window.electronAPI || !window.electronAPI.openBrowser) return;
+            showToast('Launching Browser', 'Opening default testing session...', 'info', 2500);
             try {
                 await window.electronAPI.openBrowser();
             } catch (err) {
-                alert('Failed to launch browser: ' + (err.message || err));
+                showToast('Launch Error', err.message || 'Browser failed to open.', 'error');
             }
         }
 
+        // Modular Hot-Updates
+        function logUpdate(msg, type = 'info') {
+            const box = document.getElementById('updateLogBox');
+            if (!box) return;
+            const timeStr = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            let statusClass = 'log-status-info';
+            let label = '[INFO]';
+            if (type === 'error') {
+                statusClass = 'log-status-failed';
+                label = '[ERROR]';
+            } else if (type === 'success') {
+                statusClass = 'log-status-success';
+                label = '[SUCCESS]';
+            }
+
+            entry.innerHTML = `
+                <span class="log-time">[${timeStr}]</span>
+                <span class="${statusClass}">${label}</span>
+                <span class="log-msg">${msg}</span>
+            `;
+            box.appendChild(entry);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function loadModuleVersionsUI() {
+            if (!window.electronAPI || !window.electronAPI.getModuleVersions) return;
+            try {
+                activeModuleInfo = await window.electronAPI.getModuleVersions();
+                renderModulesTable();
+            } catch (err) {
+                logUpdate('Failed to read loaded module versions: ' + err.message, 'error');
+            }
+        }
+
+        function renderModulesTable() {
+            const tbody = document.getElementById('modulesTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const knownModules = [
+                { name: 'hub-client', title: 'Hub Orchestrator (hub-client.js)' },
+                { name: 'automation', title: 'Automation Engine (automation.js)' },
+                { name: 'scheduler', title: 'Scheduler (scheduler.js)' },
+                { name: 'supabase-client', title: 'Supabase Realtime (supabase-client.js)' },
+                { name: 'cache-manager', title: 'Storage & Config (cache-manager.js)' },
+                { name: 'tray-manager', title: 'Tray Manager (tray-manager.js)' },
+                { name: 'hub-ui.html', title: 'Hub UI Screen (hub-ui.html)' }
+            ];
+
+            knownModules.forEach(mod => {
+                const info = activeModuleInfo[mod.name] || {};
+                const ver = info.version || '1.5.8';
+                const source = info.source || 'factory';
+                const update = pendingUpdates.find(u => u.name === mod.name || u.file === mod.name);
+
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border-subtle)';
+
+                let statusBadge = '<span style="color: var(--success); font-weight: 500;">✓ Up to date</span>';
+                let actionBtn = '<span style="color: var(--text-muted);">-</span>';
+
+                if (update) {
+                    statusBadge = `<span style="color: var(--warning); font-weight: 600;">Update: v${update.targetVersion}</span>`;
+                    actionBtn = `<button class="btn-action primary" onclick="installSingleUpdateUI('${update.name}')" style="padding: 4px 10px; font-size: 11px;">Update</button>`;
+                }
+
+                const sourceBadge = source === 'dynamic' 
+                    ? '<span style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500;">dynamic</span>'
+                    : '<span style="background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500;">factory</span>';
+
+                tr.innerHTML = `
+                    <td style="padding: 12px 8px;"><strong>${mod.name}</strong><div style="color: var(--text-muted); font-size: 11px; margin-top: 2px;">${mod.title}</div></td>
+                    <td style="padding: 12px 8px; font-family: 'JetBrains Mono', monospace;">v${ver}</td>
+                    <td style="padding: 12px 8px;">${sourceBadge}</td>
+                    <td style="padding: 12px 8px;">${statusBadge}</td>
+                    <td style="padding: 12px 8px; text-align: right;">${actionBtn}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function checkForUpdatesUI() {
+            if (!window.electronAPI || !window.electronAPI.checkModuleUpdates) return;
+            const btn = document.getElementById('btnCheckUpdates');
+            const banner = document.getElementById('updateNoticeBanner');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spin">🔄</span> Checking...`;
+            logUpdate('Polling repository for latest module manifest...');
+
+            try {
+                const res = await window.electronAPI.checkModuleUpdates();
+                btn.disabled = false;
+                btn.innerHTML = 'Check for Updates';
+
+                if (!res.success) {
+                    logUpdate(`Check failed: ${res.error}`, 'error');
+                    banner.style.display = 'block';
+                    banner.style.background = 'rgba(239, 68, 68, 0.15)';
+                    banner.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    banner.style.color = '#fca5a5';
+                    banner.textContent = `Update check error: ${res.error}`;
+                    showToast('Update Check Failed', res.error, 'error');
+                    return;
+                }
+
+                pendingUpdates = res.availableUpdates || [];
+                if (res.hasUpdates && pendingUpdates.length > 0) {
+                    logUpdate(`Found ${pendingUpdates.length} module update(s) ready!`, 'success');
+                    banner.style.display = 'block';
+                    banner.style.background = 'rgba(59, 130, 246, 0.15)';
+                    banner.style.border = '1px solid rgba(59, 130, 246, 0.35)';
+                    banner.style.color = '#bfdbfe';
+                    banner.textContent = `${pendingUpdates.length} module update(s) available from manifest v${res.remoteManifestVersion}. Click "Update All Modules" to download and hot-swap.`;
+                    document.getElementById('btnUpdateAll').style.display = 'inline-flex';
+                    showToast('Updates Available', `${pendingUpdates.length} module(s) can be upgraded.`, 'info');
+                } else {
+                    logUpdate('All modules are strictly up to date with remote repository.');
+                    banner.style.display = 'block';
+                    banner.style.background = 'rgba(16, 185, 129, 0.15)';
+                    banner.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    banner.style.color = '#a7f3d0';
+                    banner.textContent = 'All modules are currently up to date.';
+                    document.getElementById('btnUpdateAll').style.display = 'none';
+                    showToast('All Modules Up to Date', 'No updates required.', 'success');
+                }
+                renderModulesTable();
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerHTML = 'Check for Updates';
+                logUpdate('Error checking updates: ' + err.message, 'error');
+                showToast('Update Error', err.message, 'error');
+            }
+        }
+
+        async function installSingleUpdateUI(moduleName) {
+            if (!window.electronAPI || !window.electronAPI.installModuleUpdate) return;
+            logUpdate(`Starting download and verification for ${moduleName}...`);
+            showToast('Downloading Module', `Fetching and verifying ${moduleName}...`, 'info');
+
+            try {
+                const res = await window.electronAPI.installModuleUpdate(moduleName);
+                if (res.success) {
+                    logUpdate(`Successfully updated ${moduleName} to v${res.version}! Integrity & AST validated.`, 'success');
+                    pendingUpdates = pendingUpdates.filter(u => u.name !== moduleName);
+                    await loadModuleVersionsUI();
+                    
+                    if (moduleName === 'hub-ui' || moduleName === 'hub-ui.html') {
+                        showToast('UI Updated', 'Reloading interface dynamically...', 'success', 2500);
+                        setTimeout(() => {
+                            if (window.electronAPI && window.electronAPI.reloadUI) {
+                                window.electronAPI.reloadUI();
+                            }
+                        }, 1200);
+                    } else {
+                        showToast('Module Updated', `${moduleName} updated to v${res.version}! Click "Relaunch Hub" to activate.`, 'success');
+                        document.getElementById('btnRelaunch').style.display = 'inline-flex';
+                    }
+                } else {
+                    logUpdate(`Failed to update ${moduleName}: ${res.error}`, 'error');
+                    showToast('Update Failed', res.error, 'error');
+                }
+            } catch (err) {
+                logUpdate(`Error updating ${moduleName}: ${err.message}`, 'error');
+                showToast('Update Error', err.message, 'error');
+            }
+        }
+
+        async function installAllUpdatesUI() {
+            if (!window.electronAPI || !window.electronAPI.installAllModuleUpdates) return;
+            const btn = document.getElementById('btnUpdateAll');
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spin">⚡</span> Installing Updates...`;
+            logUpdate('Beginning sequential update installation for all outdated modules...');
+            showToast('Installing Updates', 'Hot-swapping verified modules...', 'info');
+
+            try {
+                const res = await window.electronAPI.installAllModuleUpdates();
+                btn.disabled = false;
+                btn.style.display = 'none';
+
+                if (res.success) {
+                    logUpdate('All module updates installed and cryptographically verified!', 'success');
+                    const banner = document.getElementById('updateNoticeBanner');
+                    banner.style.display = 'block';
+                    banner.style.background = 'rgba(16, 185, 129, 0.15)';
+                    banner.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    banner.style.color = '#a7f3d0';
+                    banner.textContent = 'All module updates installed successfully! Relaunch the app to activate new logic.';
+                    document.getElementById('btnRelaunch').style.display = 'inline-flex';
+                    pendingUpdates = [];
+                    await loadModuleVersionsUI();
+                    showToast('Update Complete', 'All modules updated. Please relaunch to activate.', 'success', 5000);
+                } else {
+                    logUpdate('Some module updates encountered errors. Check log stream.', 'error');
+                    showToast('Partial Update Error', 'Some modules failed to install.', 'warning');
+                }
+            } catch (err) {
+                btn.disabled = false;
+                logUpdate('Failed to install updates: ' + err.message, 'error');
+                showToast('Installation Error', err.message, 'error');
+            }
+        }
+
+        async function relaunchAppUI() {
+            if (!window.electronAPI || !window.electronAPI.relaunchApp) return;
+            showConfirmModal(
+                'Relaunch Server Hub',
+                'Relaunch ALS Server Hub now to activate all newly installed modules?',
+                'Relaunch Now',
+                async () => {
+                    await window.electronAPI.relaunchApp();
+                }
+            );
+        }
+
+        // Initialize on DOM Ready
         window.addEventListener('DOMContentLoaded', async () => {
             loadAccounts();
             loadGlobalSettings();
+            loadModuleVersionsUI();
+
             if (window.electronAPI && window.electronAPI.getAppVersion) {
                 const version = await window.electronAPI.getAppVersion();
                 const badge = document.getElementById('hubVersionBadge');
                 if (badge && version) {
                     badge.textContent = `v${version}`;
                 }
+            }
+
+            if (window.electronAPI && window.electronAPI.onTriggerUpdateCheck) {
+                window.electronAPI.onTriggerUpdateCheck(() => {
+                    switchTab('updates');
+                    checkForUpdatesUI();
+                });
             }
         });
     </script>

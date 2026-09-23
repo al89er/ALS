@@ -247,7 +247,20 @@ function resolveHubAccountsFile() {
   try {
     const { app } = require('electron');
     if (app && typeof app.getPath === 'function') {
-      return path.join(app.getPath('userData'), 'hub_accounts.json');
+      const primary = path.join(app.getPath('userData'), 'hub_accounts.json');
+      if (fs.existsSync(primary)) return primary;
+
+      // Check legacy ALS-Full path if running as Hub
+      const legacyPath = path.join(app.getPath('appData'), 'ALS-Full', 'hub_accounts.json');
+      if (fs.existsSync(legacyPath)) {
+        try {
+          fs.copyFileSync(legacyPath, primary);
+          console.log('[CACHE] Migrated legacy hub_accounts.json to userData');
+        } catch (e) {
+          return legacyPath;
+        }
+      }
+      return primary;
     }
   } catch (error) {}
   return path.join(require('os').homedir(), '.als_hub_accounts.json');
@@ -306,7 +319,10 @@ function saveEngineConfig(config = {}) {
   return { target_url, show_browser };
 }
 
+const VERSION = '1.5.8';
+
 module.exports = {
+  VERSION,
   readCache,
   writeCache,
   updateCache,

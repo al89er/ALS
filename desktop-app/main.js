@@ -2,10 +2,9 @@ const path = require('path');
 const fs = require('fs');
 const envPath = fs.existsSync(path.join(__dirname, 'bundled.env')) ? path.join(__dirname, 'bundled.env') : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
-const { app, BrowserWindow, Tray, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electron');
 
-// Isolate user data between Full and Lite editions to prevent settings crossover
-// Evaluate this BEFORE requiring cache-manager to ensure settings files use the correct path!
+// Isolate user data between Full, Lite, and Hub editions to prevent settings crossover
 let edition = 'full';
 if (process.env.ALS_EDITION) {
   edition = process.env.ALS_EDITION.toLowerCase();
@@ -18,11 +17,40 @@ if (process.env.ALS_EDITION) {
   } catch(e) {}
 }
 
-const appDataPath = path.join(app.getPath('appData'), edition === 'lite' ? 'ALS-Lite' : 'ALS-Full');
+const appDataPath = path.join(app.getPath('appData'), edition === 'lite' ? 'ALS-Lite' : (edition === 'hub' ? 'ALS-Hub' : 'ALS-Full'));
 app.setPath('userData', appDataPath);
+app.setAppUserModelId(edition === 'hub' ? 'com.als.dashboard.hub' : (edition === 'lite' ? 'com.als.dashboard.lite' : 'com.als.dashboard'));
 
-const { initSupabase, supabase } = require('./supabase-client');
-const scheduler = require('./scheduler');
+// Enforce single instance per edition
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  console.log(`[APP] Another instance of ALS (${edition}) is already running. Exiting...`);
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// Initialize Modular Engine Loader & Updater
+const moduleLoader = require('./module-loader');
+moduleLoader.init({
+  modulesDir: path.join(appDataPath, 'modules'),
+  baseDir: __dirname
+});
+const moduleUpdater = require('./module-updater');
+moduleUpdater.init();
+
+// Load modules dynamically with fail-safe factory fallbacks
+const cacheManager = moduleLoader.loadModule('cache-manager', require('./cache-manager'));
+const supabaseModule = moduleLoader.loadModule('supabase-client', require('./supabase-client'));
+const { initSupabase, supabase } = supabaseModule;
+const scheduler = moduleLoader.loadModule('scheduler', require('./scheduler'));
+const trayManager = moduleLoader.loadModule('tray-manager', require('./tray-manager'));
 
 let mainWindow;
 let tray;
@@ -32,38 +60,14 @@ global.updateTrayTooltip = function() {
   if (!tray) return;
 
   try {
-    const cacheManager = require('./cache-manager');
     const cache = cacheManager.readCache();
-    
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    
-    let inTarget = 'Pending Generation';
-    let outTarget = 'Pending Generation';
-    let isSkipped = false;
-    
-    if (cache.daily_schedule && cache.daily_schedule.date === todayStr) {
-      inTarget = cache.daily_schedule.scheduled_clock_in || 'Pending Generation';
-      outTarget = cache.daily_schedule.scheduled_clock_out || 'Pending Generation';
-      isSkipped = cache.daily_schedule.skipped;
-    }
-    
-    let inProof = '--:--';
-    let outProof = '--:--';
-    if (cache.todays_proof && cache.todays_proof.date === todayStr) {
-      inProof = cache.todays_proof.clock_in || '--:--';
-      outProof = cache.todays_proof.clock_out || '--:--';
-    }
-
-    const skipText = isSkipped ? ' (Skipped)' : '';
-
-    let tooltipText = '';
-    if (edition === 'hub') {
-      tooltipText = `[HUB] Active Accounts: ${cacheManager.getHubAccounts().length}`;
-    } else if (edition === 'lite') {
-      tooltipText = `[LITE] Connectivity: ${global.connectivityState}\nProof In: ${inProof} | Out: ${outProof}`;
-    } else {
-      tooltipText = `Connectivity: ${global.connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
-    }
+    const accounts = edition === 'hub' ? cacheManager.getHubAccounts() : [];
+    const tooltipText = trayManager.formatTrayTooltip({
+      edition,
+      connectivityState: global.connectivityState,
+      cache,
+      accounts
+    });
 
     tray.setToolTip(tooltipText);
   } catch (err) {
@@ -83,11 +87,14 @@ function createWindow() {
     }
   });
 
-  if (edition === 'hub') {
-    mainWindow.loadFile('hub-ui.html');
-  } else {
-    mainWindow.loadFile('desktop-ui.html');
-  }
+  const targetUI = edition === 'hub' ? 'hub-ui.html' : 'desktop-ui.html';
+  const resolvedUIPath = moduleLoader.resolveUIPath(targetUI, path.join(__dirname, targetUI));
+  mainWindow.loadFile(resolvedUIPath);
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
 
   // Intercept visual closure window event 'close'
   mainWindow.on('close', (event) => {
@@ -101,7 +108,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ipcMain.handle('get-env-variables', () => {
-    const config = require('./cache-manager').getDeviceConfig();
+    const config = cacheManager.getDeviceConfig();
     return {
       SUPABASE_URL: config.supabase_url,
       SUPABASE_PUBLISHABLE_KEY: config.supabase_key
@@ -113,12 +120,10 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('read-cache', () => {
-    const cacheManager = require('./cache-manager');
     return cacheManager.readCache();
   });
 
   ipcMain.handle('read-settings', async () => {
-    const cacheManager = require('./cache-manager');
     const local = cacheManager.getEngineConfig ? cacheManager.getEngineConfig() : {
       target_url: 'https://perakamwaktu.upm.edu.my/',
       show_browser: false
@@ -143,18 +148,15 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('get-device-config', () => {
-    const cacheManager = require('./cache-manager');
     return cacheManager.getDeviceConfig();
   });
 
   ipcMain.handle('save-device-config', (event, config) => {
-    const cacheManager = require('./cache-manager');
     const updated = cacheManager.saveDeviceConfig(config);
     return updated;
   });
 
   ipcMain.handle('save-settings', async (event, settings) => {
-    const cacheManager = require('./cache-manager');
     const targetUrl = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
     const showBrowser = !!settings.showBrowser;
 
@@ -187,10 +189,18 @@ app.whenReady().then(() => {
     return true;
   });
 
-  ipcMain.handle('open-browser', async () => {
-    const { openDebugBrowser } = require('./automation');
+  ipcMain.handle('open-browser', async (event, deviceId) => {
+    const automation = moduleLoader.loadModule('automation', require('./automation'));
     try {
-      await openDebugBrowser(supabase);
+      let options = {};
+      if (deviceId) {
+        const accounts = cacheManager.getHubAccounts();
+        const account = accounts.find(a => a.device_id === deviceId);
+        if (account) {
+          options.hubAccount = account;
+        }
+      }
+      await automation.openDebugBrowser(supabase, options);
       return true;
     } catch (err) {
       console.error('Failed to open browser:', err);
@@ -198,38 +208,119 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('request-manual-proof', async () => {
-    const { manualFetchProof } = require('./automation');
+  ipcMain.handle('request-manual-proof', async (event, deviceId) => {
+    const automation = moduleLoader.loadModule('automation', require('./automation'));
     try {
-      await manualFetchProof(supabase);
-      return true;
+      let options = {};
+      let targetClient = supabase;
+      if (deviceId) {
+        const accounts = cacheManager.getHubAccounts();
+        const account = accounts.find(a => a.device_id === deviceId);
+        if (account) {
+          options.hubAccount = account;
+        }
+        if (edition === 'hub') {
+          const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+          if (hubClient.getHubClientForDevice) {
+            const client = await hubClient.getHubClientForDevice(deviceId);
+            if (client) targetClient = client;
+          }
+        }
+      }
+      const res = await automation.manualFetchProof(targetClient, options);
+      return { success: true, result: res };
     } catch (err) {
       console.error('Failed to fetch proof manually:', err);
-      throw err;
+      return { success: false, error: err.message || String(err) };
     }
   });
 
+  ipcMain.handle('trigger-hub-action', async (event, deviceId, action) => {
+    const automation = moduleLoader.loadModule('automation', require('./automation'));
+    try {
+      const accounts = cacheManager.getHubAccounts();
+      const account = accounts.find(a => a.device_id === deviceId);
+      if (!account) throw new Error(`Hub account ${deviceId} not found`);
+      let targetClient = supabase;
+      if (edition === 'hub') {
+        const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+        if (hubClient.getHubClientForDevice) {
+          const client = await hubClient.getHubClientForDevice(deviceId);
+          if (client) targetClient = client;
+        }
+      }
+      const res = await automation.executeClockAction(action, targetClient, {
+        hubAccount: account,
+        source: 'hub_manual'
+      });
+      return { success: true, result: res };
+    } catch (err) {
+      console.error(`Failed to trigger hub action ${action} for ${deviceId}:`, err);
+      return { success: false, error: err.message || String(err) };
+    }
+  });
+
+  ipcMain.handle('reload-ui', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const currentTargetUI = edition === 'hub' ? 'hub-ui.html' : 'desktop-ui.html';
+      const latestUIPath = moduleLoader.resolveUIPath(currentTargetUI, path.join(__dirname, currentTargetUI));
+      mainWindow.loadFile(latestUIPath);
+      return true;
+    }
+    return false;
+  });
+
   ipcMain.handle('get-hub-accounts', () => {
-    const cacheManager = require('./cache-manager');
     return cacheManager.getHubAccounts();
   });
   
   ipcMain.handle('get-hub-account-status', async (event, deviceId) => {
     if (edition === 'hub') {
-      const hubClient = require('./hub-client');
+      const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
       return await hubClient.getHubAccountStatus(deviceId);
     }
     return null;
   });
   
   ipcMain.handle('save-hub-account', (event, account) => {
-    const cacheManager = require('./cache-manager');
     return cacheManager.saveHubAccount(account);
   });
   
   ipcMain.handle('remove-hub-account', (event, deviceId) => {
-    const cacheManager = require('./cache-manager');
     return cacheManager.removeHubAccount(deviceId);
+  });
+
+  // Modular Hot-Update IPC Handlers
+  ipcMain.handle('check-module-updates', async () => {
+    return await moduleUpdater.checkForUpdates();
+  });
+
+  ipcMain.handle('install-module-update', async (event, moduleName) => {
+    const check = await moduleUpdater.checkForUpdates();
+    if (!check.success || !check.availableUpdates) {
+      return { success: false, error: check.error || 'No updates found.' };
+    }
+    const updateInfo = check.availableUpdates.find(u => u.name === moduleName);
+    if (!updateInfo) {
+      return { success: false, error: `Module "${moduleName}" is already up to date.` };
+    }
+    return await moduleUpdater.installModuleUpdate(moduleName, updateInfo);
+  });
+
+  ipcMain.handle('install-all-module-updates', async () => {
+    const check = await moduleUpdater.checkForUpdates();
+    if (!check.success || !check.availableUpdates || check.availableUpdates.length === 0) {
+      return { success: false, error: check.error || 'No updates available.' };
+    }
+    return await moduleUpdater.installAllUpdates(check.availableUpdates);
+  });
+
+  ipcMain.handle('get-module-versions', () => {
+    return moduleLoader.getLoadedModuleInfo();
+  });
+
+  ipcMain.handle('relaunch-app', () => {
+    return moduleUpdater.relaunchApp();
   });
 
   // Native OS Auto-Launch on boot
@@ -242,35 +333,67 @@ app.whenReady().then(() => {
 
   // Initialize Supabase handshake, heartbeat, and listeners
   if (edition === 'hub') {
-    const hubClient = require('./hub-client');
+    const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
     hubClient.initHubAccounts();
   } else {
     initSupabase();
     scheduler.init(supabase);
   }
 
-  // Setup System Tray
-  const { nativeImage } = require('electron');
-  const iconPath = path.join(__dirname, 'assets', 'tray.png');
-  // Simple 16x16 red square fallback
+  // Setup System Tray with modular manager
+  const iconFileName = edition === 'hub' ? 'tray-hub.png' : 'tray.png';
+  const iconPath = path.join(__dirname, 'assets', iconFileName);
+  const defaultIconPath = path.join(__dirname, 'assets', 'tray.png');
   const fallbackIcon = nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAcSURBVDhPYzzP+P8/AwXAhFE1aNqgaYOmDcIEwAAXyA8d9Zt0XAAAAABJRU5ErkJggg==');
-  const trayIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : fallbackIcon;
+  const trayIcon = fs.existsSync(iconPath) 
+    ? nativeImage.createFromPath(iconPath) 
+    : (fs.existsSync(defaultIconPath) ? nativeImage.createFromPath(defaultIconPath) : fallbackIcon);
   
   tray = new Tray(trayIcon);
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show App', click: () => mainWindow.show() },
-    { label: 'Quit', click: () => {
-        app.isQuiting = true;
-        app.quit();
+  const contextMenu = trayManager.buildContextMenu({
+    Menu,
+    mainWindow,
+    app,
+    onCheckUpdates: () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('trigger-update-check');
       }
     }
-  ]);
+  });
   tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+  tray.on('double-click', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
   global.updateTrayTooltip();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+
+  app.on('before-quit', () => {
+    app.isQuiting = true;
+    if (tray) {
+      try { tray.destroy(); } catch (e) {}
     }
   });
 });

@@ -61,11 +61,19 @@ async function processCommandById(commandId, source = 'unknown') {
     processingPromise = processingPromise.then(async () => {
       try {
         const deviceId = getDeviceId();
-        const { data: command, error: claimError } = await supabase
+        let claimQuery = supabase
           .from('commands')
           .update({ status: 'processing' })
           .eq('id', commandId)
-          .eq('status', 'pending')
+          .eq('status', 'pending');
+
+        if (deviceId === 'home_desktop_agent') {
+          claimQuery = claimQuery.or(`device_id.eq.${deviceId},device_id.is.null,device_id.eq.home_desktop_agent`);
+        } else {
+          claimQuery = claimQuery.eq('device_id', deviceId);
+        }
+
+        const { data: command, error: claimError } = await claimQuery
           .select('*')
           .maybeSingle();
 
@@ -370,7 +378,10 @@ async function initSupabase() {
   startCommandListener();
 }
 
+const VERSION = '1.5.8';
+
 module.exports = {
+  VERSION,
   supabase,
   initSupabase,
   getDeviceId,

@@ -183,7 +183,8 @@ function scheduleCronJobs(scheduleData, supabase) {
         });
         try {
           const dateStr = scheduleData.date;
-          await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateStr);
+          const dev = scheduleData.device_id || 'home_desktop_agent';
+          await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateStr).or(`device_id.eq.${dev},device_id.is.null`);
           cacheManager.mergeDailySchedule({ clock_in_done: true }, true);
         } catch (e) {
           cacheManager.mergeDailySchedule({ clock_in_done: true }, false);
@@ -210,7 +211,8 @@ function scheduleCronJobs(scheduleData, supabase) {
         });
         try {
           const dateStr = scheduleData.date;
-          await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateStr);
+          const dev = scheduleData.device_id || 'home_desktop_agent';
+          await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateStr).or(`device_id.eq.${dev},device_id.is.null`);
           cacheManager.mergeDailySchedule({ clock_out_done: true }, true);
         } catch (e) {
           cacheManager.mergeDailySchedule({ clock_out_done: true }, false);
@@ -260,7 +262,8 @@ async function checkMissedActions(scheduleData, supabase) {
         targetAt: targetInTime.toISOString()
       });
       try {
-        await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateString);
+        const dev = scheduleData.device_id || 'home_desktop_agent';
+        await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateString).or(`device_id.eq.${dev},device_id.is.null`);
         cacheManager.mergeDailySchedule({ clock_in_done: true }, true);
       } catch (e) {
         cacheManager.mergeDailySchedule({ clock_in_done: true }, false);
@@ -270,7 +273,8 @@ async function checkMissedActions(scheduleData, supabase) {
     // Proof exists but flag not set — sync the flag to avoid future false recoveries
     console.log('[SCHEDULER] RECOVERY: Clock IN already recorded in proof, skipping automation. Syncing flag...');
     try {
-      await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateString);
+      const dev = scheduleData.device_id || 'home_desktop_agent';
+      await supabase.from('daily_schedules').update({ clock_in_done: true }).eq('date', dateString).or(`device_id.eq.${dev},device_id.is.null`);
       cacheManager.mergeDailySchedule({ clock_in_done: true }, true);
     } catch (e) {
       cacheManager.mergeDailySchedule({ clock_in_done: true }, false);
@@ -285,7 +289,8 @@ async function checkMissedActions(scheduleData, supabase) {
         targetAt: targetOutTime.toISOString()
       });
       try {
-        await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateString);
+        const dev = scheduleData.device_id || 'home_desktop_agent';
+        await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateString).or(`device_id.eq.${dev},device_id.is.null`);
         cacheManager.mergeDailySchedule({ clock_out_done: true }, true);
       } catch (e) {
         cacheManager.mergeDailySchedule({ clock_out_done: true }, false);
@@ -295,7 +300,8 @@ async function checkMissedActions(scheduleData, supabase) {
     // Proof exists but flag not set — sync the flag to avoid future false recoveries
     console.log('[SCHEDULER] RECOVERY: Clock OUT already recorded in proof, skipping automation. Syncing flag...');
     try {
-      await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateString);
+      const dev = scheduleData.device_id || 'home_desktop_agent';
+      await supabase.from('daily_schedules').update({ clock_out_done: true }).eq('date', dateString).or(`device_id.eq.${dev},device_id.is.null`);
       cacheManager.mergeDailySchedule({ clock_out_done: true }, true);
     } catch (e) {
       cacheManager.mergeDailySchedule({ clock_out_done: true }, false);
@@ -306,6 +312,11 @@ async function checkMissedActions(scheduleData, supabase) {
 async function init(supabase) {
   const today = new Date();
   const dateString = today.toLocaleDateString('en-CA');
+  let deviceId = 'home_desktop_agent';
+  try {
+    const { getDeviceId } = require('./supabase-client');
+    if (typeof getDeviceId === 'function') deviceId = getDeviceId();
+  } catch (e) {}
   
   let scheduleData = null;
   try {
@@ -314,17 +325,31 @@ async function init(supabase) {
       cacheManager.updateSkipDays(allSkips.map(s => s.date));
     }
 
-    const { data: skipData } = await supabase
+    let skipQuery = supabase
       .from('skip_days')
       .select('date')
-      .eq('date', dateString)
-      .maybeSingle();
+      .eq('date', dateString);
+    if (deviceId === 'home_desktop_agent') {
+      skipQuery = skipQuery.or(`device_id.eq.${deviceId},device_id.is.null`);
+    } else {
+      skipQuery = skipQuery.eq('device_id', deviceId);
+    }
+    const { data: skipData } = await skipQuery.maybeSingle();
     const isSkipDay = !!skipData;
 
-    const { data, error } = await supabase
+    let schedQuery = supabase
       .from('daily_schedules')
       .select('*')
-      .eq('date', dateString)
+      .eq('date', dateString);
+    if (deviceId === 'home_desktop_agent') {
+      schedQuery = schedQuery.or(`device_id.eq.${deviceId},device_id.is.null`);
+    } else {
+      schedQuery = schedQuery.eq('device_id', deviceId);
+    }
+
+    const { data, error } = await schedQuery
+      .order('updated_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
       
     if (error) throw error;
@@ -342,7 +367,13 @@ async function init(supabase) {
        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
          console.log(`[SCHEDULER] Day was un-skipped! Removing old skipped schedule to force regeneration...`);
          scheduleData = null;
-         await supabase.from('daily_schedules').delete().eq('date', dateString);
+         let delQuery = supabase.from('daily_schedules').delete().eq('date', dateString);
+         if (deviceId === 'home_desktop_agent') {
+           delQuery = delQuery.or(`device_id.eq.${deviceId},device_id.is.null`);
+         } else {
+           delQuery = delQuery.eq('device_id', deviceId);
+         }
+         await delQuery;
        }
     }
 
@@ -401,8 +432,27 @@ async function init(supabase) {
   });
 }
 
+function stop() {
+  if (global.midnightTask) {
+    global.midnightTask.stop();
+    global.midnightTask = null;
+  }
+  if (clockInTask) {
+    clockInTask.stop();
+    clockInTask = null;
+  }
+  if (clockOutTask) {
+    clockOutTask.stop();
+    clockOutTask = null;
+  }
+}
+
+const VERSION = '1.5.8';
+
 module.exports = {
+  VERSION,
   init,
+  stop,
   __test: {
     buildLocalTargetDate,
     scheduleCronJobs,

@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- VERSION: 1.6.1 -->
 <html lang="en">
 
 <head>
@@ -638,6 +639,32 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Modular Hot-Updates Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Modular Hot-Updates</h2>
+                    <span class="panel-subtitle">Independent dynamic logic & UI updates without full reinstallation</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            Keep automation algorithms, scheduler, and UI up-to-date automatically.
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" id="singleCheckUpdatesBtn" onclick="checkForDesktopUpdatesUI()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Check for Updates</button>
+                            <button class="btn" id="singleUpdateAllBtn" onclick="installAllDesktopUpdatesUI()" style="display: none; background: var(--status-online); color: #fff; padding: 0.5rem 1rem; font-size: 0.85rem;">Update All</button>
+                            <button class="btn" id="singleRelaunchBtn" onclick="relaunchDesktopAppUI()" style="display: none; background: var(--accent-orange); color: #000; font-weight: 700; padding: 0.5rem 1rem; font-size: 0.85rem;">Relaunch App</button>
+                        </div>
+                    </div>
+
+                    <div id="singleUpdateNotice" style="display: none; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;"></div>
+
+                    <div id="singleModulesList" style="display: flex; flex-direction: column; gap: 0.5rem; background: rgba(0,0,0,0.2); padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <!-- Module items injected here -->
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ==================== SKIPS TAB ==================== -->
@@ -707,6 +734,10 @@
             if (config && config.edition === 'lite') {
                 document.title = 'ALS Desktop Engine [Lite]';
                 document.getElementById('appBrandTitle').innerText = 'ALS Automation Engine Lite';
+            }
+
+            if (config && config.device_id) {
+                activeDeviceId = config.device_id;
             }
 
             if (config && config.supabase_email && config.supabase_password) {
@@ -821,11 +852,20 @@
         }
 
         async function fetchLogs() {
-            const { data, error } = await _supabase
+            if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
+            let query = _supabase
                 .from('logs')
                 .select('*')
                 .order('created_at', { ascending: false })
-                .limit(20);
+                .limit(30);
+
+            if (activeDeviceId === 'home_desktop_agent') {
+                query = query.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+            } else {
+                query = query.eq('device_id', activeDeviceId);
+            }
+
+            const { data, error } = await query;
 
             if (error) {
                 console.error('[FETCH LOGS ERROR]', error);
@@ -836,7 +876,7 @@
             if (data) {
                 logsContainer.innerHTML = '';
                 if (data.length === 0) {
-                    logsContainer.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">No logs found in the database.</div>';
+                    logsContainer.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-top: 2rem;">No logs found for this device.</div>';
                 } else {
                     data.forEach(log => logsContainer.appendChild(createLogElement(log)));
                 }
@@ -849,9 +889,10 @@
         // 3. MANUAL COMMANDS
         // ==========================================
         async function forceCommand(actionType) {
+            if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
             const { error } = await _supabase
                 .from('commands')
-                .insert([{ action: actionType, status: 'pending' }]);
+                .insert([{ action: actionType, status: 'pending', device_id: activeDeviceId }]);
 
             if (error) alert('Failed to send command: ' + error.message);
             else {
@@ -865,8 +906,15 @@
         // 4. SKIP DAYS CALENDAR
         // ==========================================
         async function fetchConfig() {
+            if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
             try {
-                const { data, error } = await _supabase.from('skip_days').select('date');
+                let query = _supabase.from('skip_days').select('date, device_id');
+                if (activeDeviceId === 'home_desktop_agent') {
+                    query = query.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                } else {
+                    query = query.eq('device_id', activeDeviceId);
+                }
+                const { data, error } = await query;
                 if (error) throw error;
                 if (data) {
                     skipDaysArray = data.map(row => row.date);
@@ -934,12 +982,19 @@
         }
 
         async function toggleDate(dateString) {
+            if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
             const wasSkipped = skipDaysArray.includes(dateString);
             if (wasSkipped) {
                 skipDaysArray = skipDaysArray.filter(d => d !== dateString);
                 renderCalendar();
                 try {
-                    const { error } = await _supabase.from('skip_days').delete().eq('date', dateString);
+                    let delQuery = _supabase.from('skip_days').delete().eq('date', dateString);
+                    if (activeDeviceId === 'home_desktop_agent') {
+                        delQuery = delQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                    } else {
+                        delQuery = delQuery.eq('device_id', activeDeviceId);
+                    }
+                    const { error } = await delQuery;
                     if (error) throw error;
                 } catch (err) {
                     console.error('[UI] Failed to delete skip day:', err);
@@ -951,7 +1006,7 @@
                 skipDaysArray.push(dateString);
                 renderCalendar();
                 try {
-                    const { error } = await _supabase.from('skip_days').insert({ date: dateString });
+                    const { error } = await _supabase.from('skip_days').insert({ date: dateString, device_id: activeDeviceId });
                     if (error) throw error;
                 } catch (err) {
                     console.error('[UI] Failed to insert skip day:', err);
@@ -966,17 +1021,29 @@
         // 5. TODAY'S DATA (PROOF & SCHEDULE)
         // ==========================================
         async function fetchTodaysData() {
+            if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
             const todayStr = new Date().toLocaleDateString('en-CA');
             
+            let proofQuery = _supabase.from('todays_proof').select('*').eq('date', todayStr);
+            let schedQuery = _supabase.from('daily_schedules').select('*').eq('date', todayStr);
+
+            if (activeDeviceId === 'home_desktop_agent') {
+                proofQuery = proofQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                schedQuery = schedQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+            } else {
+                proofQuery = proofQuery.eq('device_id', activeDeviceId);
+                schedQuery = schedQuery.eq('device_id', activeDeviceId);
+            }
+
             const [sysRes, proofRes, schedRes] = await Promise.all([
                 _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
-                _supabase.from('todays_proof').select('*').eq('date', todayStr).maybeSingle(),
-                _supabase.from('daily_schedules').select('*').eq('date', todayStr).maybeSingle()
+                proofQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+                schedQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle()
             ]);
             
-            if (proofRes.data) updateProofUI(proofRes.data);
+            if (proofRes && proofRes.data) updateProofUI(proofRes.data);
             
-            if (schedRes.data) {
+            if (schedRes && schedRes.data) {
                 updateScheduleUI(schedRes.data);
             } else {
                 updateScheduleUI(null);
@@ -1026,44 +1093,63 @@
 
 async function bindChannels() {
     activeDeviceId = await getActiveDeviceIdUI();
+    const isHome = activeDeviceId === 'home_desktop_agent';
+
     _supabase.channel(`heartbeat-${activeDeviceId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'device_status' }, payload => {
-            if (payload.new && (payload.new.id === activeDeviceId || payload.new.device_id === activeDeviceId)) {
+            if (payload.new && (payload.new.id === activeDeviceId || payload.new.device_id === activeDeviceId || (isHome && (!payload.new.device_id || payload.new.id === 'home_desktop_agent')))) {
                 updateHeartbeat(payload.new.last_seen, payload.new.current_status);
             }
         })
         .subscribe();
-_supabase.channel('logs-channel')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
-                if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
-                    logsContainer.innerHTML = '';
-                }
-                const el = createLogElement(payload.new);
-                logsContainer.insertBefore(el, logsContainer.firstChild);
-            })
-            .subscribe();
-_supabase.channel('proof-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
-                const todayStr = new Date().toLocaleDateString('en-CA');
-                if (payload.new && payload.new.date === todayStr) updateProofUI(payload.new);
-            })
-            .subscribe();
-_supabase.channel('sys-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
-                // system config (not schedules anymore) updates handled via UI sync separately
-            })
-            .subscribe();
-_supabase.channel('schedule-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_schedules' }, payload => {
-                const todayStr = new Date().toLocaleDateString('en-CA');
-                if (payload.new && payload.new.date === todayStr) updateScheduleUI(payload.new);
-            })
-            .subscribe();
-_supabase.channel('skip-channel')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
+
+    _supabase.channel(`logs-${activeDeviceId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'logs' }, payload => {
+            if (!payload.new) return;
+            const matches = payload.new.device_id === activeDeviceId || (isHome && (!payload.new.device_id || payload.new.device_id === 'home_desktop_agent'));
+            if (!matches) return;
+
+            if (logsContainer.children[0] && logsContainer.children[0].innerText.includes('Establishing')) {
+                logsContainer.innerHTML = '';
+            }
+            const el = createLogElement(payload.new);
+            logsContainer.insertBefore(el, logsContainer.firstChild);
+        })
+        .subscribe();
+
+    _supabase.channel(`proof-${activeDeviceId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'todays_proof' }, payload => {
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            if (payload.new && payload.new.date === todayStr) {
+                const matches = payload.new.device_id === activeDeviceId || (isHome && (!payload.new.device_id || payload.new.device_id === 'home_desktop_agent'));
+                if (matches) updateProofUI(payload.new);
+            }
+        })
+        .subscribe();
+
+    _supabase.channel('sys-channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'system_config', filter: 'id=eq.1' }, payload => {
+            // system config (not schedules anymore) updates handled via UI sync separately
+        })
+        .subscribe();
+
+    _supabase.channel(`schedule-${activeDeviceId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'daily_schedules' }, payload => {
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            if (payload.new && payload.new.date === todayStr) {
+                const matches = payload.new.device_id === activeDeviceId || (isHome && (!payload.new.device_id || payload.new.device_id === 'home_desktop_agent'));
+                if (matches) updateScheduleUI(payload.new);
+            }
+        })
+        .subscribe();
+
+    _supabase.channel(`skip-${activeDeviceId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
+            if (!payload.new || !payload.new.device_id || payload.new.device_id === activeDeviceId || (isHome && (!payload.new.device_id || payload.new.device_id === 'home_desktop_agent'))) {
                 fetchConfig();
-            })
-            .subscribe();
+            }
+        })
+        .subscribe();
 }
 
         function toggleAutoClockDetails(enabled) {
@@ -1125,6 +1211,142 @@ _supabase.channel('skip-channel')
             }
         }
 
+        let activeDesktopModules = {};
+        let pendingDesktopUpdates = [];
+
+        async function loadDesktopModuleVersionsUI() {
+            if (!window.electronAPI || !window.electronAPI.getModuleVersions) return;
+            try {
+                activeDesktopModules = await window.electronAPI.getModuleVersions();
+                renderDesktopModules();
+            } catch (e) {}
+        }
+
+        function renderDesktopModules() {
+            const list = document.getElementById('singleModulesList');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const known = [
+                { name: 'automation', title: 'Automation Core (automation.js)' },
+                { name: 'scheduler', title: 'Daily Scheduler (scheduler.js)' },
+                { name: 'supabase-client', title: 'Supabase Realtime (supabase-client.js)' },
+                { name: 'cache-manager', title: 'Offline Storage & Config (cache-manager.js)' },
+                { name: 'tray-manager', title: 'System Tray (tray-manager.js)' },
+                { name: 'desktop-ui.html', title: 'Desktop UI (desktop-ui.html)' }
+            ];
+
+            known.forEach(m => {
+                const info = activeDesktopModules[m.name] || {};
+                const ver = info.version || '1.5.8';
+                const source = info.source || 'factory';
+                const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name);
+
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.justifyContent = 'space-between';
+                item.style.alignItems = 'center';
+                item.style.padding = '0.5rem 0.6rem';
+                item.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+
+                let updateTag = '<span style="color:var(--status-online); font-size:0.8rem;">Current</span>';
+                if (update) {
+                    updateTag = `<span style="color:var(--accent-orange); font-weight:700; font-size:0.8rem;">v${update.targetVersion} ready</span>`;
+                }
+
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight:600; font-size:0.88rem; color:#fff;">${m.name} <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:400;">(${source})</span></div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">${m.title}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <span style="font-size:0.85rem; color:#eee;">v${ver}</span>
+                        ${updateTag}
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        async function checkForDesktopUpdatesUI() {
+            if (!window.electronAPI || !window.electronAPI.checkModuleUpdates) return;
+            const btn = document.getElementById('singleCheckUpdatesBtn');
+            const notice = document.getElementById('singleUpdateNotice');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            try {
+                const res = await window.electronAPI.checkModuleUpdates();
+                btn.disabled = false;
+                btn.textContent = 'Check for Updates';
+
+                if (!res.success) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.textContent = `Update check failed: ${res.error}`;
+                    return;
+                }
+
+                pendingDesktopUpdates = res.availableUpdates || [];
+                if (res.hasUpdates && pendingDesktopUpdates.length > 0) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(59, 130, 246, 0.2)';
+                    notice.style.color = 'var(--accent-blue)';
+                    notice.textContent = `${pendingDesktopUpdates.length} module update(s) available. Click "Update All" to install.`;
+                    document.getElementById('singleUpdateAllBtn').style.display = 'inline-block';
+                } else {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                    notice.style.color = 'var(--status-online)';
+                    notice.textContent = 'All modules are up to date with the remote manifest.';
+                    document.getElementById('singleUpdateAllBtn').style.display = 'none';
+                }
+                renderDesktopModules();
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = 'Check for Updates';
+            }
+        }
+
+        async function installAllDesktopUpdatesUI() {
+            if (!window.electronAPI || !window.electronAPI.installAllModuleUpdates) return;
+            const btn = document.getElementById('singleUpdateAllBtn');
+            const notice = document.getElementById('singleUpdateNotice');
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+
+            try {
+                const res = await window.electronAPI.installAllModuleUpdates();
+                btn.disabled = false;
+                btn.style.display = 'none';
+
+                if (res.success) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                    notice.style.color = 'var(--status-online)';
+                    notice.textContent = 'All updates installed successfully! Relaunch the app to apply changes.';
+                    document.getElementById('singleRelaunchBtn').style.display = 'inline-block';
+                    pendingDesktopUpdates = [];
+                    await loadDesktopModuleVersionsUI();
+                } else {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.textContent = 'Some module updates could not be applied. Check console.';
+                }
+            } catch (err) {
+                btn.disabled = false;
+            }
+        }
+
+        async function relaunchDesktopAppUI() {
+            if (!window.electronAPI || !window.electronAPI.relaunchApp) return;
+            if (confirm('Relaunch ALS Automation Engine now to activate updated modules?')) {
+                await window.electronAPI.relaunchApp();
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             if (window.electronAPI && window.electronAPI.getAppVersion) {
                 const version = await window.electronAPI.getAppVersion();
@@ -1134,6 +1356,14 @@ _supabase.channel('skip-channel')
                 }
             }
             await loadDeviceConfigUI();
+            await loadDesktopModuleVersionsUI();
+
+            if (window.electronAPI && window.electronAPI.onTriggerUpdateCheck) {
+                window.electronAPI.onTriggerUpdateCheck(() => {
+                    switchTab('settings');
+                    checkForDesktopUpdatesUI();
+                });
+            }
         });
 
         async function loadLocalSettings() {
