@@ -42,7 +42,7 @@ moduleLoader.init({
   modulesDir: path.join(appDataPath, 'modules'),
   baseDir: __dirname
 });
-const moduleUpdater = require('./module-updater');
+const moduleUpdater = moduleLoader.loadModule('module-updater', require('./module-updater'));
 moduleUpdater.init();
 
 // Load modules dynamically with fail-safe factory fallbacks
