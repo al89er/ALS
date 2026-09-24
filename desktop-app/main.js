@@ -57,21 +57,27 @@ let tray;
 
 global.connectivityState = 'Pending Connection';
 global.updateTrayTooltip = function() {
-  if (!tray) return;
+  if (tray) {
+    try {
+      const cache = cacheManager.readCache();
+      const accounts = edition === 'hub' ? cacheManager.getHubAccounts() : [];
+      const tooltipText = trayManager.formatTrayTooltip({
+        edition,
+        connectivityState: global.connectivityState,
+        cache,
+        accounts
+      });
 
-  try {
-    const cache = cacheManager.readCache();
-    const accounts = edition === 'hub' ? cacheManager.getHubAccounts() : [];
-    const tooltipText = trayManager.formatTrayTooltip({
-      edition,
-      connectivityState: global.connectivityState,
-      cache,
-      accounts
-    });
+      tray.setToolTip(tooltipText);
+    } catch (err) {
+      console.error('Failed to update tray tooltip:', err);
+    }
+  }
 
-    tray.setToolTip(tooltipText);
-  } catch (err) {
-    console.error('Failed to update tray tooltip:', err);
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    try {
+      mainWindow.webContents.send('engine-data-updated');
+    } catch (e) {}
   }
 };
 
@@ -371,12 +377,18 @@ app.whenReady().then(() => {
         mainWindow.show();
         mainWindow.focus();
       }
+      if (mainWindow.webContents) {
+        try { mainWindow.webContents.send('engine-data-updated'); } catch (e) {}
+      }
     }
   });
   tray.on('double-click', () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.show();
       mainWindow.focus();
+      if (mainWindow.webContents) {
+        try { mainWindow.webContents.send('engine-data-updated'); } catch (e) {}
+      }
     }
   });
   global.updateTrayTooltip();

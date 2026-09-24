@@ -1,7 +1,7 @@
 {
-  "version": "1.6.1",
+  "version": "1.6.2",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-23T03:48:20.550Z",
+  "updatedAt": "2026-09-24T04:43:45.659Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -61,10 +61,10 @@
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.1",
+      "version": "1.6.2",
       "type": "ui",
-      "sizeBytes": 67972,
-      "sha256": "98a7091ba00ed0d65e52b0e4b54199441f480a0ebc74a3ba174fc4c96a35f0fe",
+      "sizeBytes": 77319,
+      "sha256": "e673ed31c1546d748d57a9756795c4afba75e9ccab01c7aad9379d8ee45d1e84",
       "description": "ALS Single Agent desktop interface"
     }
   }

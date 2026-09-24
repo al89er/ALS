@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.1 -->
+<!-- VERSION: 1.6.2 -->
 <html lang="en">
 
 <head>
@@ -711,20 +711,71 @@
         function switchTab(tabId) {
             // Update buttons
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            const targetBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
+            if (targetBtn) targetBtn.classList.add('active');
 
             // Update content views
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            document.getElementById(`tab-${tabId}`).classList.add('active');
+            const targetContent = document.getElementById(`tab-${tabId}`);
+            if (targetContent) targetContent.classList.add('active');
+
+            // Parity with Server Hub: refresh data when switching tabs
+            if (tabId === 'control') {
+                fetchTodaysData();
+                fetchInitialStatus();
+            } else if (tabId === 'history') {
+                fetchLogs();
+            } else if (tabId === 'calendar') {
+                fetchConfig();
+            } else if (tabId === 'settings') {
+                loadDesktopModuleVersionsUI();
+            }
         }
 
         // ==========================================
-        // CONFIGURATION
+        // CONFIGURATION & AUTO-REFRESH
         // ==========================================
         let _supabase;
         let lastSeenTimestamp = 0;
         let skipDaysArray = [];
         let currentNavDate = new Date();
+        let lastKnownDate = new Date().toLocaleDateString('en-CA');
+        let isRefreshingUI = false;
+
+        async function refreshDesktopUI(full = false) {
+            if (isRefreshingUI) return;
+            isRefreshingUI = true;
+            try {
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const dateChanged = (todayStr !== lastKnownDate);
+                if (dateChanged) {
+                    lastKnownDate = todayStr;
+                    console.log(`[DESKTOP-UI] Date rollover detected (${todayStr}), refreshing views`);
+                }
+
+                await Promise.allSettled([
+                    fetchInitialStatus(),
+                    fetchTodaysData(),
+                    dateChanged || full ? fetchConfig() : Promise.resolve(),
+                    dateChanged || full ? fetchLogs() : Promise.resolve()
+                ]);
+
+                // Check active tab to refresh tab-specific content
+                const activeTab = document.querySelector('.tab-btn.active');
+                if (activeTab && activeTab.getAttribute('onclick')) {
+                    const clickAttr = activeTab.getAttribute('onclick');
+                    if (clickAttr.includes('history')) {
+                        await fetchLogs();
+                    } else if (clickAttr.includes('settings')) {
+                        await loadDesktopModuleVersionsUI();
+                    }
+                }
+            } catch (err) {
+                console.warn('[DESKTOP-UI] Auto-refresh encountered non-fatal error:', err);
+            } finally {
+                isRefreshingUI = false;
+            }
+        }
 
         async function initDesktopClient() {
             const env = await window.electronAPI.getEnvVariables();
@@ -780,6 +831,7 @@
         // 1. HEARTBEAT ENGINE
         // ==========================================
         let activeDeviceId = 'home_desktop_agent';
+        let isProbingStatus = false;
 
         async function getActiveDeviceIdUI() {
             if (window.electronAPI && window.electronAPI.getDeviceConfig) {
@@ -790,14 +842,27 @@
         }
 
         async function fetchInitialStatus() {
+            if (!_supabase) return;
             activeDeviceId = await getActiveDeviceIdUI();
-            const { data, error } = await _supabase
-                .from('device_status')
-                .select('*')
-                .or(`id.eq.${activeDeviceId},device_id.eq.${activeDeviceId}`)
-                .maybeSingle();
+            try {
+                const { data, error } = await _supabase
+                    .from('device_status')
+                    .select('*')
+                    .or(`id.eq.${activeDeviceId},device_id.eq.${activeDeviceId}`)
+                    .maybeSingle();
 
-            if (data) updateHeartbeat(data.last_seen, data.current_status);
+                if (data) updateHeartbeat(data.last_seen, data.current_status);
+            } catch (err) {
+                if (window.electronAPI && window.electronAPI.readCache) {
+                    try {
+                        const cache = await window.electronAPI.readCache();
+                        if (cache && (cache.todays_proof || cache.daily_schedule)) {
+                            lastSeenTimestamp = Date.now();
+                            evaluateStatus('Local Active');
+                        }
+                    } catch (ce) {}
+                }
+            }
         }
 
         function updateHeartbeat(timestamp, statusStr) {
@@ -805,7 +870,7 @@
             evaluateStatus(statusStr);
         }
 
-        function evaluateStatus(overrideStatus = null) {
+        async function evaluateStatus(overrideStatus = null) {
             const now = Date.now();
             const diff = now - lastSeenTimestamp;
             const isOnline = diff < 90000; // 90 seconds
@@ -813,10 +878,21 @@
             if (overrideStatus === 'CAPTIVE_PORTAL') {
                 statusBadge.className = 'status-badge';
                 statusText.innerText = 'Captive Portal';
+            } else if (overrideStatus === 'Local Active') {
+                statusBadge.className = 'status-badge status-online';
+                statusText.innerText = 'Connected (Local)';
             } else if (isOnline) {
                 statusBadge.className = 'status-badge status-online';
                 statusText.innerText = 'Connected';
             } else {
+                if (!isProbingStatus && diff > 60000) {
+                    isProbingStatus = true;
+                    try {
+                        await fetchInitialStatus();
+                    } catch (e) {} finally {
+                        isProbingStatus = false;
+                    }
+                }
                 statusBadge.className = 'status-badge';
                 statusText.innerText = 'Offline';
             }
@@ -1024,27 +1100,61 @@
             if (!activeDeviceId) activeDeviceId = await getActiveDeviceIdUI();
             const todayStr = new Date().toLocaleDateString('en-CA');
             
-            let proofQuery = _supabase.from('todays_proof').select('*').eq('date', todayStr);
-            let schedQuery = _supabase.from('daily_schedules').select('*').eq('date', todayStr);
+            let proofQuery = _supabase ? _supabase.from('todays_proof').select('*').eq('date', todayStr) : null;
+            let schedQuery = _supabase ? _supabase.from('daily_schedules').select('*').eq('date', todayStr) : null;
 
-            if (activeDeviceId === 'home_desktop_agent') {
-                proofQuery = proofQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
-                schedQuery = schedQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
-            } else {
-                proofQuery = proofQuery.eq('device_id', activeDeviceId);
-                schedQuery = schedQuery.eq('device_id', activeDeviceId);
+            if (proofQuery && schedQuery) {
+                if (activeDeviceId === 'home_desktop_agent') {
+                    proofQuery = proofQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                    schedQuery = schedQuery.or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+                } else {
+                    proofQuery = proofQuery.eq('device_id', activeDeviceId);
+                    schedQuery = schedQuery.eq('device_id', activeDeviceId);
+                }
             }
 
-            const [sysRes, proofRes, schedRes] = await Promise.all([
-                _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
-                proofQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle(),
-                schedQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle()
-            ]);
+            let cloudProof = null;
+            let cloudSched = null;
+
+            if (_supabase && proofQuery && schedQuery) {
+                try {
+                    const [sysRes, proofRes, schedRes] = await Promise.all([
+                        _supabase.from('system_config').select('*').eq('id', 1).maybeSingle(),
+                        proofQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+                        schedQuery.order('updated_at', { ascending: false }).limit(1).maybeSingle()
+                    ]);
+                    cloudProof = proofRes && proofRes.data;
+                    cloudSched = schedRes && schedRes.data;
+                } catch (err) {
+                    console.warn('[DESKTOP-UI] Cloud fetch failed, falling back to local cache:', err);
+                }
+            }
+
+            // Fallback to local cache if cloud data was unavailable or empty
+            if (window.electronAPI && window.electronAPI.readCache) {
+                try {
+                    const cache = await window.electronAPI.readCache();
+                    if (cache) {
+                        if (!cloudProof && cache.todays_proof && cache.todays_proof.date === todayStr) {
+                            cloudProof = cache.todays_proof;
+                        }
+                        if (!cloudSched && cache.daily_schedule && cache.daily_schedule.date === todayStr) {
+                            cloudSched = cache.daily_schedule;
+                        }
+                    }
+                } catch (ce) {
+                    console.warn('[DESKTOP-UI] Cache fallback read error:', ce);
+                }
+            }
             
-            if (proofRes && proofRes.data) updateProofUI(proofRes.data);
+            if (cloudProof) {
+                updateProofUI(cloudProof);
+            } else {
+                updateProofUI({ date: todayStr, clock_in: '--:--', clock_out: '--:--', updated_at: null });
+            }
             
-            if (schedRes && schedRes.data) {
-                updateScheduleUI(schedRes.data);
+            if (cloudSched) {
+                updateScheduleUI(cloudSched);
             } else {
                 updateScheduleUI(null);
             }
@@ -1233,14 +1343,14 @@ async function bindChannels() {
                 { name: 'supabase-client', title: 'Supabase Realtime (supabase-client.js)' },
                 { name: 'cache-manager', title: 'Offline Storage & Config (cache-manager.js)' },
                 { name: 'tray-manager', title: 'System Tray (tray-manager.js)' },
-                { name: 'desktop-ui.html', title: 'Desktop UI (desktop-ui.html)' }
+                { name: 'desktop-ui', title: 'Desktop UI (desktop-ui.html)' }
             ];
 
             known.forEach(m => {
                 const info = activeDesktopModules[m.name] || {};
                 const ver = info.version || '1.5.8';
                 const source = info.source || 'factory';
-                const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name);
+                const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name || (m.name === 'desktop-ui' && (u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html')));
 
                 const item = document.createElement('div');
                 item.style.display = 'flex';
@@ -1251,7 +1361,10 @@ async function bindChannels() {
 
                 let updateTag = '<span style="color:var(--status-online); font-size:0.8rem;">Current</span>';
                 if (update) {
-                    updateTag = `<span style="color:var(--accent-orange); font-weight:700; font-size:0.8rem;">v${update.targetVersion} ready</span>`;
+                    updateTag = `
+                        <span style="color:var(--accent-orange); font-weight:700; font-size:0.8rem;">v${update.targetVersion} ready</span>
+                        <button class="btn-primary" onclick="installSingleDesktopUpdateUI('${m.name}')" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; cursor: pointer;">Update</button>
+                    `;
                 }
 
                 item.innerHTML = `
@@ -1309,6 +1422,47 @@ async function bindChannels() {
             }
         }
 
+        async function installSingleDesktopUpdateUI(moduleName) {
+            if (!window.electronAPI || !window.electronAPI.installModuleUpdate) return;
+            const notice = document.getElementById('singleUpdateNotice');
+            notice.style.display = 'block';
+            notice.style.background = 'rgba(59, 130, 246, 0.2)';
+            notice.style.color = 'var(--accent-blue)';
+            notice.textContent = `Installing update for ${moduleName}...`;
+
+            try {
+                const res = await window.electronAPI.installModuleUpdate(moduleName);
+                if (res.success) {
+                    pendingDesktopUpdates = pendingDesktopUpdates.filter(u => u.name !== moduleName && u.file !== moduleName);
+                    await loadDesktopModuleVersionsUI();
+
+                    if (moduleName === 'desktop-ui' || moduleName === 'desktop-ui.html') {
+                        notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                        notice.style.color = 'var(--status-online)';
+                        notice.textContent = 'Desktop UI updated! Reloading interface dynamically...';
+                        setTimeout(() => {
+                            if (window.electronAPI && window.electronAPI.reloadUI) {
+                                window.electronAPI.reloadUI();
+                            }
+                        }, 1200);
+                    } else {
+                        notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                        notice.style.color = 'var(--status-online)';
+                        notice.textContent = `${moduleName} updated to v${res.version}! Relaunch when ready.`;
+                        document.getElementById('singleRelaunchBtn').style.display = 'inline-block';
+                    }
+                } else {
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.textContent = `Failed to update ${moduleName}: ${res.error}`;
+                }
+            } catch (err) {
+                notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                notice.style.color = 'var(--status-offline)';
+                notice.textContent = `Error updating ${moduleName}: ${err.message}`;
+            }
+        }
+
         async function installAllDesktopUpdatesUI() {
             if (!window.electronAPI || !window.electronAPI.installAllModuleUpdates) return;
             const btn = document.getElementById('singleUpdateAllBtn');
@@ -1325,10 +1479,22 @@ async function bindChannels() {
                     notice.style.display = 'block';
                     notice.style.background = 'rgba(16, 185, 129, 0.2)';
                     notice.style.color = 'var(--status-online)';
-                    notice.textContent = 'All updates installed successfully! Relaunch the app to apply changes.';
-                    document.getElementById('singleRelaunchBtn').style.display = 'inline-block';
+
+                    const hadUIUpdate = pendingDesktopUpdates.some(u => u.name === 'desktop-ui' || u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html');
                     pendingDesktopUpdates = [];
                     await loadDesktopModuleVersionsUI();
+
+                    if (hadUIUpdate) {
+                        notice.textContent = 'Updates installed! Reloading Desktop UI dynamically...';
+                        setTimeout(() => {
+                            if (window.electronAPI && window.electronAPI.reloadUI) {
+                                window.electronAPI.reloadUI();
+                            }
+                        }, 1200);
+                    } else {
+                        notice.textContent = 'All updates installed successfully! Relaunch the app to apply background changes.';
+                        document.getElementById('singleRelaunchBtn').style.display = 'inline-block';
+                    }
                 } else {
                     notice.style.display = 'block';
                     notice.style.background = 'rgba(239, 68, 68, 0.2)';
@@ -1337,6 +1503,7 @@ async function bindChannels() {
                 }
             } catch (err) {
                 btn.disabled = false;
+                btn.textContent = 'Update All';
             }
         }
 
@@ -1364,6 +1531,30 @@ async function bindChannels() {
                     checkForDesktopUpdatesUI();
                 });
             }
+
+            // Freshness listener 1: Window focus
+            window.addEventListener('focus', () => {
+                refreshDesktopUI(false);
+            });
+
+            // Freshness listener 2: Visibility change (restored from tray)
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    refreshDesktopUI(false);
+                }
+            });
+
+            // Freshness listener 3: Engine update IPC push
+            if (window.electronAPI && window.electronAPI.onEngineUpdate) {
+                window.electronAPI.onEngineUpdate(() => {
+                    refreshDesktopUI(true);
+                });
+            }
+
+            // Freshness listener 4: Background auto-sync interval (every 45 seconds)
+            setInterval(() => {
+                refreshDesktopUI(false);
+            }, 45000);
         });
 
         async function loadLocalSettings() {

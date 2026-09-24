@@ -25,5 +25,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reloadUI: () => ipcRenderer.invoke('reload-ui'),
     onTriggerUpdateCheck: (callback) => {
         ipcRenderer.on('trigger-update-check', () => callback());
+    },
+    onEngineUpdate: (callback) => {
+        ipcRenderer.on('engine-data-updated', () => callback());
     }
 });
