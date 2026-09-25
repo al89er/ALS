@@ -383,7 +383,7 @@ async function getHubClientForDevice(deviceId) {
   }
 }
 
-const VERSION = '1.5.8';
+const VERSION = '1.6.4';
 
 module.exports = {
   VERSION,

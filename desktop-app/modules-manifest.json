@@ -1,22 +1,22 @@
 {
-  "version": "1.6.3",
+  "version": "1.6.4",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-25T03:14:23.139Z",
+  "updatedAt": "2026-09-25T03:33:30.500Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.5.8",
+      "version": "1.6.4",
       "type": "engine",
       "sizeBytes": 33237,
-      "sha256": "4f7b17e43c8c7344632f8458d5dae76f81e9e4572ac653c0313543c2f889b5bb",
+      "sha256": "ded36b9cb79c9c529a98236f1d9802a4dfc227deae0da07e968408e0c226b94b",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
       "file": "hub-client.js",
-      "version": "1.5.8",
+      "version": "1.6.4",
       "type": "engine",
-      "sizeBytes": 13235,
-      "sha256": "2359ec5af33549381954cf23eb29f2cde5442f7e8ac737d30b4b9d4b6a7e01a8",
+      "sizeBytes": 13645,
+      "sha256": "414d70b240ad2c5e865c8586bbbb0247a52a9bac7b4c34886b6e16afc7215117",
       "description": "Multi-account hub orchestrator, heartbeat recovery, and atomic queue"
     },
     "scheduler": {
@@ -29,42 +29,42 @@
     },
     "supabase-client": {
       "file": "supabase-client.js",
-      "version": "1.5.8",
+      "version": "1.6.4",
       "type": "network",
       "sizeBytes": 14654,
-      "sha256": "d81904a9174703a0e476884f8d39e6eb14f2afb4f9f4fe71f50f3bad6af2a3a4",
+      "sha256": "6e591947bbf65733dbbb49d5eb814234a67462bfdeeb464a3213bb3f120b22a6",
       "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
     },
     "cache-manager": {
       "file": "cache-manager.js",
       "version": "1.5.8",
       "type": "storage",
-      "sizeBytes": 10578,
-      "sha256": "5ae405d6cfc3d67e5a2835605bfc31033a5496ab4520bc72e1c2324596221769",
+      "sizeBytes": 10925,
+      "sha256": "a53b8baeae4a0f60bca4feae1197c30621e2682fee69ab6cbe211156568ca3be",
       "description": "Local JSON cache, settings persistence, and hub accounts manager"
     },
     "tray-manager": {
       "file": "tray-manager.js",
       "version": "1.5.8",
       "type": "ui",
-      "sizeBytes": 3288,
-      "sha256": "e40f11848eec61a58e7d9a54cb274e7ad76dbb618a0969448aed7298cba056bf",
+      "sizeBytes": 3387,
+      "sha256": "5f6eb0fac3a402116bac21fa4eb8af63e925775014efee70799159f3ee67365b",
       "description": "Modular Windows system tray tooltip and context menu formatter"
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.1",
+      "version": "1.6.4",
       "type": "ui",
-      "sizeBytes": 88973,
-      "sha256": "677378ccbd25eb354dbae13642acfe76ab5925da45991717ea99710576d61ff2",
+      "sizeBytes": 91131,
+      "sha256": "c61a16dea3845574fdbd614d9d50d119ddca9c2ad4d6eb2258405d454e0595dd",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.3",
+      "version": "1.6.4",
       "type": "ui",
       "sizeBytes": 80337,
-      "sha256": "92646962f6d34fdf6420d238d5a61c00f5639c45f98280f2c67ac93257caefa0",
+      "sha256": "d2ebc665b5e5d7502dc0bdf43f8a2a62ac5b5c395e2a322285eb10285b52ad9e",
       "description": "ALS Single Agent desktop interface"
     }
   }
