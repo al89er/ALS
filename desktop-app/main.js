@@ -301,11 +301,37 @@ app.whenReady().then(() => {
   });
   
   ipcMain.handle('save-hub-account', (event, account) => {
-    return cacheManager.saveHubAccount(account);
+    const res = cacheManager.saveHubAccount(account);
+    if (edition === 'hub') {
+      try {
+        const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+        if (typeof hubClient.initSingleAccount === 'function') {
+          hubClient.initSingleAccount(account);
+        } else {
+          hubClient.initHubAccounts();
+        }
+      } catch (err) {
+        console.error('[HUB] Error dynamically initializing account:', err.message);
+      }
+    }
+    return res;
   });
   
   ipcMain.handle('remove-hub-account', (event, deviceId) => {
-    return cacheManager.removeHubAccount(deviceId);
+    const res = cacheManager.removeHubAccount(deviceId);
+    if (edition === 'hub') {
+      try {
+        const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+        if (typeof hubClient.removeSingleAccount === 'function') {
+          hubClient.removeSingleAccount(deviceId);
+        } else {
+          hubClient.initHubAccounts();
+        }
+      } catch (err) {
+        console.error('[HUB] Error dynamically removing account:', err.message);
+      }
+    }
+    return res;
   });
 
   // Modular Hot-Update IPC Handlers

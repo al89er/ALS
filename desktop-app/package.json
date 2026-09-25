@@ -1,6 +1,6 @@
 {
   "name": "desktop-app",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "ALS Automation Engine",
   "main": "main.js",
   "scripts": {

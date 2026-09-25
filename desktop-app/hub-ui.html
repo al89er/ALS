@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.7 -->
+<!-- VERSION: 1.6.8 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -966,7 +966,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.7</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.8</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
@@ -1804,9 +1804,12 @@
 
             try {
                 await window.electronAPI.saveHubAccount(account);
-                showToast('Account Saved', `Account profile for ${account.device_id} saved successfully!`, 'success');
+                showToast('Account Saved', `Account profile for ${account.device_id} saved successfully! Connecting...`, 'success');
                 cancelEditAccount();
                 switchTab('accounts');
+                setTimeout(() => {
+                    loadAccounts();
+                }, 1200);
             } catch (err) {
                 showToast('Save Error', err.message || 'Could not save account.', 'error');
             }

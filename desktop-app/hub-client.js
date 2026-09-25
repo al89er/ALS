@@ -139,43 +139,78 @@ function initHubAccounts() {
   stopHubAccounts();
 
   for (const account of accounts) {
-    if (!account.supabase_email || !account.supabase_password) continue;
-
-    console.log(`[HUB] Initializing isolated client for ${account.device_id}...`);
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-        storageKey: `hub-auth-${account.device_id}`
-      }
-    });
-
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (session && session.access_token) {
-        try {
-          supabase.realtime.setAuth(session.access_token);
-        } catch (authErr) {
-          console.warn(`[HUB] Failed to set realtime auth for ${account.device_id}:`, authErr.message);
-        }
-      }
-    });
-    
-    supabase.auth.signInWithPassword({
-      email: account.supabase_email,
-      password: account.supabase_password
-    }).then(({ data, error }) => {
-      if (error) {
-        console.error(`[HUB] Auth failed for ${account.device_id}:`, error.message);
-        return;
-      }
-      activeClients.set(account.device_id, supabase);
-      startHubHeartbeat(supabase, account);
-      startHubCommandListener(supabase, account);
-    }).catch(err => {
-      console.error(`[HUB] Exception during auth for ${account.device_id}:`, err.message);
-    });
+    initSingleAccount(account);
   }
+}
+
+function initSingleAccount(account) {
+  if (!account || !account.device_id || !account.supabase_email || !account.supabase_password) return;
+  const envVars = cacheManager.getDeviceConfig();
+  const supabaseUrl = envVars.supabase_url;
+  const supabaseKey = envVars.supabase_key;
+  if (!supabaseUrl || !supabaseKey) return;
+
+  const deviceId = account.device_id;
+  if (activeIntervals.has(deviceId)) {
+    clearInterval(activeIntervals.get(deviceId));
+    activeIntervals.delete(deviceId);
+  }
+  const oldClient = activeClients.get(deviceId);
+  if (oldClient) {
+    try { oldClient.removeAllChannels(); } catch (e) {}
+    activeClients.delete(deviceId);
+  }
+
+  console.log(`[HUB] Initializing isolated client for ${deviceId}...`);
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storageKey: `hub-auth-${deviceId}`
+    }
+  });
+
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (session && session.access_token) {
+      try {
+        supabase.realtime.setAuth(session.access_token);
+      } catch (authErr) {
+        console.warn(`[HUB] Failed to set realtime auth for ${deviceId}:`, authErr.message);
+      }
+    }
+  });
+  
+  supabase.auth.signInWithPassword({
+    email: account.supabase_email,
+    password: account.supabase_password
+  }).then(({ data, error }) => {
+    if (error) {
+      console.error(`[HUB] Auth failed for ${deviceId}:`, error.message);
+      return;
+    }
+    activeClients.set(deviceId, supabase);
+    startHubHeartbeat(supabase, account);
+    startHubCommandListener(supabase, account);
+    console.log(`[HUB] Successfully connected account ${deviceId}!`);
+  }).catch(err => {
+    console.error(`[HUB] Exception during auth for ${deviceId}:`, err.message);
+  });
+}
+
+function removeSingleAccount(deviceId) {
+  if (activeIntervals.has(deviceId)) {
+    clearInterval(activeIntervals.get(deviceId));
+    activeIntervals.delete(deviceId);
+  }
+  const client = activeClients.get(deviceId);
+  if (client) {
+    try { client.removeAllChannels(); } catch (e) {}
+    activeClients.delete(deviceId);
+  }
+  activeChannels.delete(deviceId);
+  activeRecoveries.delete(deviceId);
+  console.log(`[HUB] Account ${deviceId} disconnected and removed.`);
 }
 
 function stopHubAccounts() {
@@ -383,11 +418,13 @@ async function getHubClientForDevice(deviceId) {
   }
 }
 
-const VERSION = '1.6.4';
+const VERSION = '1.6.5';
 
 module.exports = {
   VERSION,
   initHubAccounts,
+  initSingleAccount,
+  removeSingleAccount,
   stopHubAccounts,
   getHubAccountStatus,
   getHubClientForDevice,
