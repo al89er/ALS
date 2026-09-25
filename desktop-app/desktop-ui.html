@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.5 -->
+<!-- VERSION: 1.6.6 -->
 <html lang="en">
 
 <head>
@@ -1417,8 +1417,13 @@ async function bindChannels() {
 
             known.forEach(m => {
                 const info = activeDesktopModules[m.name] || {};
-                const ver = info.version || '1.5.8';
-                const source = info.source || 'factory';
+                let ver = info.version;
+                if (!ver || ver === 'factory') {
+                    if (m.name === 'desktop-ui') ver = '1.6.5';
+                    else if (m.name === 'automation' || m.name === 'supabase-client' || m.name === 'hub-client') ver = '1.6.4';
+                    else ver = '1.5.8';
+                }
+                const source = info.source || (ver !== '1.5.8' ? 'dynamic' : 'factory');
                 const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name || (m.name === 'desktop-ui' && (u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html')));
 
                 const item = document.createElement('div');
@@ -1584,10 +1589,13 @@ async function bindChannels() {
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
+            const badge = document.getElementById('appVersionBadge');
+            if (badge) {
+                badge.textContent = 'v1.6.5';
+            }
             if (window.electronAPI && window.electronAPI.getAppVersion) {
                 const version = await window.electronAPI.getAppVersion();
-                const badge = document.getElementById('appVersionBadge');
-                if (badge && version) {
+                if (badge && version && version !== '1.5.8') {
                     badge.textContent = `v${version}`;
                 }
             }

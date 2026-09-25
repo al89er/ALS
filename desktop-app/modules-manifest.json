@@ -1,7 +1,7 @@
 {
-  "version": "1.6.6",
+  "version": "1.6.7",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-25T04:00:17.316Z",
+  "updatedAt": "2026-09-25T04:09:39.021Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -53,18 +53,18 @@
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.6",
+      "version": "1.6.7",
       "type": "ui",
-      "sizeBytes": 91232,
-      "sha256": "c65b6f0992774ee4ee21bc3fd0dabe00a4942497f8c3aba361c243d438388adc",
+      "sizeBytes": 91696,
+      "sha256": "e1586834c729b28b5bfecfd830dfc1831dc98e896043bcc2a6bafef45e2b1c83",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.5",
+      "version": "1.6.6",
       "type": "ui",
-      "sizeBytes": 80337,
-      "sha256": "c5464c96546a9f156eb48a6cd60c9ac005fe35470ebc6fb652e03b3cf744a998",
+      "sizeBytes": 80767,
+      "sha256": "a5fa1882ce8de9881b2a0535dc8937644e1adc6d627603c217697af1029e88ec",
       "description": "ALS Single Agent desktop interface"
     }
   }
