@@ -72,7 +72,7 @@ async function processHubCommand(supabase, account, cmd, source = 'realtime') {
     return;
   }
 
-  const validActions = ['clock_in', 'clock_out', 'manual_proof_sync'];
+  const validActions = ['clock_in', 'clock_out', 'ot_in', 'ot_out', 'manual_proof_sync'];
   if (!validActions.includes(cmd.action)) {
     console.warn(`[HUB] Unknown action for ${deviceId}: ${cmd.action}`);
     await supabase
@@ -104,7 +104,7 @@ async function processHubCommand(supabase, account, cmd, source = 'realtime') {
   console.log(`[HUB] Processing claimed command for ${deviceId}: ${cmd.action} (source=${source})`);
 
   try {
-    if (cmd.action === 'clock_in' || cmd.action === 'clock_out') {
+    if (cmd.action === 'clock_in' || cmd.action === 'clock_out' || cmd.action === 'ot_in' || cmd.action === 'ot_out') {
       await runtimeDependencies.executeClockAction(cmd.action, supabase, { source: source || 'hub_manual', hubAccount: account });
     } else if (cmd.action === 'manual_proof_sync') {
       await runtimeDependencies.manualFetchProof(supabase, { source: source || 'hub_manual', hubAccount: account });

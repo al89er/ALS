@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.2 -->
+<!-- VERSION: 1.6.3 -->
 <html lang="en">
 
 <head>
@@ -275,6 +275,45 @@
             box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
         }
 
+        .btn-ot-in {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.25);
+            color: #fff;
+        }
+
+        .btn-ot-out {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.25);
+            color: #fff;
+        }
+
+        .ot-toggle-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .ot-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        .ot-buttons-drawer {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            animation: fadeIn 0.2s ease;
+        }
+
         .btn:hover {
             transform: translateY(-2px);
             filter: brightness(1.1);
@@ -519,6 +558,22 @@
                 <div class="btn-group">
                     <button class="btn btn-primary" onclick="forceCommand('clock_in')">Force Clock IN</button>
                     <button class="btn btn-secondary" onclick="forceCommand('clock_out')">Force Clock OUT</button>
+                </div>
+
+                <!-- Overtime Actions (Hidden by default, expandable) -->
+                <div class="ot-section" style="margin-top: 0.85rem; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 0.75rem;">
+                    <button type="button" id="toggleOtBtnSingle" class="ot-toggle-btn" onclick="toggleOvertimeSection('Single')">
+                        <span id="toggleOtIconSingle" style="display: inline-block; transition: transform 0.2s;">▸</span>
+                        <span>Overtime Actions (OT)</span>
+                    </button>
+                    <div id="otButtonsGroupSingle" class="ot-buttons-drawer" style="display: none; margin-top: 0.6rem;">
+                        <button id="otInBtnSingle" class="btn btn-ot-in" onclick="forceCommand('ot_in')">
+                            <span style="font-size: 0.95rem;">⚡</span> a52 : OT In
+                        </button>
+                        <button id="otOutBtnSingle" class="btn btn-ot-out" onclick="forceCommand('ot_out')">
+                            <span style="font-size: 0.95rem;">🌙</span> a53 : OT Out
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -974,6 +1029,20 @@
             else {
                 // Switch to history tab to see the command action log
                 switchTab('history');
+            }
+        }
+
+        function toggleOvertimeSection(prefix = 'Single') {
+            const drawer = document.getElementById(`otButtonsGroup${prefix}`);
+            const icon = document.getElementById(`toggleOtIcon${prefix}`);
+            if (!drawer) return;
+            const isHidden = drawer.style.display === 'none' || drawer.style.display === '';
+            if (isHidden) {
+                drawer.style.display = 'grid';
+                if (icon) icon.innerText = '▾';
+            } else {
+                drawer.style.display = 'none';
+                if (icon) icon.innerText = '▸';
             }
         }
 

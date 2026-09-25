@@ -56,7 +56,7 @@ async function checkDashboardStatus(page, actionType, supabase, targetDeviceId) 
       return { date: twm, clockIn: wm, clockOut: wk };
     });
 
-    const targetVal = actionType === 'clock_in' ? proofData.clockIn : proofData.clockOut;
+    const targetVal = actionType === 'clock_in' ? proofData.clockIn : (actionType === 'clock_out' ? proofData.clockOut : null);
     const standardDate = new Date().toLocaleDateString('en-CA');
     
     if (targetVal && targetVal !== '?' && targetVal.length > 2) {
@@ -305,7 +305,10 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
     // 5. Trigger
     console.log(`[PLAYWRIGHT] Executing smart element trigger for action: ${actionType}`);
-    const selector = actionType === 'clock_in' ? '#a50' : '#a51';
+    let selector = '#a50';
+    if (actionType === 'clock_out') selector = '#a51';
+    else if (actionType === 'ot_in') selector = '#a52';
+    else if (actionType === 'ot_out') selector = '#a53';
 
     let targetFrame = page;
     let targetHandle = null;
@@ -359,24 +362,29 @@ async function executeClockAction(actionType, supabase, options = {}) {
     // 6. Post-Flight
     console.log('[PLAYWRIGHT] Element triggered successfully. Verifying DOM for proof...');
     
-    const targetProofSelector = actionType === 'clock_in' ? '#wm' : '#wk';
+    const targetProofSelector = actionType === 'clock_in' ? '#wm' : (actionType === 'clock_out' ? '#wk' : null);
     
-    try {
-      await page.waitForFunction((selector) => {
-        const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
-        for (const doc of docs) {
-          const el = doc.querySelector(selector);
-          if (el) {
-            const text = el.innerText.trim();
-            if (text && text !== '?' && text !== '--:--' && text.length > 2) {
-              return true;
+    if (targetProofSelector) {
+      try {
+        await page.waitForFunction((selector) => {
+          const docs = [document, ...Array.from(document.querySelectorAll('iframe')).map(f => f.contentDocument).filter(Boolean)];
+          for (const doc of docs) {
+            const el = doc.querySelector(selector);
+            if (el) {
+              const text = el.innerText.trim();
+              if (text && text !== '?' && text !== '--:--' && text.length > 2) {
+                return true;
+              }
             }
           }
-        }
-        return false;
-      }, targetProofSelector, { timeout: 15000 });
-    } catch (timeoutErr) {
-      throw new Error('[TIMEOUT] Portal dashboard failed to update time values within 15s');
+          return false;
+        }, targetProofSelector, { timeout: 15000 });
+      } catch (timeoutErr) {
+        throw new Error('[TIMEOUT] Portal dashboard failed to update time values within 15s');
+      }
+    } else {
+      // Overtime trigger (a52 / a53) - allow brief settle time for portal submission
+      await new Promise(r => setTimeout(r, 2500));
     }
     
     const postProofData = await page.evaluate(() => {

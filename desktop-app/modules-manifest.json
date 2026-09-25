@@ -1,22 +1,22 @@
 {
-  "version": "1.6.2",
+  "version": "1.6.3",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-24T04:43:45.659Z",
+  "updatedAt": "2026-09-25T03:14:23.139Z",
   "modules": {
     "automation": {
       "file": "automation.js",
       "version": "1.5.8",
       "type": "engine",
-      "sizeBytes": 32803,
-      "sha256": "943e82a39e6d859700a4b9d98cb16e383097c3842498811978f7bbf22774bcb8",
+      "sizeBytes": 33237,
+      "sha256": "4f7b17e43c8c7344632f8458d5dae76f81e9e4572ac653c0313543c2f889b5bb",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
       "file": "hub-client.js",
       "version": "1.5.8",
       "type": "engine",
-      "sizeBytes": 13163,
-      "sha256": "87a4be6dd6db0637144a5d94f618769b4f814cbb7528931a68a7a2310e344709",
+      "sizeBytes": 13235,
+      "sha256": "2359ec5af33549381954cf23eb29f2cde5442f7e8ac737d30b4b9d4b6a7e01a8",
       "description": "Multi-account hub orchestrator, heartbeat recovery, and atomic queue"
     },
     "scheduler": {
@@ -31,8 +31,8 @@
       "file": "supabase-client.js",
       "version": "1.5.8",
       "type": "network",
-      "sizeBytes": 14590,
-      "sha256": "36dd68788283233778a066cfd95a16ca1b0dc2f099db1ae0f5f52b63c6ec2f85",
+      "sizeBytes": 14654,
+      "sha256": "d81904a9174703a0e476884f8d39e6eb14f2afb4f9f4fe71f50f3bad6af2a3a4",
       "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
     },
     "cache-manager": {
@@ -53,18 +53,18 @@
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "type": "ui",
-      "sizeBytes": 86785,
-      "sha256": "a3834c832548557bd61483e62bb5c0d4007215b5cba92b4ec11e95f45771b82f",
+      "sizeBytes": 88973,
+      "sha256": "677378ccbd25eb354dbae13642acfe76ab5925da45991717ea99710576d61ff2",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.2",
+      "version": "1.6.3",
       "type": "ui",
-      "sizeBytes": 77319,
-      "sha256": "e673ed31c1546d748d57a9756795c4afba75e9ccab01c7aad9379d8ee45d1e84",
+      "sizeBytes": 80337,
+      "sha256": "92646962f6d34fdf6420d238d5a61c00f5639c45f98280f2c67ac93257caefa0",
       "description": "ALS Single Agent desktop interface"
     }
   }

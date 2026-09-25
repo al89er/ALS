@@ -112,7 +112,7 @@ async function processCommandById(commandId, source = 'unknown') {
         }
 
         const action = command.action;
-        const validActions = ['clock_in', 'clock_out', 'manual_proof_sync'];
+        const validActions = ['clock_in', 'clock_out', 'ot_in', 'ot_out', 'manual_proof_sync'];
         if (!validActions.includes(action)) {
           console.warn(`[SUPABASE] Unknown action: ${action}`);
           const { error: failError } = await supabase
@@ -126,7 +126,7 @@ async function processCommandById(commandId, source = 'unknown') {
         console.log(`[SUPABASE] Processing claimed command for ${deviceId}: ${action}`);
 
         try {
-          if (action === 'clock_in' || action === 'clock_out') {
+          if (action === 'clock_in' || action === 'clock_out' || action === 'ot_in' || action === 'ot_out') {
             await runtimeDependencies.executeClockAction(action, supabase, { source, device_id: deviceId });
           } else if (action === 'manual_proof_sync') {
             await runtimeDependencies.manualFetchProof(supabase, { device_id: deviceId });

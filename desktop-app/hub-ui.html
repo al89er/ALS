@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.0 -->
+<!-- VERSION: 1.6.1 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1636,12 +1636,31 @@
                         <button class="btn-action" onclick="manualClockAction('${acc.device_id}', 'clock_out', this)">
                             <span>🚪</span> Clock Out
                         </button>
+                        <button class="btn-action" onclick="toggleAccountOt('${acc.device_id}')">
+                            <span id="ot-icon-${acc.device_id}">⚡</span> Overtime ▾
+                        </button>
                         <button class="btn-action" onclick="editAccount('${acc.device_id}')">
                             <span>✏️</span> Edit
                         </button>
                         <button class="btn-action danger" onclick="confirmRemoveAccount('${acc.device_id}')">
                             <span>🗑️</span> Remove
                         </button>
+                    </div>
+
+                    <!-- Overtime Collapsible Drawer (Hidden by default) -->
+                    <div class="ot-account-drawer" id="ot-box-${acc.device_id}" style="display: none; margin-top: 8px; padding: 8px 12px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 13px;">⚡</span>
+                            <span style="font-size: 11px; font-weight: 600; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.05em;">Overtime Punch:</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn-action" onclick="manualClockAction('${acc.device_id}', 'ot_in', this)" style="background: rgba(245, 158, 11, 0.18); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24;">
+                                <span>⚡</span> a52 : OT In
+                            </button>
+                            <button class="btn-action" onclick="manualClockAction('${acc.device_id}', 'ot_out', this)" style="background: rgba(6, 182, 212, 0.18); border-color: rgba(6, 182, 212, 0.4); color: #22d3ee;">
+                                <span>🌙</span> a53 : OT Out
+                            </button>
+                        </div>
                     </div>
 
                     <div class="logs-drawer">
@@ -1668,6 +1687,13 @@
                 box.classList.add('open');
                 if (chevron) chevron.textContent = '▾';
             }
+        }
+
+        function toggleAccountOt(deviceId) {
+            const box = document.getElementById(`ot-box-${deviceId}`);
+            if (!box) return;
+            const isHidden = box.style.display === 'none' || box.style.display === '';
+            box.style.display = isHidden ? 'flex' : 'none';
         }
 
         // Quick Actions per Account
@@ -1723,7 +1749,10 @@
 
         async function manualClockAction(deviceId, action, btn) {
             if (!window.electronAPI || !window.electronAPI.triggerHubAction) return;
-            const actionLabel = action === 'clock_in' ? 'Clock IN' : 'Clock OUT';
+            let actionLabel = 'Clock IN';
+            if (action === 'clock_out') actionLabel = 'Clock OUT';
+            else if (action === 'ot_in') actionLabel = 'OT IN (a52)';
+            else if (action === 'ot_out') actionLabel = 'OT OUT (a53)';
 
             showConfirmModal(
                 `Trigger ${actionLabel}?`,
