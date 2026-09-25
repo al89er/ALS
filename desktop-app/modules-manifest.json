@@ -1,7 +1,7 @@
 {
-  "version": "1.6.5",
+  "version": "1.6.6",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-25T03:43:29.455Z",
+  "updatedAt": "2026-09-25T04:00:17.316Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -53,10 +53,10 @@
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.5",
+      "version": "1.6.6",
       "type": "ui",
-      "sizeBytes": 91131,
-      "sha256": "55df93e697f75b1f1318a9ab23c987e54ee2bab497a04a44c95d8fa95ebd7337",
+      "sizeBytes": 91232,
+      "sha256": "c65b6f0992774ee4ee21bc3fd0dabe00a4942497f8c3aba361c243d438388adc",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {

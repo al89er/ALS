@@ -122,6 +122,18 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('get-app-version', () => {
+    try {
+      const dynamicManifestPath = path.join(moduleLoader.getModulesDir(), 'modules-manifest.json');
+      if (fs.existsSync(dynamicManifestPath)) {
+        const manifest = JSON.parse(fs.readFileSync(dynamicManifestPath, 'utf8'));
+        if (manifest.version) return manifest.version;
+      }
+      const bundledManifestPath = path.join(__dirname, 'modules-manifest.json');
+      if (fs.existsSync(bundledManifestPath)) {
+        const bundled = JSON.parse(fs.readFileSync(bundledManifestPath, 'utf8'));
+        if (bundled.version) return bundled.version;
+      }
+    } catch (e) {}
     return app.getVersion();
   });
 

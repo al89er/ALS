@@ -238,11 +238,55 @@ function loadModule(name, fallbackExport) {
   return fallbackExport;
 }
 
+function extractVersionFromFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return '1.5.8';
+    const content = fs.readFileSync(filePath, 'utf8');
+    const match = content.match(/(?:VERSION\s*=\s*['"]|<!--\s*VERSION:\s*)([^'"\s>]+)/);
+    if (match) return match[1];
+  } catch (e) {}
+  return '1.5.8';
+}
+
 /**
- * Returns metadata of currently loaded modules.
+ * Returns metadata of currently loaded modules and on-disk modular targets.
  */
 function getLoadedModuleInfo() {
-  return { ...loadedModulesInfo };
+  const info = { ...loadedModulesInfo };
+
+  const knownTargets = [
+    { name: 'automation', file: 'automation.js' },
+    { name: 'hub-client', file: 'hub-client.js' },
+    { name: 'scheduler', file: 'scheduler.js' },
+    { name: 'supabase-client', file: 'supabase-client.js' },
+    { name: 'cache-manager', file: 'cache-manager.js' },
+    { name: 'tray-manager', file: 'tray-manager.js' },
+    { name: 'hub-ui', file: 'hub-ui.html' },
+    { name: 'desktop-ui', file: 'desktop-ui.html' }
+  ];
+
+  for (const t of knownTargets) {
+    if (!info[t.name]) {
+      const dynamicPath = path.join(activeModulesDir, t.file);
+      const factoryPath = path.join(activeBaseDir, t.file);
+
+      if (fs.existsSync(dynamicPath)) {
+        info[t.name] = {
+          source: 'dynamic',
+          path: dynamicPath,
+          version: extractVersionFromFile(dynamicPath)
+        };
+      } else if (fs.existsSync(factoryPath)) {
+        info[t.name] = {
+          source: 'factory',
+          path: factoryPath,
+          version: extractVersionFromFile(factoryPath)
+        };
+      }
+    }
+  }
+
+  return info;
 }
 
 /**

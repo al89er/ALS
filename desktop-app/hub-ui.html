@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.5 -->
+<!-- VERSION: 1.6.6 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -966,7 +966,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.5</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.6</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
@@ -1963,14 +1963,14 @@
                 { name: 'supabase-client', title: 'Supabase Realtime (supabase-client.js)' },
                 { name: 'cache-manager', title: 'Storage & Config (cache-manager.js)' },
                 { name: 'tray-manager', title: 'Tray Manager (tray-manager.js)' },
-                { name: 'hub-ui.html', title: 'Hub UI Screen (hub-ui.html)' }
+                { name: 'hub-ui', title: 'Hub UI Screen (hub-ui.html)' }
             ];
 
             knownModules.forEach(mod => {
-                const info = activeModuleInfo[mod.name] || {};
+                const info = activeModuleInfo[mod.name] || activeModuleInfo[mod.name + '.html'] || {};
                 const ver = info.version || '1.5.8';
                 const source = info.source || 'factory';
-                const update = pendingUpdates.find(u => u.name === mod.name || u.file === mod.name);
+                const update = pendingUpdates.find(u => u.name === mod.name || u.file === mod.name || u.name === mod.name + '.html' || u.file === mod.name + '.html');
 
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid var(--border-subtle)';
