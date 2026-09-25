@@ -2,7 +2,18 @@
 /**
  * ALS Manifest Generator & Integrity Validator
  * Updates desktop-app/modules-manifest.json with real-time SHA-256 hashes, file sizes, and versions.
- * Usage: node update-manifest.js [optional-overall-manifest-version]
+ * 
+ * Features:
+ * - Syntax AST validation via vm.Script
+ * - Auto-detects modified code (hash diff vs manifest)
+ * - Auto-increments module VERSION if code changed without version bump
+ * - Automatically writes bumped version directly back into source file
+ * - Keeps package.json in sync with highest module version
+ * 
+ * Usage:
+ *   node update-manifest.js                 # Auto-detects changes and auto-bumps modified modules
+ *   node update-manifest.js 1.6.5           # Explicitly sets manifest version
+ *   node update-manifest.js --bump minor    # Bumps minor version on modified modules
  */
 
 const fs = require('fs');
@@ -12,6 +23,7 @@ const vm = require('vm');
 
 const baseDir = __dirname;
 const manifestPath = path.join(baseDir, 'modules-manifest.json');
+const packageJsonPath = path.join(baseDir, 'package.json');
 
 const targetModules = [
   { name: 'automation', file: 'automation.js', type: 'engine', description: 'Playwright automation engine, multi-device clocking, and proof capture' },
@@ -24,6 +36,35 @@ const targetModules = [
   { name: 'desktop-ui', file: 'desktop-ui.html', type: 'ui', description: 'ALS Single Agent desktop interface' }
 ];
 
+function compareSemver(v1, v2) {
+  const p1 = (v1 || '0').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  const p2 = (v2 || '0').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+    const num1 = p1[i] || 0;
+    const num2 = p2[i] || 0;
+    if (num1 > num2) return 1;
+    if (num1 < num2) return -1;
+  }
+  return 0;
+}
+
+function incrementSemver(version, type = 'patch') {
+  const clean = (version || '1.5.8').replace(/^v/, '');
+  const parts = clean.split('.').map(n => parseInt(n, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  if (type === 'major') {
+    parts[0]++;
+    parts[1] = 0;
+    parts[2] = 0;
+  } else if (type === 'minor') {
+    parts[1]++;
+    parts[2] = 0;
+  } else {
+    parts[2]++;
+  }
+  return parts.join('.');
+}
+
 function extractVersionFromFile(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
@@ -33,7 +74,18 @@ function extractVersionFromFile(filePath) {
   return '1.5.8';
 }
 
-function updateManifest(customVersion) {
+function updateVersionInFile(filePath, newVersion) {
+  let content = fs.readFileSync(filePath, 'utf8');
+  if (filePath.endsWith('.js')) {
+    content = content.replace(/(const\s+VERSION\s*=\s*['"])[^'"]+(['"];?)/, `$1${newVersion}$2`);
+  } else if (filePath.endsWith('.html')) {
+    content = content.replace(/(<!--\s*VERSION:\s*)[^\s>]+(\s*-->)/, `$1${newVersion}$2`);
+    content = content.replace(/(id="hubVersionBadge">v)[^<]+(<\/span>)/, `$1${newVersion}$2`);
+  }
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function updateManifest(customArg) {
   let existingManifest = {};
   if (fs.existsSync(manifestPath)) {
     try {
@@ -41,12 +93,27 @@ function updateManifest(customVersion) {
     } catch (e) {}
   }
 
-  const manifestVersion = customVersion || existingManifest.version || '1.5.8';
-  const updatedModules = {};
+  const existingModules = existingManifest.modules || {};
+  let bumpType = 'patch';
+  let explicitVersion = null;
+
+  if (customArg) {
+    if (customArg.startsWith('--bump=')) {
+      bumpType = customArg.split('=')[1] || 'patch';
+    } else if (customArg === '--bump' || customArg === '-b') {
+      bumpType = 'patch';
+    } else if (/^\d+\.\d+\.\d+/.test(customArg)) {
+      explicitVersion = customArg;
+    }
+  }
 
   console.log(`\n======================================================`);
-  console.log(`  ALS Modular Manifest Generator (v${manifestVersion})`);
+  console.log(`  ALS Modular Manifest Generator & Auto-Versioner`);
   console.log(`======================================================\n`);
+
+  const updatedModules = {};
+  let highestVersion = explicitVersion || existingManifest.version || '1.5.8';
+  let autoBumpsCount = 0;
 
   for (const target of targetModules) {
     const fullPath = path.join(baseDir, target.file);
@@ -55,8 +122,29 @@ function updateManifest(customVersion) {
       process.exit(1);
     }
 
-    const contentBuffer = fs.readFileSync(fullPath);
-    const sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
+    let contentBuffer = fs.readFileSync(fullPath);
+    let sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
+    let fileVersion = extractVersionFromFile(fullPath);
+
+    // Check if code changed compared to the recorded manifest hash
+    const prevMod = existingModules[target.name];
+    if (prevMod && prevMod.sha256 && prevMod.sha256 !== sha256) {
+      // Code was modified! Check if version was bumped
+      if (compareSemver(fileVersion, prevMod.version) <= 0) {
+        const nextVersion = incrementSemver(prevMod.version || fileVersion, bumpType);
+        console.log(`⚡ [AUTO-BUMP] Detected code changes in ${target.file} without version bump.`);
+        console.log(`   Auto-incrementing ${fileVersion} -> ${nextVersion} in file and manifest...`);
+        
+        updateVersionInFile(fullPath, nextVersion);
+        fileVersion = nextVersion;
+        autoBumpsCount++;
+
+        // Re-read updated file buffer and recompute hash
+        contentBuffer = fs.readFileSync(fullPath);
+        sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
+      }
+    }
+
     const sizeBytes = contentBuffer.length;
 
     // Syntax validation for JS
@@ -70,7 +158,9 @@ function updateManifest(customVersion) {
       }
     }
 
-    const fileVersion = extractVersionFromFile(fullPath);
+    if (compareSemver(fileVersion, highestVersion) > 0) {
+      highestVersion = fileVersion;
+    }
 
     updatedModules[target.name] = {
       file: target.file,
@@ -84,6 +174,8 @@ function updateManifest(customVersion) {
     console.log(`✓ ${target.file.padEnd(20)} [v${fileVersion}]  ${(sizeBytes / 1024).toFixed(1).padStart(6)} KB  SHA: ${sha256.substring(0, 16)}...`);
   }
 
+  const manifestVersion = explicitVersion || highestVersion;
+
   const outputManifest = {
     version: manifestVersion,
     name: 'ALS Modular Engine',
@@ -92,9 +184,35 @@ function updateManifest(customVersion) {
   };
 
   fs.writeFileSync(manifestPath, JSON.stringify(outputManifest, null, 2), 'utf8');
-  console.log(`\n[SUCCESS] Updated manifest written to: ${manifestPath}\n`);
+  console.log(`\n[SUCCESS] Updated manifest (v${manifestVersion}) written to: ${manifestPath}`);
+  if (autoBumpsCount > 0) {
+    console.log(`[INFO] Auto-bumped ${autoBumpsCount} module(s) due to detected code edits.\n`);
+  }
+
+  // Keep package.json version synchronized
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      if (compareSemver(manifestVersion, pkg.version) > 0) {
+        pkg.version = manifestVersion;
+        fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+        console.log(`[SYNC] Updated package.json version to v${manifestVersion}`);
+      }
+    } catch (e) {}
+  }
 }
 
-const args = process.argv.slice(2);
-const cliVersion = args[0];
-updateManifest(cliVersion);
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const cliArg = args[0];
+  updateManifest(cliArg);
+}
+
+module.exports = {
+  compareSemver,
+  incrementSemver,
+  extractVersionFromFile,
+  updateVersionInFile,
+  updateManifest
+};
+

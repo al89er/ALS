@@ -232,3 +232,32 @@ test('Tray Manager: Formats tooltips correctly for Hub, Lite, and Full editions'
   assert.ok(liteTooltip.includes('[LITE'));
   assert.ok(liteTooltip.includes('Proof In: 07:49:12'));
 });
+
+test('Manifest Auto-Versioner: Increments semver and updates source files in-place', () => {
+  const manifestUpdater = require('../update-manifest');
+
+  // 1. Semver comparison
+  assert.strictEqual(manifestUpdater.compareSemver('1.6.4', '1.5.8'), 1);
+  assert.strictEqual(manifestUpdater.compareSemver('1.5.8', '1.6.4'), -1);
+  assert.strictEqual(manifestUpdater.compareSemver('1.6.4', '1.6.4'), 0);
+
+  // 2. Semver incrementing
+  assert.strictEqual(manifestUpdater.incrementSemver('1.6.4', 'patch'), '1.6.5');
+  assert.strictEqual(manifestUpdater.incrementSemver('1.6.4', 'minor'), '1.7.0');
+  assert.strictEqual(manifestUpdater.incrementSemver('1.6.4', 'major'), '2.0.0');
+
+  // 3. In-place JS file version updating
+  const tempJsPath = path.join(testModulesDir, 'version_test.js');
+  fs.writeFileSync(tempJsPath, "const VERSION = '1.6.4';\nmodule.exports = { VERSION };\n", 'utf8');
+  manifestUpdater.updateVersionInFile(tempJsPath, '1.6.5');
+  assert.strictEqual(manifestUpdater.extractVersionFromFile(tempJsPath), '1.6.5');
+
+  // 4. In-place HTML file version updating
+  const tempHtmlPath = path.join(testModulesDir, 'version_test.html');
+  fs.writeFileSync(tempHtmlPath, "<!-- VERSION: 1.6.4 -->\n<div><span id=\"hubVersionBadge\">v1.6.4</span></div>\n", 'utf8');
+  manifestUpdater.updateVersionInFile(tempHtmlPath, '1.6.5');
+  assert.strictEqual(manifestUpdater.extractVersionFromFile(tempHtmlPath), '1.6.5');
+  const updatedHtml = fs.readFileSync(tempHtmlPath, 'utf8');
+  assert.ok(updatedHtml.includes('id="hubVersionBadge">v1.6.5</span>'));
+});
+

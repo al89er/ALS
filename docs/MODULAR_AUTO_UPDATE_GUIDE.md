@@ -49,65 +49,77 @@ The following 8 modules are hot-updatable:
 
 ## 3. Step-by-Step: How to Push an Update in the Future (No Installer Needed!)
 
-Follow these 5 simple steps whenever you make changes to business logic or UI:
+Follow these 4 simple steps whenever you make changes to business logic or UI:
 
 ### Step 1: Make Your Code Changes
-Edit any of the 8 modular files in `desktop-app/`.
-*Example: You need to update an element selector or captive portal bypass in `desktop-app/automation.js`.*
+Edit any of the 8 modular files in `desktop-app/` (e.g., updating an element selector in `automation.js`, adding a feature in `hub-ui.html`, or refining `supabase-client.js`).
 
-### Step 2: Bump the Module Version Constant
-Open the modified file and bump the exported `VERSION` constant:
-```javascript
-// desktop-app/automation.js
-const VERSION = '1.5.9';
-```
-
-### Step 3: Run the Manifest Update Command
+### Step 2: Run the Manifest & Auto-Versioner Command
 In your terminal, navigate to `desktop-app/` and run:
 ```bash
 npm run update-manifest
 ```
-*(Optionally provide a global manifest version: `npm run update-manifest 1.5.9`)*
 
-**What this script does automatically**:
-1. Inspects all 8 modular targets.
-2. Performs an AST syntax compilation check (`vm.Script`) on every `.js` file to prevent syntax errors from ever reaching production.
-3. Computes the cryptographic **SHA-256 hash** and exact file size of each module.
-4. Updates `desktop-app/modules-manifest.json` with the new versions, hashes, and timestamp.
+> [!TIP]
+> **Zero-Human-Error Auto-Increment Engine**:
+> You **do not need to remember to manually bump version numbers**!
+> When you run `npm run update-manifest`, the generator:
+> 1. Compares the current SHA-256 hash of each module against the recorded hash in `modules-manifest.json`.
+> 2. **Auto-detects code edits**: If a file was modified but its version constant was not bumped, it **automatically increments the patch version** (`1.6.4` $\rightarrow$ `1.6.5`).
+> 3. **Rewrites the version in-place**: Updates the `const VERSION = '...'` or `<!-- VERSION: ... -->` directly inside the source file!
+> 4. Validates JavaScript AST syntax via Node's `new vm.Script(...)` to guarantee no broken code is released.
+> 5. Writes the new SHA-256 checksums, timestamps, and versions into `modules-manifest.json`.
+> 6. Synchronizes `package.json` to match the highest module version.
 
-Example console output:
-```
-======================================================
-  ALS Modular Manifest Generator (v1.5.9)
-======================================================
+#### Advanced CLI Options:
+```bash
+# Standard auto-detection (patch increment for changed modules)
+npm run update-manifest
 
-✓ automation.js        [v1.5.9]    25.0 KB  SHA: 49c381cb87911c2c...
-✓ hub-client.js        [v1.5.8]    11.6 KB  SHA: e3b0ce21059703a6...
-✓ scheduler.js         [v1.5.8]    17.1 KB  SHA: 74f3a7a77f961142...
-✓ supabase-client.js   [v1.5.8]    14.0 KB  SHA: c618ecd0e71f7acc...
-✓ cache-manager.js     [v1.5.8]    10.3 KB  SHA: 5ae405d6cfc3d67e...
-✓ tray-manager.js      [v1.5.8]     3.2 KB  SHA: e40f11848eec61a5...
-✓ hub-ui.html          [v1.5.8]    25.7 KB  SHA: 7b6f16afbda7aaa3...
-✓ desktop-ui.html      [v1.5.8]    63.3 KB  SHA: 27fb37e7f2174d88...
+# Bump minor version across modified modules (e.g. 1.6.4 -> 1.7.0)
+node update-manifest.js --bump=minor
 
-[SUCCESS] Updated manifest written to: desktop-app/modules-manifest.json
+# Explicitly set manifest and module target version
+node update-manifest.js 1.7.0
 ```
 
-### Step 4: Run the Test Suite
-Ensure all automated tests pass before committing:
+Example console output with auto-bump:
+```
+======================================================
+  ALS Modular Manifest Generator & Auto-Versioner
+======================================================
+
+⚡ [AUTO-BUMP] Detected code changes in automation.js without version bump.
+   Auto-incrementing 1.6.4 -> 1.6.5 in file and manifest...
+✓ automation.js        [v1.6.5]    32.6 KB  SHA: e49c381cb87911c2...
+✓ hub-client.js        [v1.6.4]    13.3 KB  SHA: 414d70b240ad2c5e...
+✓ scheduler.js         [v1.5.8]    18.7 KB  SHA: 4978584176387dc3...
+✓ supabase-client.js   [v1.6.4]    14.3 KB  SHA: 6e591947bbf65733...
+✓ cache-manager.js     [v1.5.8]    10.7 KB  SHA: a53b8baeae4a0f60...
+✓ tray-manager.js      [v1.5.8]     3.3 KB  SHA: 5f6eb0fac3a40211...
+✓ hub-ui.html          [v1.6.4]    89.0 KB  SHA: c61a16dea3845574...
+✓ desktop-ui.html      [v1.6.4]    78.5 KB  SHA: d2ebc665b5e5d750...
+
+[SUCCESS] Updated manifest (v1.6.5) written to: desktop-app/modules-manifest.json
+[INFO] Auto-bumped 1 module(s) due to detected code edits.
+[SYNC] Updated package.json version to v1.6.5
+```
+
+### Step 3: Run the Test Suite
+Ensure all automated unit tests pass:
 ```bash
 npm test
 ```
 
-### Step 5: Commit and Push to GitHub
-Commit the modified module file and `modules-manifest.json`:
+### Step 4: Commit and Push to GitHub
+Commit your changes and push to `main`:
 ```bash
-git add desktop-app/automation.js desktop-app/modules-manifest.json
-git commit -m "feat(automation): hotfix portal selector v1.5.9"
+git add desktop-app/ modules-manifest.json
+git commit -m "feat(automation): hotfix portal selector"
 git push origin main
 ```
 
-**That's it!** You do **not** need to run `electron-builder` or build an installer.
+**That's all!** You do **not** need to run `electron-builder` or distribute an installer.
 
 ---
 
