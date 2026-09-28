@@ -244,3 +244,13 @@ test('Hub Client Hardening: Atomic claiming prevents duplicate execution if alre
   hubClient.__test.resetRuntimeDependencies();
 });
 
+test('Hub Client Hardening: Active client returns cached instance immediately', async () => {
+  const dummyClient = { isDummy: true };
+  hubClient.__test.activeClients.set('TEST_DEV', dummyClient);
+
+  const client = await hubClient.getHubClientForDevice('TEST_DEV');
+  assert.strictEqual(client, dummyClient, 'Must return cached client from activeClients');
+
+  hubClient.__test.activeClients.delete('TEST_DEV');
+});
+

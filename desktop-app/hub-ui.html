@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.8 -->
+<!-- VERSION: 1.6.9 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -966,7 +966,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.8</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.9</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
@@ -1238,6 +1238,13 @@
             renderAccountList();
         }
 
+        function isAccountOnline(statusObj) {
+            if (!statusObj || !statusObj.current_status || !statusObj.current_status.includes('ONLINE')) return false;
+            if (!statusObj.last_seen) return false;
+            const diff = Date.now() - new Date(statusObj.last_seen).getTime();
+            return diff < 90000; // 90 seconds (consistent with webapp)
+        }
+
         // Load Accounts & Fetch Status
         async function loadAccounts(manualRefresh = false) {
             if (!window.electronAPI) return;
@@ -1258,7 +1265,7 @@
                         const data = await window.electronAPI.getHubAccountStatus(acc.device_id);
                         accountStatusMap[acc.device_id] = data;
 
-                        const isOnline = data && data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                        const isOnline = isAccountOnline(data && data.status);
                         if (isOnline) onlineCount++;
 
                         const proofIn = data && data.proof && data.proof.clock_in && data.proof.clock_in !== '--:--';
@@ -1521,7 +1528,7 @@
 
             const filtered = cachedAccounts.filter(acc => {
                 const data = accountStatusMap[acc.device_id] || {};
-                const isOnline = data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                const isOnline = isAccountOnline(data.status);
                 const hasProofIn = data.proof && data.proof.clock_in && data.proof.clock_in !== '--:--';
                 const hasProofOut = data.proof && data.proof.clock_out && data.proof.clock_out !== '--:--';
                 const needsProof = !hasProofIn || !hasProofOut;
@@ -1552,7 +1559,7 @@
 
             for (const acc of filtered) {
                 const data = accountStatusMap[acc.device_id] || {};
-                const isOnline = data.status && data.status.current_status && data.status.current_status.includes('ONLINE');
+                const isOnline = isAccountOnline(data.status);
                 const statusBadgeClass = isOnline ? 'online' : 'offline';
                 const statusLabel = isOnline ? 'ONLINE' : 'OFFLINE';
 
@@ -1565,7 +1572,9 @@
                     : `<span class="proof-val empty">--:--</span>`;
 
                 const lastSeenStr = data.status && data.status.last_seen 
-                    ? new Date(data.status.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) 
+                    ? (isOnline 
+                        ? new Date(data.status.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        : `${new Date(data.status.last_seen).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(data.status.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`) 
                     : 'Never';
 
                 let logsHtml = '<div style="color: var(--text-muted);">No activity recorded today.</div>';

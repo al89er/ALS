@@ -143,12 +143,12 @@ function initHubAccounts() {
   }
 }
 
-function initSingleAccount(account) {
-  if (!account || !account.device_id || !account.supabase_email || !account.supabase_password) return;
+async function initSingleAccount(account) {
+  if (!account || !account.device_id || !account.supabase_email || !account.supabase_password) return null;
   const envVars = cacheManager.getDeviceConfig();
   const supabaseUrl = envVars.supabase_url;
   const supabaseKey = envVars.supabase_key;
-  if (!supabaseUrl || !supabaseKey) return;
+  if (!supabaseUrl || !supabaseKey) return null;
 
   const deviceId = account.device_id;
   if (activeIntervals.has(deviceId)) {
@@ -181,21 +181,24 @@ function initSingleAccount(account) {
     }
   });
   
-  supabase.auth.signInWithPassword({
-    email: account.supabase_email,
-    password: account.supabase_password
-  }).then(({ data, error }) => {
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: account.supabase_email,
+      password: account.supabase_password
+    });
     if (error) {
       console.error(`[HUB] Auth failed for ${deviceId}:`, error.message);
-      return;
+      return null;
     }
     activeClients.set(deviceId, supabase);
     startHubHeartbeat(supabase, account);
     startHubCommandListener(supabase, account);
     console.log(`[HUB] Successfully connected account ${deviceId}!`);
-  }).catch(err => {
+    return supabase;
+  } catch (err) {
     console.error(`[HUB] Exception during auth for ${deviceId}:`, err.message);
-  });
+    return null;
+  }
 }
 
 function removeSingleAccount(deviceId) {
@@ -250,6 +253,24 @@ function startHubHeartbeat(supabase, account) {
 
       if (error) {
         console.error(`[HUB] Heartbeat failed for ${deviceId}:`, error.message);
+        // If auth expired or invalid after prolonged offline period, re-authenticate session
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('jwt') || msg.includes('token') || msg.includes('expired') || msg.includes('unauthorized') || error.status === 401 || error.code === 'PGRST301') {
+          console.log(`[HUB] Re-authenticating session for ${deviceId} after auth lapse...`);
+          try {
+            const { error: reauthErr } = await supabase.auth.signInWithPassword({
+              email: account.supabase_email,
+              password: account.supabase_password
+            });
+            if (reauthErr) {
+              console.error(`[HUB] Re-authentication failed for ${deviceId}:`, reauthErr.message);
+            } else {
+              console.log(`[HUB] Re-authenticated session for ${deviceId}!`);
+            }
+          } catch (reauthEx) {
+            console.error(`[HUB] Re-authentication exception for ${deviceId}:`, reauthEx.message);
+          }
+        }
       } else {
         // Channel health check: if channel degraded/closed, re-subscribe
         const currentChannel = activeChannels.get(deviceId);
@@ -387,38 +408,10 @@ async function getHubClientForDevice(deviceId) {
   const account = accounts.find(a => a.device_id === deviceId);
   if (!account || !account.supabase_email || !account.supabase_password) return null;
 
-  const envVars = cacheManager.getDeviceConfig();
-  const supabaseUrl = envVars.supabase_url;
-  const supabaseKey = envVars.supabase_key;
-  if (!supabaseUrl || !supabaseKey) return null;
-
-  try {
-    const client = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-        storageKey: `hub-auth-${account.device_id}`
-      }
-    });
-
-    const { data, error } = await client.auth.signInWithPassword({
-      email: account.supabase_email,
-      password: account.supabase_password
-    });
-    if (error) {
-      console.error(`[HUB] Authentication failed for ${deviceId}:`, error.message);
-      return null;
-    }
-    activeClients.set(deviceId, client);
-    return client;
-  } catch (err) {
-    console.error(`[HUB] Error creating client for ${deviceId}:`, err.message);
-    return null;
-  }
+  return await initSingleAccount(account);
 }
 
-const VERSION = '1.6.5';
+const VERSION = '1.6.6';
 
 module.exports = {
   VERSION,

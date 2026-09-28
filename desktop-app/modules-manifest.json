@@ -1,7 +1,7 @@
 {
-  "version": "1.6.8",
+  "version": "1.6.9",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-09-25T09:29:02.835Z",
+  "updatedAt": "2026-09-28T09:31:19.234Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -13,10 +13,10 @@
     },
     "hub-client": {
       "file": "hub-client.js",
-      "version": "1.6.5",
+      "version": "1.6.6",
       "type": "engine",
-      "sizeBytes": 14767,
-      "sha256": "b369ae1dc4850f56abaea5adb4c28a588b2fa59f350c1effffa39b8596548e47",
+      "sizeBytes": 15000,
+      "sha256": "cd035669ba1bbd57e48c5fc814512f04c27929c8622945ec72ae8dc9a8a84aff",
       "description": "Multi-account hub orchestrator, heartbeat recovery, and atomic queue"
     },
     "scheduler": {
@@ -53,10 +53,10 @@
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.8",
+      "version": "1.6.9",
       "type": "ui",
-      "sizeBytes": 91810,
-      "sha256": "609dc72595ad3c512f13b7a1ad670130d912f87e58ebcbc7ba773b7e9348dc3b",
+      "sizeBytes": 92270,
+      "sha256": "219b5dcf2db5289bb5d64bc0692233d011ed80e3a9e7ecff057538a9bc7587be",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
