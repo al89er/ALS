@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.8 -->
+<!-- VERSION: 1.6.9 -->
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
     <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net;">
     <title>ALS Desktop Engine</title>
     <link rel="icon" href="data:,">
@@ -14,8 +15,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
+            color-scheme: dark;
             --bg-color: #0b0f19;
-            --surface-color: rgba(30, 41, 59, 0.4);
+            --surface-color: rgba(22, 27, 34, 0.85);
             --border-color: rgba(255, 255, 255, 0.08);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
@@ -34,6 +36,12 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        html {
+            background-color: var(--bg-color);
+            color-scheme: dark;
+            min-height: 100%;
+        }
+
         body {
             background-color: var(--bg-color);
             color: var(--text-primary);
@@ -41,11 +49,26 @@
             background-image: 
                 radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
                 radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
-            background-attachment: fixed;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             overflow-x: hidden;
+        }
+
+        /* --- DARK SCROLLBAR --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
         }
 
         /* --- NAVIGATION BAR --- */
@@ -180,6 +203,7 @@
             padding: 1.5rem;
             box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
             margin-bottom: 1.5rem;
+            transform: translateZ(0);
         }
 
         .panel-header {

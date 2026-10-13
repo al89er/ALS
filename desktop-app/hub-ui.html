@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.10 -->
+<!-- VERSION: 1.6.11 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
     <title>ALS Server Hub Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {
+            color-scheme: dark;
             --bg-base: #0b0f19;
             --bg-surface: rgba(22, 27, 34, 0.85);
             --bg-surface-elevated: rgba(30, 36, 48, 0.9);
@@ -34,17 +36,37 @@
             padding: 0;
         }
 
+        html {
+            background-color: var(--bg-base);
+            color-scheme: dark;
+            min-height: 100%;
+        }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg-base);
             background-image: 
                 radial-gradient(circle at 10% 15%, rgba(59, 130, 246, 0.08), transparent 35%),
                 radial-gradient(circle at 90% 85%, rgba(16, 185, 129, 0.06), transparent 35%);
-            background-attachment: fixed;
             color: var(--text-primary);
             min-height: 100vh;
             padding: 24px;
-            overflow-y: overlay;
+        }
+
+        /* --- DARK SCROLLBAR --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
         }
 
         .container {
@@ -966,7 +988,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.10</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.11</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
