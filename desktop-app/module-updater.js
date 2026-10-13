@@ -249,7 +249,11 @@ async function installModuleUpdate(moduleName, updateInfo, manifestBaseUrl) {
     // 1. Verify SHA-256 Integrity
     if (updateInfo.sha256) {
       const computed = computeHash(buffer);
-      if (computed !== updateInfo.sha256) {
+      const text = buffer.toString('utf8');
+      const computedLF = computeHash(Buffer.from(text.replace(/\r\n/g, '\n'), 'utf8'));
+      const computedCRLF = computeHash(Buffer.from(text.replace(/\r?\n/g, '\r\n'), 'utf8'));
+      const matches = (computed === updateInfo.sha256 || computedLF === updateInfo.sha256 || computedCRLF === updateInfo.sha256);
+      if (!matches) {
         throw new Error(`Integrity verification failed for ${moduleName}! Expected ${updateInfo.sha256}, got ${computed}`);
       }
     }

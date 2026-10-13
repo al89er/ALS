@@ -85,6 +85,14 @@ function updateVersionInFile(filePath, newVersion) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function getNormalizedFileBuffer(filePath) {
+  const raw = fs.readFileSync(filePath);
+  if (/\.(js|json|html|htm|css|md|txt|env)$/i.test(filePath)) {
+    return Buffer.from(raw.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
+  }
+  return raw;
+}
+
 function updateManifest(customArg) {
   let existingManifest = {};
   if (fs.existsSync(manifestPath)) {
@@ -122,7 +130,7 @@ function updateManifest(customArg) {
       process.exit(1);
     }
 
-    let contentBuffer = fs.readFileSync(fullPath);
+    let contentBuffer = getNormalizedFileBuffer(fullPath);
     let sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
     let fileVersion = extractVersionFromFile(fullPath);
 
@@ -140,7 +148,7 @@ function updateManifest(customArg) {
         autoBumpsCount++;
 
         // Re-read updated file buffer and recompute hash
-        contentBuffer = fs.readFileSync(fullPath);
+        contentBuffer = getNormalizedFileBuffer(fullPath);
         sha256 = crypto.createHash('sha256').update(contentBuffer).digest('hex');
       }
     }

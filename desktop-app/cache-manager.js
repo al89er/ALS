@@ -319,7 +319,7 @@ function saveEngineConfig(config = {}) {
   return { target_url, show_browser };
 }
 
-const VERSION = '1.5.8';
+const VERSION = '1.5.9';
 
 module.exports = {
   VERSION,
