@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.7 -->
+<!-- VERSION: 1.6.8 -->
 <html lang="en">
 
 <head>
@@ -1419,8 +1419,9 @@ async function bindChannels() {
                 const info = activeDesktopModules[m.name] || {};
                 let ver = info.version;
                 if (!ver || ver === 'factory') {
-                    if (m.name === 'desktop-ui') ver = '1.6.5';
-                    else if (m.name === 'automation' || m.name === 'supabase-client' || m.name === 'hub-client') ver = '1.6.4';
+                    if (m.name === 'automation') ver = '1.6.5';
+                    else if (m.name === 'desktop-ui') ver = '1.6.7';
+                    else if (m.name === 'supabase-client' || m.name === 'hub-client') ver = '1.6.5';
                     else ver = '1.5.8';
                 }
                 const source = info.source || (ver !== '1.5.8' ? 'dynamic' : 'factory');

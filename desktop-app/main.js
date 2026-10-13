@@ -51,6 +51,7 @@ const supabaseModule = moduleLoader.loadModule('supabase-client', require('./sup
 const { initSupabase, supabase } = supabaseModule;
 const scheduler = moduleLoader.loadModule('scheduler', require('./scheduler'));
 const trayManager = moduleLoader.loadModule('tray-manager', require('./tray-manager'));
+const automation = moduleLoader.loadModule('automation', require('./automation'));
 
 let mainWindow;
 let tray;
