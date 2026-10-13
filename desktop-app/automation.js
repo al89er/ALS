@@ -5,6 +5,11 @@ const { chromium } = require('playwright');
 const path = require('path');
 const cacheManager = require('./cache-manager');
 
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0';
+const DEFAULT_BROWSER_ARGS = [
+  '--disable-blink-features=AutomationControlled'
+];
+
 async function sendTelegramAlert(message, deviceId = 'home_desktop_agent') {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -238,7 +243,9 @@ async function executeClockAction(actionType, supabase, options = {}) {
     context = await chromium.launchPersistentContext(userDataDir, {
       channel: 'msedge',
       headless: !config.showBrowser,
-      viewport: { width: 1280, height: 720 }
+      viewport: { width: 1280, height: 720 },
+      args: DEFAULT_BROWSER_ARGS,
+      userAgent: DEFAULT_USER_AGENT
     });
 
     const page = await context.newPage();
@@ -246,6 +253,11 @@ async function executeClockAction(actionType, supabase, options = {}) {
     // 3. Portal Navigation
     console.log('[PLAYWRIGHT] Navigating to target portal: ' + config.targetUrl);
     await page.goto(config.targetUrl);
+
+    const pageTitle = typeof page.title === 'function' ? await page.title().catch(() => '') : '';
+    if (pageTitle && (pageTitle.toLowerCase().includes('blocked') || pageTitle.toLowerCase().includes('forbidden'))) {
+      throw new Error(`PORTAL_BLOCKED: Target portal access was blocked by security gateway (${pageTitle}).`);
+    }
 
     // 4. Auth
     const isLoginPage = page.url().toLowerCase().includes('login') || await page.isVisible('input[type="password"]');
@@ -537,7 +549,9 @@ async function openDebugBrowser(supabase, options = {}) {
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'msedge',
     headless: false,
-    viewport: { width: 1280, height: 720 }
+    viewport: { width: 1280, height: 720 },
+    args: DEFAULT_BROWSER_ARGS,
+    userAgent: DEFAULT_USER_AGENT
   });
   const page = await context.newPage();
   await page.goto(config.targetUrl);
@@ -572,12 +586,20 @@ async function manualFetchProof(supabase, options = {}) {
         : path.join(basePath, '.als_upm_session');
     }
     context = await chromium.launchPersistentContext(userDataDir, {
+      channel: 'msedge',
       headless: !config.showBrowser,
-      viewport: { width: 1280, height: 720 }
+      viewport: { width: 1280, height: 720 },
+      args: DEFAULT_BROWSER_ARGS,
+      userAgent: DEFAULT_USER_AGENT
     });
 
     const page = await context.newPage();
     await page.goto(config.targetUrl);
+
+    const pageTitleManual = typeof page.title === 'function' ? await page.title().catch(() => '') : '';
+    if (pageTitleManual && (pageTitleManual.toLowerCase().includes('blocked') || pageTitleManual.toLowerCase().includes('forbidden'))) {
+      throw new Error(`PORTAL_BLOCKED: Target portal access was blocked by security gateway (${pageTitleManual}).`);
+    }
 
     const isLoginPage = page.url().toLowerCase().includes('login') || await page.isVisible('input[type="password"]');
 
@@ -744,7 +766,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.4';
+const VERSION = '1.6.5';
 
 module.exports = {
   VERSION,
