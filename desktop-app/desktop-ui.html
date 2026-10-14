@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.9 -->
+<!-- VERSION: 1.6.10 -->
 <html lang="en">
 
 <head>
@@ -996,13 +996,19 @@
             div.className = `log-entry ${statusClass}`;
             const dateStr = new Date(log.created_at).toLocaleString();
 
-            div.innerHTML = `
-                <div class="log-header">
-                    <span class="log-tag">${log.action ? log.action : 'SYS'}</span>
-                    <span class="log-time">${dateStr}</span>
-                </div>
-                <div class="log-message">${log.message || ''}</div>
+            const header = document.createElement('div');
+            header.className = 'log-header';
+            header.innerHTML = `
+                <span class="log-tag">${log.action ? log.action : 'SYS'}</span>
+                <span class="log-time">${dateStr}</span>
             `;
+
+            const msg = document.createElement('div');
+            msg.className = 'log-message';
+            msg.textContent = log.message || '';
+
+            div.appendChild(header);
+            div.appendChild(msg);
             return div;
         }
 

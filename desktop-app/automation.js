@@ -677,14 +677,9 @@ async function manualFetchProof(supabase, options = {}) {
     }
 
     if (proofData.clockIn === '--:--' && proofData.clockOut === '--:--') {
-       let debugDump = '';
-       for (const frame of page.frames()) {
-          try {
-              debugDump += await frame.content() + '\n\n';
-          } catch(e) {}
-       }
+       console.warn('[PLAYWRIGHT] Proof Extraction: Selectors #wm and #wk returned empty values.');
        if (clientToUse && typeof clientToUse.from === 'function') {
-         await remoteLog(clientToUse, 'manual_proof_sync', 'failed', `Proof Extraction Failed! Dump: ${debugDump.substring(0, 5000)}`, targetDeviceId);
+         await remoteLog(clientToUse, 'manual_proof_sync', 'failed', 'Proof Extraction Failed: Target portal did not render dashboard proof selectors (#twm, #wm, #wk).', targetDeviceId);
        }
     }
     
@@ -766,7 +761,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.5';
+const VERSION = '1.6.6';
 
 module.exports = {
   VERSION,

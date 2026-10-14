@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
     <title>ALS Dashboard v1.4.2 | Core</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <!-- PWA Requirements -->
@@ -20,8 +21,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
+            color-scheme: dark;
             --bg-color: #0b0f19;
-            --surface-color: rgba(30, 41, 59, 0.4);
+            --surface-color: rgba(22, 27, 34, 0.85);
             --border-color: rgba(255, 255, 255, 0.08);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
@@ -40,6 +42,12 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        html {
+            background-color: var(--bg-color);
+            color-scheme: dark;
+            min-height: 100%;
+        }
+
         body {
             background-color: var(--bg-color);
             color: var(--text-primary);
@@ -47,11 +55,26 @@
             background-image:
                 radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
                 radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
-            background-attachment: fixed;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             overflow-x: hidden;
+        }
+
+        /* --- DARK SCROLLBAR --- */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
         }
 
         /* --- NAVIGATION BAR --- */
@@ -1031,13 +1054,19 @@
             div.className = `log-entry ${statusClass}`;
             const dateStr = new Date(log.created_at).toLocaleString();
 
-            div.innerHTML = `
-                <div class="log-header">
-                    <span class="log-tag">${log.action ? log.action : 'SYS'}</span>
-                    <span class="log-time">${dateStr}</span>
-                </div>
-                <div class="log-message">${log.message || ''}</div>
+            const header = document.createElement('div');
+            header.className = 'log-header';
+            header.innerHTML = `
+                <span class="log-tag">${log.action ? log.action : 'SYS'}</span>
+                <span class="log-time">${dateStr}</span>
             `;
+
+            const msg = document.createElement('div');
+            msg.className = 'log-message';
+            msg.textContent = log.message || '';
+
+            div.appendChild(header);
+            div.appendChild(msg);
             return div;
         }
 

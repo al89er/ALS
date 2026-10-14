@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.11 -->
+<!-- VERSION: 1.6.12 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -988,7 +988,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.11</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.12</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
@@ -1599,6 +1599,16 @@
                         : `${new Date(data.status.last_seen).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(data.status.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`) 
                     : 'Never';
 
+                function escapeHtml(str) {
+                    if (!str) return '';
+                    return String(str)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                }
+
                 let logsHtml = '<div style="color: var(--text-muted);">No activity recorded today.</div>';
                 if (data.logs && data.logs.length > 0) {
                     logsHtml = data.logs.slice(0, 10).map(log => {
@@ -1610,7 +1620,7 @@
                             <div class="log-entry">
                                 <span class="log-time">[${time}]</span>
                                 <span class="${statusClass}">[${(log.status || 'INFO').toUpperCase()}]</span>
-                                <span class="log-msg">${log.message || ''}</span>
+                                <span class="log-msg">${escapeHtml(log.message || '')}</span>
                             </div>
                         `;
                     }).join('');

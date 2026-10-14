@@ -1,14 +1,14 @@
 {
-  "version": "1.6.11",
+  "version": "1.6.12",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-13T10:33:07.581Z",
+  "updatedAt": "2026-10-14T01:15:33.522Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.5",
+      "version": "1.6.6",
       "type": "engine",
-      "sizeBytes": 33655,
-      "sha256": "29bc5c44a8902c4b72489c99ec80f18718ac71b486bf530d2d0cf295294e752a",
+      "sizeBytes": 33611,
+      "sha256": "12c0137b8ddd689b7a833d5723837e7f4803d52812142f456ff7e764a2894cef",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
@@ -53,18 +53,18 @@
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.11",
+      "version": "1.6.12",
       "type": "ui",
-      "sizeBytes": 90633,
-      "sha256": "138398652c71875ab491ce08d5a5fc48de977a5363a10d5350cb12977f0ed1a5",
+      "sizeBytes": 91028,
+      "sha256": "d66a637da7bc08108c7adab869f31dab7676621af092830fadebf67acf3696e4",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.9",
+      "version": "1.6.10",
       "type": "ui",
-      "sizeBytes": 79734,
-      "sha256": "df5434397fcfe5df3f871e1759390bc96841a2c3b29b304447adda8a7cffb6f4",
+      "sizeBytes": 79921,
+      "sha256": "a21a9c9241b28b47fe860908a1c6cb710d807d07c7dcfe2f1b34a829a2c6eaa6",
       "description": "ALS Single Agent desktop interface"
     }
   }
