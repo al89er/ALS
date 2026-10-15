@@ -254,6 +254,25 @@ function extractVersionFromFile(filePath) {
 function getLoadedModuleInfo() {
   const info = { ...loadedModulesInfo };
 
+  let installedManifest = { modules: {} };
+  try {
+    const instPath = path.join(activeModulesDir, 'installed-manifest.json');
+    const compatPath = path.join(activeModulesDir, 'modules-manifest.json');
+    if (fs.existsSync(instPath)) {
+      installedManifest = JSON.parse(fs.readFileSync(instPath, 'utf8'));
+    } else if (fs.existsSync(compatPath)) {
+      installedManifest = JSON.parse(fs.readFileSync(compatPath, 'utf8'));
+    }
+  } catch (_) {}
+
+  let bundledManifest = { modules: {} };
+  try {
+    const bundPath = path.join(activeBaseDir, 'modules-manifest.json');
+    if (fs.existsSync(bundPath)) {
+      bundledManifest = JSON.parse(fs.readFileSync(bundPath, 'utf8'));
+    }
+  } catch (_) {}
+
   const knownTargets = [
     { name: 'automation', file: 'automation.js' },
     { name: 'hub-client', file: 'hub-client.js' },
@@ -266,23 +285,42 @@ function getLoadedModuleInfo() {
   ];
 
   for (const t of knownTargets) {
-    if (!info[t.name]) {
-      const dynamicPath = path.join(activeModulesDir, t.file);
-      const factoryPath = path.join(activeBaseDir, t.file);
+    const dynamicPath = path.join(activeModulesDir, t.file);
+    const factoryPath = path.join(activeBaseDir, t.file);
+    const dynamicExists = fs.existsSync(dynamicPath);
 
-      if (fs.existsSync(dynamicPath)) {
-        info[t.name] = {
-          source: 'dynamic',
-          path: dynamicPath,
-          version: extractVersionFromFile(dynamicPath)
-        };
-      } else if (fs.existsSync(factoryPath)) {
-        info[t.name] = {
-          source: 'factory',
-          path: factoryPath,
-          version: extractVersionFromFile(factoryPath)
-        };
+    const currentInfo = info[t.name];
+    const isUnresolvedVersion = !currentInfo || !currentInfo.version || currentInfo.version === 'factory' || currentInfo.version === 'custom';
+
+    if (isUnresolvedVersion || dynamicExists) {
+      const source = dynamicExists ? 'dynamic' : (currentInfo && currentInfo.source ? currentInfo.source : 'factory');
+      const targetPath = dynamicExists ? dynamicPath : (currentInfo && currentInfo.path ? currentInfo.path : factoryPath);
+
+      let version = null;
+      if (dynamicExists && installedManifest.modules && installedManifest.modules[t.name] && installedManifest.modules[t.name].version) {
+        version = installedManifest.modules[t.name].version;
       }
+      if (!version) {
+        const fileVer = extractVersionFromFile(targetPath);
+        if (fileVer && fileVer !== '1.5.8') {
+          version = fileVer;
+        }
+      }
+      if (!version && bundledManifest.modules && bundledManifest.modules[t.name] && bundledManifest.modules[t.name].version) {
+        version = bundledManifest.modules[t.name].version;
+      }
+      if (!version) {
+        version = (currentInfo && currentInfo.version && currentInfo.version !== 'factory' && currentInfo.version !== 'custom') 
+          ? currentInfo.version 
+          : extractVersionFromFile(targetPath);
+      }
+
+      info[t.name] = {
+        ...(currentInfo || {}),
+        source,
+        path: targetPath,
+        version: version || '1.5.8'
+      };
     }
   }
 

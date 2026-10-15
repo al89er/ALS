@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.10 -->
+<!-- VERSION: 1.6.11 -->
 <html lang="en">
 
 <head>
@@ -509,7 +509,7 @@
         <div class="nav-container">
             <div class="brand">
                 <span id="appBrandTitle">ALS Automation Engine</span>
-                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v?.?.?</span>
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.11</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -1449,12 +1449,9 @@ async function bindChannels() {
                 const info = activeDesktopModules[m.name] || {};
                 let ver = info.version;
                 if (!ver || ver === 'factory') {
-                    if (m.name === 'automation') ver = '1.6.5';
-                    else if (m.name === 'desktop-ui') ver = '1.6.7';
-                    else if (m.name === 'supabase-client' || m.name === 'hub-client') ver = '1.6.5';
-                    else ver = '1.5.8';
+                    ver = '1.6.12';
                 }
-                const source = info.source || (ver !== '1.5.8' ? 'dynamic' : 'factory');
+                const source = info.source || 'factory';
                 const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name || (m.name === 'desktop-ui' && (u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html')));
 
                 const item = document.createElement('div');
@@ -1541,6 +1538,14 @@ async function bindChannels() {
                     pendingDesktopUpdates = pendingDesktopUpdates.filter(u => u.name !== moduleName && u.file !== moduleName);
                     await loadDesktopModuleVersionsUI();
 
+                    if (window.electronAPI && window.electronAPI.getAppVersion) {
+                        try {
+                            const newVer = await window.electronAPI.getAppVersion();
+                            const badge = document.getElementById('appVersionBadge');
+                            if (badge && newVer) badge.textContent = `v${newVer}`;
+                        } catch (_) {}
+                    }
+
                     if (moduleName === 'desktop-ui' || moduleName === 'desktop-ui.html') {
                         notice.style.background = 'rgba(16, 185, 129, 0.2)';
                         notice.style.color = 'var(--status-online)';
@@ -1589,6 +1594,14 @@ async function bindChannels() {
                     pendingDesktopUpdates = [];
                     await loadDesktopModuleVersionsUI();
 
+                    if (window.electronAPI && window.electronAPI.getAppVersion) {
+                        try {
+                            const newVer = await window.electronAPI.getAppVersion();
+                            const badge = document.getElementById('appVersionBadge');
+                            if (badge && newVer) badge.textContent = `v${newVer}`;
+                        } catch (_) {}
+                    }
+
                     if (hadUIUpdate) {
                         notice.textContent = 'Updates installed! Reloading Desktop UI dynamically...';
                         setTimeout(() => {
@@ -1621,14 +1634,13 @@ async function bindChannels() {
 
         window.addEventListener('DOMContentLoaded', async () => {
             const badge = document.getElementById('appVersionBadge');
-            if (badge) {
-                badge.textContent = 'v1.6.5';
-            }
             if (window.electronAPI && window.electronAPI.getAppVersion) {
-                const version = await window.electronAPI.getAppVersion();
-                if (badge && version && version !== '1.5.8') {
-                    badge.textContent = `v${version}`;
-                }
+                try {
+                    const version = await window.electronAPI.getAppVersion();
+                    if (badge && version) {
+                        badge.textContent = `v${version}`;
+                    }
+                } catch (e) {}
             }
             await loadDeviceConfigUI();
             await loadDesktopModuleVersionsUI();

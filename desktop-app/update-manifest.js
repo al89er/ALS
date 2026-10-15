@@ -80,7 +80,7 @@ function updateVersionInFile(filePath, newVersion) {
     content = content.replace(/(const\s+VERSION\s*=\s*['"])[^'"]+(['"];?)/, `$1${newVersion}$2`);
   } else if (filePath.endsWith('.html')) {
     content = content.replace(/(<!--\s*VERSION:\s*)[^\s>]+(\s*-->)/, `$1${newVersion}$2`);
-    content = content.replace(/(id="hubVersionBadge">v)[^<]+(<\/span>)/, `$1${newVersion}$2`);
+    content = content.replace(/(id="(?:hubVersionBadge|appVersionBadge)">v)[^<]+(<\/span>)/g, `$1${newVersion}$2`);
   }
   fs.writeFileSync(filePath, content, 'utf8');
 }

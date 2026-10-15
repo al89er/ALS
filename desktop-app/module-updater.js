@@ -88,12 +88,18 @@ function compareSemver(v1, v2) {
 function getInstalledManifest() {
   const modulesDir = moduleLoader.getModulesDir();
   const manifestPath = path.join(modulesDir, 'installed-manifest.json');
+  const compatPath = path.join(modulesDir, 'modules-manifest.json');
   try {
     if (fs.existsSync(manifestPath)) {
-      return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      if (parsed) return parsed;
+    } else if (fs.existsSync(compatPath)) {
+      const parsed = JSON.parse(fs.readFileSync(compatPath, 'utf8'));
+      if (parsed) return parsed;
     }
   } catch (e) {}
-  return { version: '1.0.0', modules: {} };
+  const bundled = getBundledManifest();
+  return { version: bundled.version || '1.0.0', modules: {} };
 }
 
 /**
@@ -117,6 +123,12 @@ function saveInstalledManifest(manifest) {
   moduleLoader.ensureModulesDir();
   const manifestPath = path.join(modulesDir, 'installed-manifest.json');
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+
+  // Also maintain modules-manifest.json in modules directory for legacy/fallback readers
+  try {
+    const compatPath = path.join(modulesDir, 'modules-manifest.json');
+    fs.writeFileSync(compatPath, JSON.stringify(manifest, null, 2), 'utf8');
+  } catch (_) {}
 }
 
 /**
@@ -283,6 +295,11 @@ async function installModuleUpdate(moduleName, updateInfo, manifestBaseUrl) {
       sha256: updateInfo.sha256 || computeHash(buffer),
       installedAt: new Date().toISOString()
     };
+    if (updateInfo.manifestVersion) {
+      installed.version = updateInfo.manifestVersion;
+    } else if (updateInfo.targetVersion && compareSemver(updateInfo.targetVersion, installed.version) > 0) {
+      installed.version = updateInfo.targetVersion;
+    }
     saveInstalledManifest(installed);
 
     // 6. Invalidate module loader cache
@@ -313,8 +330,9 @@ async function installModuleUpdate(moduleName, updateInfo, manifestBaseUrl) {
  * Installs all available updates.
  * @param {Array} updatesList
  * @param {string} [manifestBaseUrl]
+ * @param {string} [remoteManifestVersion]
  */
-async function installAllUpdates(updatesList, manifestBaseUrl) {
+async function installAllUpdates(updatesList, manifestBaseUrl, remoteManifestVersion) {
   const results = [];
   let anyRequiresRelaunch = false;
 
@@ -323,6 +341,23 @@ async function installAllUpdates(updatesList, manifestBaseUrl) {
     results.push(res);
     if (res.success && res.requiresRelaunch) {
       anyRequiresRelaunch = true;
+    }
+  }
+
+  // Update overall installed manifest version
+  const installed = getInstalledManifest();
+  if (remoteManifestVersion) {
+    installed.version = remoteManifestVersion;
+    saveInstalledManifest(installed);
+  } else {
+    let highest = installed.version || '1.0.0';
+    for (const u of updatesList) {
+      const v = u.manifestVersion || u.targetVersion;
+      if (v && compareSemver(v, highest) > 0) highest = v;
+    }
+    if (highest !== installed.version) {
+      installed.version = highest;
+      saveInstalledManifest(installed);
     }
   }
 

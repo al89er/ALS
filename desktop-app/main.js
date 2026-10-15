@@ -125,15 +125,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-app-version', () => {
     try {
-      const dynamicManifestPath = path.join(moduleLoader.getModulesDir(), 'modules-manifest.json');
-      if (fs.existsSync(dynamicManifestPath)) {
-        const manifest = JSON.parse(fs.readFileSync(dynamicManifestPath, 'utf8'));
-        if (manifest.version) return manifest.version;
+      const installed = moduleUpdater.getInstalledManifest();
+      if (installed && installed.version && installed.version !== '1.0.0') {
+        return installed.version;
       }
-      const bundledManifestPath = path.join(__dirname, 'modules-manifest.json');
-      if (fs.existsSync(bundledManifestPath)) {
-        const bundled = JSON.parse(fs.readFileSync(bundledManifestPath, 'utf8'));
-        if (bundled.version) return bundled.version;
+      const bundled = moduleUpdater.getBundledManifest();
+      if (bundled && bundled.version) {
+        return bundled.version;
       }
     } catch (e) {}
     return app.getVersion();
@@ -362,6 +360,9 @@ app.whenReady().then(() => {
     if (!updateInfo) {
       return { success: false, error: `Module "${moduleName}" is already up to date.` };
     }
+    if (check.remoteManifestVersion) {
+      updateInfo.manifestVersion = check.remoteManifestVersion;
+    }
     return await moduleUpdater.installModuleUpdate(moduleName, updateInfo);
   });
 
@@ -370,7 +371,7 @@ app.whenReady().then(() => {
     if (!check.success || !check.availableUpdates || check.availableUpdates.length === 0) {
       return { success: false, error: check.error || 'No updates available.' };
     }
-    return await moduleUpdater.installAllUpdates(check.availableUpdates);
+    return await moduleUpdater.installAllUpdates(check.availableUpdates, null, check.remoteManifestVersion);
   });
 
   ipcMain.handle('get-module-versions', () => {

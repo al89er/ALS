@@ -252,12 +252,51 @@ test('Manifest Auto-Versioner: Increments semver and updates source files in-pla
   manifestUpdater.updateVersionInFile(tempJsPath, '1.6.5');
   assert.strictEqual(manifestUpdater.extractVersionFromFile(tempJsPath), '1.6.5');
 
-  // 4. In-place HTML file version updating
+  // 4. In-place HTML file version updating (both hub and single agent badges)
   const tempHtmlPath = path.join(testModulesDir, 'version_test.html');
-  fs.writeFileSync(tempHtmlPath, "<!-- VERSION: 1.6.4 -->\n<div><span id=\"hubVersionBadge\">v1.6.4</span></div>\n", 'utf8');
+  fs.writeFileSync(tempHtmlPath, "<!-- VERSION: 1.6.4 -->\n<div><span id=\"hubVersionBadge\">v1.6.4</span><span id=\"appVersionBadge\">v1.6.4</span></div>\n", 'utf8');
   manifestUpdater.updateVersionInFile(tempHtmlPath, '1.6.5');
   assert.strictEqual(manifestUpdater.extractVersionFromFile(tempHtmlPath), '1.6.5');
   const updatedHtml = fs.readFileSync(tempHtmlPath, 'utf8');
   assert.ok(updatedHtml.includes('id="hubVersionBadge">v1.6.5</span>'));
+  assert.ok(updatedHtml.includes('id="appVersionBadge">v1.6.5</span>'));
 });
+
+test('Module Updater & Loader: Installed updates synchronize manifest version and module info', async () => {
+  const dummyCode = "const VERSION = '1.6.15';\nmodule.exports = { VERSION, hello: () => 'world' };\n";
+  const dummyHash = moduleUpdater.computeHash(Buffer.from(dummyCode, 'utf8'));
+
+  const origFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => Buffer.from(dummyCode, 'utf8')
+  });
+
+  const updateInfo = {
+    file: 'automation.js',
+    targetVersion: '1.6.15',
+    manifestVersion: '1.6.15',
+    sha256: dummyHash,
+    requiresRelaunch: true
+  };
+
+  const res = await moduleUpdater.installModuleUpdate('automation', updateInfo);
+  assert.strictEqual(res.success, true);
+
+  // 1. Verify installed-manifest.json has version set to 1.6.15
+  const installed = moduleUpdater.getInstalledManifest();
+  assert.strictEqual(installed.version, '1.6.15');
+  assert.ok(installed.modules['automation']);
+  assert.strictEqual(installed.modules['automation'].version, '1.6.15');
+
+  // 2. Verify getLoadedModuleInfo resolves the dynamic module version from installed-manifest
+  const loadedInfo = moduleLoader.getLoadedModuleInfo();
+  assert.ok(loadedInfo['automation']);
+  assert.strictEqual(loadedInfo['automation'].source, 'dynamic');
+  assert.strictEqual(loadedInfo['automation'].version, '1.6.15');
+
+  global.fetch = origFetch;
+});
+
 
