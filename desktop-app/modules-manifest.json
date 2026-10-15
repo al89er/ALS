@@ -1,7 +1,7 @@
 {
   "version": "1.6.12",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-15T04:58:10.966Z",
+  "updatedAt": "2026-10-15T05:01:52.164Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -21,10 +21,10 @@
     },
     "scheduler": {
       "file": "scheduler.js",
-      "version": "1.5.9",
+      "version": "1.5.10",
       "type": "engine",
-      "sizeBytes": 18679,
-      "sha256": "6ca06b72163055ff02f13d59c8a836ec27a783ace7b84a1c64ae10a295cb5d47",
+      "sizeBytes": 23853,
+      "sha256": "adc8528eed9295aa7283d6d46b070006ee3985874e31754f53876c5ca5ba5aa6",
       "description": "Daily schedule generator, node-cron triggers, and missed action recovery"
     },
     "supabase-client": {

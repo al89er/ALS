@@ -611,6 +611,73 @@ test('Reliability Improvements', async (t) => {
       global.fetch = originalFetch;
     }
   });
+
+  await t.test('Health Diagnostics: runPortalHealthDiagnostics handles healthy, captive portal, maintenance, and WAF blocks', async () => {
+    const { runPortalHealthDiagnostics } = scheduler.__test;
+    assert.strictEqual(typeof runPortalHealthDiagnostics, 'function');
+
+    const originalFetch = global.fetch;
+
+    try {
+      // 1. Scenario: Healthy Portal (200 OK)
+      global.fetch = async (url) => {
+        if (url.includes('neverssl')) {
+          return { text: async () => '<html><body>OK</body></html>' };
+        }
+        return {
+          status: 200,
+          text: async () => '<html><body>UPM Perakam Waktu Dashboard</body></html>'
+        };
+      };
+
+      const healthyRes = await runPortalHealthDiagnostics(mockSupabase, { deviceId: 'TEST_DEV' });
+      assert.strictEqual(healthyRes.network, 'ok');
+      assert.strictEqual(healthyRes.portal, 'ok');
+      assert.strictEqual(healthyRes.issue, null);
+      assert.ok(mockSupabase._inserts.some(i => i.action === 'preflight_diagnostic' && i.status === 'success'));
+
+      // 2. Scenario: Captive Portal detected via route check
+      global.fetch = async (url) => {
+        if (url.includes('neverssl')) {
+          return { text: async () => 'Captive Portal Login Required' };
+        }
+        return { status: 200, text: async () => '<html></html>' };
+      };
+
+      const cpRes = await runPortalHealthDiagnostics(mockSupabase, { deviceId: 'TEST_DEV' });
+      assert.strictEqual(cpRes.network, 'captive_portal');
+      assert.ok(cpRes.issue.includes('Captive Portal'));
+      assert.ok(mockSupabase._inserts.some(i => i.action === 'preflight_diagnostic' && i.status === 'warning'));
+
+      // 3. Scenario: Portal 503 Maintenance
+      global.fetch = async (url) => {
+        if (url.includes('neverssl')) {
+          return { text: async () => '<html><body>OK</body></html>' };
+        }
+        return { status: 503, text: async () => 'Service Unavailable - Under Maintenance' };
+      };
+
+      const maintRes = await runPortalHealthDiagnostics(mockSupabase, { deviceId: 'TEST_DEV' });
+      assert.strictEqual(maintRes.portal, 'server_error');
+      assert.ok(maintRes.issue.includes('503'));
+
+      // 4. Scenario: FortiWeb / FortiGuard WAF block
+      global.fetch = async (url) => {
+        if (url.includes('neverssl')) {
+          return { text: async () => '<html><body>OK</body></html>' };
+        }
+        return { status: 200, text: async () => '<html><body>FortiWeb Web Application Firewall - Blocked</body></html>' };
+      };
+
+      const wafRes = await runPortalHealthDiagnostics(mockSupabase, { deviceId: 'TEST_DEV' });
+      assert.strictEqual(wafRes.portal, 'waf_blocked');
+      assert.ok(wafRes.issue.includes('FortiWeb/FortiGuard'));
+
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });
+
 
 

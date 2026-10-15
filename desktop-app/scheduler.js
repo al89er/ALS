@@ -144,8 +144,115 @@ function generateRandomTimeStr(baseTimeStr, durationMinutes = 5) {
 // Global references to running cron tasks
 let clockInTask = null;
 let clockOutTask = null;
+let diagnosticTask = null;
+
+async function runPortalHealthDiagnostics(supabase, options = {}) {
+  const deviceConfig = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
+  const targetDeviceId = options.deviceId || deviceConfig.device_id || 'home_desktop_agent';
+  const targetUrl = options.targetUrl || deviceConfig.target_url || 'https://perakamwaktu.upm.edu.my/';
+
+  const results = {
+    timestamp: new Date().toISOString(),
+    network: 'ok',
+    portal: 'ok',
+    statusCode: null,
+    issue: null
+  };
+
+  // 1. Network / Captive Portal check
+  try {
+    const fetchResp = await fetch('http://neverssl.com', { signal: AbortSignal.timeout(5000) });
+    const text = await fetchResp.text();
+    if (!text.includes('<html')) {
+      results.network = 'captive_portal';
+      results.issue = 'Wi-Fi Captive Portal detected (redirected). Network requires campus login.';
+    }
+  } catch (netErr) {
+    console.warn('[HEALTH-CHECK] Pre-flight route ping warning:', netErr.message);
+  }
+
+  // 2. Target Portal Reachability check
+  if (!results.issue) {
+    try {
+      const portalResp = await fetch(targetUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+        }
+      });
+      results.statusCode = portalResp.status;
+
+      if (portalResp.status >= 500) {
+        results.portal = 'server_error';
+        results.issue = `UPM Portal returned server error HTTP ${portalResp.status}. Possible server maintenance.`;
+      } else {
+        const portalText = (await portalResp.text().catch(() => '')).toLowerCase();
+        if (
+          portalText.includes('penyelenggaraan') ||
+          portalText.includes('maintenance') ||
+          portalText.includes('under maintenance')
+        ) {
+          results.portal = 'maintenance';
+          results.issue = 'UPM Portal is currently displaying a maintenance notice.';
+        } else if (
+          portalText.includes('fortiguard') ||
+          portalText.includes('fortiweb') ||
+          portalText.includes('web filter blocked')
+        ) {
+          results.portal = 'waf_blocked';
+          results.issue = 'UPM Security Gateway (FortiWeb/FortiGuard) block detected.';
+        }
+      }
+    } catch (portalErr) {
+      results.portal = 'unreachable';
+      results.issue = `Unable to connect to UPM Portal (${portalErr.message}). Check internet connectivity.`;
+    }
+  }
+
+  // 3. Handle results
+  if (results.issue) {
+    console.warn(`[HEALTH-CHECK] Diagnostic issue detected: ${results.issue}`);
+    try {
+      if (supabase && typeof supabase.from === 'function') {
+        await supabase.from('logs').insert({
+          action: 'preflight_diagnostic',
+          status: 'warning',
+          message: results.issue,
+          device_id: targetDeviceId
+        });
+      }
+    } catch (_) {}
+
+    // Dispatch early warning alert to Telegram
+    try {
+      const { sendTelegramAlert } = require('./automation').__test || require('./automation');
+      if (typeof sendTelegramAlert === 'function') {
+        const alertMsg = `⚠️ [ALS Desktop] Pre-Flight Health Diagnostic Warning!\n\nIssue detected prior to scheduled attendance:\n📌 ${results.issue}\n\nScheduled Clock-In: ${options.scheduledTime || 'Upcoming'}`;
+        await sendTelegramAlert(alertMsg, targetDeviceId);
+      }
+    } catch (telegramErr) {
+      console.warn('[HEALTH-CHECK] Error dispatching diagnostic Telegram alert:', telegramErr.message);
+    }
+  } else {
+    console.log('[HEALTH-CHECK] Pre-flight portal diagnostics PASSED. Portal is online and responsive.');
+    try {
+      if (supabase && typeof supabase.from === 'function') {
+        await supabase.from('logs').insert({
+          action: 'preflight_diagnostic',
+          status: 'success',
+          message: `Pre-flight health diagnostics passed (HTTP ${results.statusCode || 200}).`,
+          device_id: targetDeviceId
+        });
+      }
+    } catch (_) {}
+  }
+
+  return results;
+}
 
 function scheduleCronJobs(scheduleData, supabase) {
+  if (diagnosticTask) diagnosticTask.stop();
   if (clockInTask) clockInTask.stop();
   if (clockOutTask) clockOutTask.stop();
 
@@ -168,6 +275,27 @@ function scheduleCronJobs(scheduleData, supabase) {
   const cronOutM = outTime.getMinutes();
   
   if (!scheduleData.clock_in_done) {
+    // Pre-flight health diagnostics scheduled 25 minutes prior to Clock IN
+    const diagTime = new Date();
+    diagTime.setHours(Number(inH), Number(inM), 0, 0);
+    diagTime.setMinutes(diagTime.getMinutes() - 25);
+    const cronDiagH = diagTime.getHours();
+    const cronDiagM = diagTime.getMinutes();
+
+    diagnosticTask = cron.schedule(`${cronDiagM} ${cronDiagH} * * *`, async () => {
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      if (scheduleData.date !== todayStr) return;
+      console.log('[SCHEDULER] Triggering scheduled pre-flight portal health diagnostic...');
+      try {
+        await runPortalHealthDiagnostics(supabase, {
+          deviceId: scheduleData.device_id,
+          scheduledTime: scheduleData.scheduled_clock_in
+        });
+      } catch (err) {
+        console.error('[SCHEDULER] Error during pre-flight diagnostics:', err.message);
+      }
+    });
+
     clockInTask = cron.schedule(`${cronInM} ${cronInH} * * *`, async () => {
       const todayStr = new Date().toLocaleDateString('en-CA');
       if (scheduleData.date !== todayStr) {
@@ -437,6 +565,10 @@ function stop() {
     global.midnightTask.stop();
     global.midnightTask = null;
   }
+  if (diagnosticTask) {
+    diagnosticTask.stop();
+    diagnosticTask = null;
+  }
   if (clockInTask) {
     clockInTask.stop();
     clockInTask = null;
@@ -447,15 +579,17 @@ function stop() {
   }
 }
 
-const VERSION = '1.5.9';
+const VERSION = '1.5.10';
 
 module.exports = {
   VERSION,
   init,
   stop,
+  runPortalHealthDiagnostics,
   __test: {
     buildLocalTargetDate,
     scheduleCronJobs,
-    checkMissedActions
+    checkMissedActions,
+    runPortalHealthDiagnostics
   }
 };
