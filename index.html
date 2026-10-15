@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark">
-    <title>ALS Dashboard v1.4.2 | Core</title>
+    <title>ALS Dashboard v1.6.0 | Core</title>
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
     <!-- PWA Requirements -->
     <link rel="manifest" href="manifest.json">
@@ -765,7 +765,7 @@
                 <div class="brand">
                     ALS Hub
                     <span
-                        style="font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 6px; letter-spacing: 0.5px;">v1.5.8</span>
+                        style="font-size: 0.7rem; font-weight: 600; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 6px; letter-spacing: 0.5px;">v1.6.0</span>
                     <div class="status-badge" id="statusBadge">
                         <div class="status-dot"></div>
                         <span id="statusText">Connecting...</span>
@@ -783,6 +783,12 @@
                         title="Biometric Security">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.5-1 6.8-2.8 9.6m-3.4-2A15.9 15.9 0 0 0 12 21c4.4 0 8-3.6 8-8V9a8 8 0 1 0-16 0v2"></path></svg>
                         <span id="navBioLabel">Biometrics</span>
+                    </button>
+                    <button id="navNotifyBtn" onclick="togglePushNotifications()"
+                        style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;"
+                        title="Web Push Notifications">
+                        <svg id="navNotifyIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                        <span id="navNotifyLabel">Alerts</span>
                     </button>
                     <button onclick="handleSignOut()"
                         style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;"
@@ -1797,6 +1803,149 @@
             }
         }
 
+        // ==========================================
+        // PWA NOTIFICATIONS & REALTIME ALERTS
+        // ==========================================
+        const NOTIFY_KEY = 'als_push_notifications_enabled';
+        let lastNotifiedProof = { in: null, out: null };
+
+        function isNotificationsSupported() {
+            return 'Notification' in window;
+        }
+
+        function checkNotificationState() {
+            const btn = document.getElementById('navNotifyBtn');
+            const label = document.getElementById('navNotifyLabel');
+            const icon = document.getElementById('navNotifyIcon');
+            if (!btn || !label || !icon) return;
+
+            if (!isNotificationsSupported()) {
+                btn.style.display = 'none';
+                return;
+            }
+
+            btn.style.display = 'flex';
+            const perm = Notification.permission;
+            const userPref = localStorage.getItem(NOTIFY_KEY);
+
+            if (perm === 'granted' && userPref !== 'false') {
+                btn.style.background = 'rgba(16, 185, 129, 0.15)';
+                btn.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                btn.style.color = '#34d399';
+                label.innerText = 'Alerts: On';
+                icon.innerHTML = '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>';
+            } else if (perm === 'denied') {
+                btn.style.background = 'rgba(239, 68, 68, 0.15)';
+                btn.style.borderColor = 'rgba(239, 68, 68, 0.35)';
+                btn.style.color = '#f87171';
+                label.innerText = 'Alerts: Blocked';
+                icon.innerHTML = '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                btn.style.background = 'rgba(148, 163, 184, 0.12)';
+                btn.style.borderColor = 'rgba(148, 163, 184, 0.25)';
+                btn.style.color = 'var(--text-secondary)';
+                label.innerText = 'Alerts: Off';
+                icon.innerHTML = '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path>';
+            }
+        }
+
+        async function togglePushNotifications() {
+            if (!isNotificationsSupported()) {
+                alert('Web notifications are not supported by this browser.');
+                return;
+            }
+
+            if (Notification.permission === 'denied') {
+                alert('Notifications are blocked in your browser settings.\n\nPlease allow notifications for this site in your browser settings (click the padlock icon in your browser URL bar) to receive live attendance alerts.');
+                return;
+            }
+
+            if (Notification.permission !== 'granted') {
+                const result = await Notification.requestPermission();
+                if (result === 'granted') {
+                    localStorage.setItem(NOTIFY_KEY, 'true');
+                    checkNotificationState();
+                    triggerPushNotification('🔔 ALS Notifications Enabled', 'You will receive immediate alerts when clock actions complete and proof updates.', 'als-welcome');
+                } else {
+                    checkNotificationState();
+                }
+                return;
+            }
+
+            // Already granted: toggle mute or test
+            const isCurrentlyEnabled = localStorage.getItem(NOTIFY_KEY) !== 'false';
+            if (isCurrentlyEnabled) {
+                if (confirm('Push alerts are currently active.\n\nDo you want to MUTE attendance notifications on this device?')) {
+                    localStorage.setItem(NOTIFY_KEY, 'false');
+                    checkNotificationState();
+                }
+            } else {
+                localStorage.setItem(NOTIFY_KEY, 'true');
+                checkNotificationState();
+                triggerPushNotification('🔔 ALS Notifications Active', 'Attendance alerts have been re-enabled.', 'als-active');
+            }
+        }
+
+        function triggerPushNotification(title, body, tag = 'als-alert') {
+            if (!isNotificationsSupported() || Notification.permission !== 'granted') return;
+            if (localStorage.getItem(NOTIFY_KEY) === 'false') return;
+
+            const options = {
+                body: body,
+                icon: './icon-192.png',
+                badge: './icon-192.png',
+                tag: tag,
+                renotify: true,
+                vibrate: [200, 100, 200]
+            };
+
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.showNotification(title, options);
+                }).catch(() => {
+                    try { new Notification(title, options); } catch (e) { /* ignore */ }
+                });
+            } else {
+                try {
+                    new Notification(title, options);
+                } catch (e) {
+                    console.warn('[NOTIFY] Direct Notification constructor failed:', e);
+                }
+            }
+        }
+
+        function handlePushNotificationForLog(log) {
+            if (!log || !log.message) return;
+            const msg = log.message;
+
+            if (msg.includes('Clock-in Successful') || msg.includes('Clock-in confirmed')) {
+                triggerPushNotification('✅ ALS Clock-in Confirmed', msg, 'als-clock-in');
+            } else if (msg.includes('Clock-out Successful') || msg.includes('Clock-out confirmed')) {
+                triggerPushNotification('✅ ALS Clock-out Confirmed', msg, 'als-clock-out');
+            } else if (msg.includes('Captive Portal detected')) {
+                triggerPushNotification('⚠️ Campus Network Warning', 'Wi-Fi captive portal detected! Campus login required.', 'als-health');
+            } else if (msg.includes('UPM Security Gateway') || msg.includes('FortiGuard')) {
+                triggerPushNotification('⚠️ Security Gateway Block', 'Target portal access was blocked by FortiGuard/FortiWeb.', 'als-security');
+            } else if (log.status === 'failed' || log.status === 'error') {
+                triggerPushNotification('⚠️ ALS Attendance Alert', `${log.action ? `[${log.action.toUpperCase()}] ` : ''}${msg}`, 'als-error');
+            }
+        }
+
+        function handlePushNotificationForProof(proof) {
+            if (!proof) return;
+            const inTime = proof.clock_in && proof.clock_in !== '--:--' && proof.clock_in !== '?' ? proof.clock_in : null;
+            const outTime = proof.clock_out && proof.clock_out !== '--:--' && proof.clock_out !== '?' ? proof.clock_out : null;
+
+            if (inTime && inTime !== lastNotifiedProof.in) {
+                lastNotifiedProof.in = inTime;
+                triggerPushNotification('🕒 Attendance Recorded', `Today's clock-in verified at ${inTime}`, 'als-proof-in');
+            }
+            if (outTime && outTime !== lastNotifiedProof.out) {
+                lastNotifiedProof.out = outTime;
+                triggerPushNotification('🕒 Attendance Recorded', `Today's clock-out verified at ${outTime}`, 'als-proof-out');
+            }
+        }
+
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
 
@@ -1830,11 +1979,13 @@
                 loginOverlay.style.display = 'none';
                 appContainer.style.display = 'block';
                 checkBiometricState();
+                checkNotificationState();
                 initializeApp();
             } else {
                 loginOverlay.style.display = 'flex';
                 appContainer.style.display = 'none';
                 checkBiometricState();
+                checkNotificationState();
             }
         }
 
@@ -1896,6 +2047,7 @@
                         }
                         const el = createLogElement(payload.new);
                         logsContainer.insertBefore(el, logsContainer.firstChild);
+                        handlePushNotificationForLog(payload.new);
                     }
                 })
                 .subscribe();
@@ -1905,6 +2057,7 @@
                     const todayStr = new Date().toLocaleDateString('en-CA');
                     if (payload.new && payload.new.date === todayStr && (!payload.new.device_id || payload.new.device_id === activeDeviceId)) {
                         updateProofUI(payload.new);
+                        handlePushNotificationForProof(payload.new);
                     }
                 })
                 .subscribe();
@@ -1932,6 +2085,7 @@
             fetchConfig();
             fetchTodaysData();
             bindChannels();
+            checkNotificationState();
         }
 
         // Call checkSession instead of initializeApp on load
