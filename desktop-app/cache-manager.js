@@ -389,7 +389,7 @@ function getLatestProofImage(dateStr) {
   return null;
 }
 
-const VERSION = '1.5.13';
+const VERSION = '1.6.14';
 
 module.exports = {
   VERSION,

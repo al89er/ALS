@@ -507,7 +507,7 @@ async function getHubClientForDevice(deviceId) {
   return await initSingleAccount(account);
 }
 
-const VERSION = '1.6.8';
+const VERSION = '1.6.14';
 
 module.exports = {
   VERSION,

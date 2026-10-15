@@ -1,70 +1,70 @@
 {
-  "version": "1.6.13",
+  "version": "1.6.14",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-15T09:38:24.188Z",
+  "updatedAt": "2026-10-15T09:51:16.524Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.12",
+      "version": "1.6.14",
       "type": "engine",
       "sizeBytes": 52616,
-      "sha256": "7b73be57ea8e3fa08d4d7b60dedb00f5d90fa5ad681e311513d9940ec5ddabd8",
+      "sha256": "098e13b24b050c68a6576393bf5b89fdf4e1c8d26a1b76ce039740a8f1d47670",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
       "file": "hub-client.js",
-      "version": "1.6.8",
+      "version": "1.6.14",
       "type": "engine",
-      "sizeBytes": 17972,
-      "sha256": "57801f44820fd4b51d24ef838d8cd5acfed6b8650c980e1e5c933d917bd7afc8",
+      "sizeBytes": 17973,
+      "sha256": "d7982e042ed926cb28884c76d7a56dc5601f2d9e1fa8990c1f8885139989b272",
       "description": "Multi-account hub orchestrator, heartbeat recovery, and atomic queue"
     },
     "scheduler": {
       "file": "scheduler.js",
-      "version": "1.5.10",
+      "version": "1.6.14",
       "type": "engine",
       "sizeBytes": 23853,
-      "sha256": "adc8528eed9295aa7283d6d46b070006ee3985874e31754f53876c5ca5ba5aa6",
+      "sha256": "95435cf69dc1ff53caa8f83d1835f748e9b0648164d595dce097d3dbdef04a61",
       "description": "Daily schedule generator, node-cron triggers, and missed action recovery"
     },
     "supabase-client": {
       "file": "supabase-client.js",
-      "version": "1.6.5",
+      "version": "1.6.14",
       "type": "network",
-      "sizeBytes": 14259,
-      "sha256": "b387aa8972b699772f082a3aede0c7f906a9a57b8aa58477e5a7ec78dec9490d",
+      "sizeBytes": 14260,
+      "sha256": "3eac2b862a6de8f5739fee7d3aa7b8759dd7dc5c1b4069164f5795e9229276f6",
       "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
     },
     "cache-manager": {
       "file": "cache-manager.js",
-      "version": "1.5.13",
+      "version": "1.6.14",
       "type": "storage",
       "sizeBytes": 13266,
-      "sha256": "88b861836679d7e032361a7f62b802cf80df93ab9e782b5f30b9e70df71337f3",
+      "sha256": "3d5f81dfcff66f60f9de11b7f08703a7aa2566fc61cc34ab8ad5ccba5313b86f",
       "description": "Local JSON cache, settings persistence, and hub accounts manager"
     },
     "tray-manager": {
       "file": "tray-manager.js",
-      "version": "1.5.9",
+      "version": "1.6.14",
       "type": "ui",
-      "sizeBytes": 3288,
-      "sha256": "9cc0bb682175837a546dd6484eff90b619bd916d749ec3b69a4d27663a25734c",
+      "sizeBytes": 3289,
+      "sha256": "8a60529c12d912690a8b020f5bf354514a6845ecc55fc04578315b67e3eb0d0e",
       "description": "Modular Windows system tray tooltip and context menu formatter"
     },
     "hub-ui": {
       "file": "hub-ui.html",
-      "version": "1.6.13",
+      "version": "1.6.14",
       "type": "ui",
-      "sizeBytes": 91584,
-      "sha256": "98bdb86e0354600df814bd7b4923d48956a42710c68ddcfbbfa3c5696dfaaddc",
+      "sizeBytes": 92683,
+      "sha256": "8a3ceb14d6c85b7c6b1c1ab3484f2fdcddddfad3a456de5e5ace26444ddf070a",
       "description": "ALS Server Hub administrative UI"
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.13",
+      "version": "1.6.14",
       "type": "ui",
-      "sizeBytes": 95004,
-      "sha256": "521a5960eecf34b18aa3e0cc849af7eb83ee317d6d41f4ebf19ae5900668a9ad",
+      "sizeBytes": 96213,
+      "sha256": "ffc7f13f8a65f9edb6b8bb9771ad96f76b58147a06d521b8bff26a1e1aaa04e5",
       "description": "ALS Single Agent desktop interface"
     }
   }

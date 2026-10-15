@@ -579,7 +579,7 @@ function stop() {
   }
 }
 
-const VERSION = '1.5.10';
+const VERSION = '1.6.14';
 
 module.exports = {
   VERSION,

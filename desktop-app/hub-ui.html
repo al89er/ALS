@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.13 -->
+<!-- VERSION: 1.6.14 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -988,7 +988,7 @@
             <div class="header-title-group">
                 <span style="font-size: 24px;">⚡</span>
                 <h1 class="app-title">ALS Server Hub</h1>
-                <span class="version-tag" id="hubVersionBadge">v1.6.13</span>
+                <span class="version-tag" id="hubVersionBadge">v1.6.14</span>
             </div>
             <div class="hub-realtime-status">
                 <div class="pulse-indicator"></div>
@@ -1995,6 +1995,21 @@
             }
         }
 
+        function compareSemver(v1, v2) {
+            if (!v1 && !v2) return 0;
+            if (!v1) return -1;
+            if (!v2) return 1;
+            const p1 = String(v1).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            const p2 = String(v2).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                const num1 = p1[i] || 0;
+                const num2 = p2[i] || 0;
+                if (num1 > num2) return 1;
+                if (num1 < num2) return -1;
+            }
+            return 0;
+        }
+
         function renderModulesTable() {
             const tbody = document.getElementById('modulesTableBody');
             if (!tbody) return;
@@ -2014,7 +2029,7 @@
                 const info = activeModuleInfo[mod.name] || activeModuleInfo[mod.name + '.html'] || {};
                 let ver = info.version;
                 if (!ver || ver === 'factory') {
-                    ver = '1.6.12';
+                    ver = '1.6.14';
                 }
                 const source = info.source || 'factory';
                 const update = pendingUpdates.find(u => u.name === mod.name || u.file === mod.name || u.name === mod.name + '.html' || u.file === mod.name + '.html');
@@ -2026,8 +2041,14 @@
                 let actionBtn = '<span style="color: var(--text-muted);">-</span>';
 
                 if (update) {
-                    statusBadge = `<span style="color: var(--warning); font-weight: 600;">Update: v${update.targetVersion}</span>`;
-                    actionBtn = `<button class="btn-action primary" onclick="installSingleUpdateUI('${update.name}')" style="padding: 4px 10px; font-size: 11px;">Update</button>`;
+                    const diff = compareSemver(update.targetVersion, ver);
+                    if (diff > 0) {
+                        statusBadge = `<span style="color: var(--warning); font-weight: 600;">Update: v${update.targetVersion}</span>`;
+                        actionBtn = `<button class="btn-action primary" onclick="installSingleUpdateUI('${update.name}')" style="padding: 4px 10px; font-size: 11px;">Update</button>`;
+                    } else if (diff === 0) {
+                        statusBadge = `<span style="color: #60a5fa; font-weight: 600;">Patch ready</span>`;
+                        actionBtn = `<button class="btn-action primary" onclick="installSingleUpdateUI('${update.name}')" style="padding: 4px 10px; font-size: 11px;">Update</button>`;
+                    }
                 }
 
                 const sourceBadge = source === 'dynamic' 

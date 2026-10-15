@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.13 -->
+<!-- VERSION: 1.6.14 -->
 <html lang="en">
 
 <head>
@@ -509,7 +509,7 @@
         <div class="nav-container">
             <div class="brand">
                 <span id="appBrandTitle">ALS Automation Engine</span>
-                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.13</span>
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.14</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -1637,6 +1637,21 @@ async function bindChannels() {
             } catch (e) {}
         }
 
+        function compareSemver(v1, v2) {
+            if (!v1 && !v2) return 0;
+            if (!v1) return -1;
+            if (!v2) return 1;
+            const p1 = String(v1).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            const p2 = String(v2).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                const num1 = p1[i] || 0;
+                const num2 = p2[i] || 0;
+                if (num1 > num2) return 1;
+                if (num1 < num2) return -1;
+            }
+            return 0;
+        }
+
         function renderDesktopModules() {
             const list = document.getElementById('singleModulesList');
             if (!list) return;
@@ -1655,7 +1670,7 @@ async function bindChannels() {
                 const info = activeDesktopModules[m.name] || {};
                 let ver = info.version;
                 if (!ver || ver === 'factory') {
-                    ver = '1.6.12';
+                    ver = '1.6.14';
                 }
                 const source = info.source || 'factory';
                 const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name || (m.name === 'desktop-ui' && (u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html')));
@@ -1669,10 +1684,18 @@ async function bindChannels() {
 
                 let updateTag = '<span style="color:var(--status-online); font-size:0.8rem;">Current</span>';
                 if (update) {
-                    updateTag = `
-                        <span style="color:var(--accent-orange); font-weight:700; font-size:0.8rem;">v${update.targetVersion} ready</span>
-                        <button class="btn-primary" onclick="installSingleDesktopUpdateUI('${m.name}')" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; cursor: pointer;">Update</button>
-                    `;
+                    const diff = compareSemver(update.targetVersion, ver);
+                    if (diff > 0) {
+                        updateTag = `
+                            <span style="color:var(--accent-orange); font-weight:700; font-size:0.8rem;">v${update.targetVersion} ready</span>
+                            <button class="btn-primary" onclick="installSingleDesktopUpdateUI('${m.name}')" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; cursor: pointer;">Update</button>
+                        `;
+                    } else if (diff === 0) {
+                        updateTag = `
+                            <span style="color:var(--accent-blue); font-weight:600; font-size:0.8rem;">Patch ready</span>
+                            <button class="btn-primary" onclick="installSingleDesktopUpdateUI('${m.name}')" style="padding: 3px 8px; font-size: 0.72rem; border-radius: 4px; cursor: pointer;">Update</button>
+                        `;
+                    }
                 }
 
                 item.innerHTML = `

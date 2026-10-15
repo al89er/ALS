@@ -378,7 +378,7 @@ async function initSupabase() {
   startCommandListener();
 }
 
-const VERSION = '1.6.5';
+const VERSION = '1.6.14';
 
 module.exports = {
   VERSION,

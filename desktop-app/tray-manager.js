@@ -1,7 +1,7 @@
 // Tray Manager - Modular Tray Tooltip & Menu Formatter
 // Version: 1.5.8
 
-const VERSION = '1.5.9';
+const VERSION = '1.6.14';
 
 /**
  * Formats the tray tooltip string according to the active edition and current state.
