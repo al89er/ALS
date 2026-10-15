@@ -238,6 +238,23 @@ function saveDeviceConfig(config) {
       ...createDeviceConfig(merged, process.env, getAppEdition())
     };
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+
+    if (config && config._triggerTelegramTest) {
+      try {
+        const automation = require('./automation');
+        if (typeof automation.testTelegramAlert === 'function') {
+          return automation.testTelegramAlert({
+            botToken: updated.telegram_bot_token,
+            chatId: updated.telegram_chat_id,
+            message: config.testMessage
+          }).then(res => ({ ...updated, telegramTestResult: res }))
+            .catch(err => ({ ...updated, telegramTestResult: { success: false, error: err.message } }));
+        }
+      } catch (testErr) {
+        return { ...updated, telegramTestResult: { success: false, error: testErr.message } };
+      }
+    }
+
     return updated;
   } catch (err) {
     console.error('[CACHE] Failed to save device config:', err.message);
@@ -372,7 +389,7 @@ function getLatestProofImage(dateStr) {
   return null;
 }
 
-const VERSION = '1.5.12';
+const VERSION = '1.5.13';
 
 module.exports = {
   VERSION,

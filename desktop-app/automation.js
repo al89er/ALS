@@ -240,6 +240,13 @@ async function testTelegramAlert(credentials = {}) {
   if (!token || !chatId) {
     return { success: false, error: 'Both Telegram Bot Token and Chat ID are required.' };
   }
+  const botIdFromToken = token.split(':')[0];
+  if (String(chatId).trim() === botIdFromToken) {
+    return {
+      success: false,
+      error: `Invalid Chat ID: ${chatId} is your Bot's own ID! The Chat ID must be your personal Telegram User ID (e.g. from @userinfobot) so the bot can send messages to your account.`
+    };
+  }
   try {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
     const messageText = credentials.message || '⚡ <b>[ALS Desktop Engine]</b>\nTest notification successful!\nYour Telegram bot is properly configured and ready to receive real-time attendance alerts and verified visual proof snapshots.';
@@ -1228,7 +1235,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.11';
+const VERSION = '1.6.12';
 
 module.exports = {
   VERSION,

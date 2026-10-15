@@ -1,14 +1,14 @@
 {
   "version": "1.6.13",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-15T09:17:30.259Z",
+  "updatedAt": "2026-10-15T09:38:24.188Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.11",
+      "version": "1.6.12",
       "type": "engine",
-      "sizeBytes": 52288,
-      "sha256": "f5df9c0266c271257a2dbe796481e2200ddc0525947b45d73f128c4d7c711574",
+      "sizeBytes": 52616,
+      "sha256": "7b73be57ea8e3fa08d4d7b60dedb00f5d90fa5ad681e311513d9940ec5ddabd8",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
@@ -37,10 +37,10 @@
     },
     "cache-manager": {
       "file": "cache-manager.js",
-      "version": "1.5.12",
+      "version": "1.5.13",
       "type": "storage",
-      "sizeBytes": 12583,
-      "sha256": "0cbd1718bcc4528c382fe7e1d3aa15192444c6bd1a127502b9f6731b8e20a883",
+      "sizeBytes": 13266,
+      "sha256": "88b861836679d7e032361a7f62b802cf80df93ab9e782b5f30b9e70df71337f3",
       "description": "Local JSON cache, settings persistence, and hub accounts manager"
     },
     "tray-manager": {
@@ -61,10 +61,10 @@
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.12",
+      "version": "1.6.13",
       "type": "ui",
-      "sizeBytes": 93286,
-      "sha256": "9706076d8e410d5c255bbb0a253ed183c80e25cd9ec62c9d76dfae7db8a1481b",
+      "sizeBytes": 95004,
+      "sha256": "521a5960eecf34b18aa3e0cc849af7eb83ee317d6d41f4ebf19ae5900668a9ad",
       "description": "ALS Single Agent desktop interface"
     }
   }

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.12 -->
+<!-- VERSION: 1.6.13 -->
 <html lang="en">
 
 <head>
@@ -509,7 +509,7 @@
         <div class="nav-container">
             <div class="brand">
                 <span id="appBrandTitle">ALS Automation Engine</span>
-                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.12</span>
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.13</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -742,12 +742,12 @@
                             <input type="password" id="telegramBotTokenInput" placeholder="e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Telegram Chat ID</label>
-                            <input type="text" id="telegramChatIdInput" placeholder="e.g. 987654321" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Your Telegram Chat ID (User ID)</label>
+                            <input type="text" id="telegramChatIdInput" placeholder="e.g. 109793829" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
                         </div>
                     </div>
                     <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">
-                        Tip: Create a bot with <strong>@BotFather</strong> to obtain a token, then obtain your chat ID from <strong>@userinfobot</strong> or message your bot and call <code>getUpdates</code>.
+                        <strong>Important:</strong> Enter your <em>own personal Telegram Chat ID</em> (e.g. <code>109793829</code>), <u>NOT the bot ID</u>. You must also open your bot in Telegram and click <strong>/start</strong> before it can send you alerts.
                     </div>
                     <div id="telegramStatusNotice" style="display: none; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;"></div>
                     <div class="btn-group">
@@ -1539,7 +1539,7 @@ async function bindChannels() {
         }
 
         async function testTelegramNotificationUI() {
-            if (!window.electronAPI || !window.electronAPI.testTelegramAlert) return;
+            if (!window.electronAPI) return;
             const token = document.getElementById('telegramBotTokenInput').value.trim();
             const chatId = document.getElementById('telegramChatIdInput').value.trim();
             const notice = document.getElementById('telegramStatusNotice');
@@ -1552,6 +1552,18 @@ async function bindChannels() {
                     notice.style.color = 'var(--status-offline)';
                     notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
                     notice.textContent = 'Please enter both Telegram Bot Token and Chat ID before testing.';
+                }
+                return;
+            }
+
+            const botIdFromToken = token.split(':')[0];
+            if (chatId === botIdFromToken) {
+                if (notice) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    notice.innerHTML = '<strong>Invalid Chat ID:</strong> You entered the Bot\'s own ID (<code>' + chatId + '</code>)! The Chat ID must be <strong>your personal Telegram User ID</strong> (e.g. <code>109793829</code>), not the bot itself.';
                 }
                 return;
             }
@@ -1569,11 +1581,24 @@ async function bindChannels() {
             }
 
             try {
-                const res = await window.electronAPI.testTelegramAlert({
-                    botToken: token,
-                    chatId: chatId,
-                    message: '🔔 <b>ALS Desktop Test Notification</b>\n\nYour Telegram bot alerts are configured successfully! You will receive verified proof snapshots and clock action statuses directly in this chat.'
-                });
+                let res;
+                if (typeof window.electronAPI.testTelegramAlert === 'function') {
+                    res = await window.electronAPI.testTelegramAlert({
+                        botToken: token,
+                        chatId: chatId,
+                        message: '🔔 <b>ALS Desktop Test Notification</b>\n\nYour Telegram bot alerts are configured successfully! You will receive verified proof snapshots and clock action statuses directly in this chat.'
+                    });
+                } else if (typeof window.electronAPI.saveDeviceConfig === 'function') {
+                    const saveRes = await window.electronAPI.saveDeviceConfig({
+                        telegram_bot_token: token,
+                        telegram_chat_id: chatId,
+                        _triggerTelegramTest: true,
+                        testMessage: '🔔 <b>ALS Desktop Test Notification</b>\n\nYour Telegram bot alerts are configured successfully! You will receive verified proof snapshots and clock action statuses directly in this chat.'
+                    });
+                    res = (saveRes && saveRes.telegramTestResult) || { success: false, error: 'Test not supported on this engine version. Please restart the app.' };
+                } else {
+                    throw new Error('Desktop API interface unavailable.');
+                }
 
                 if (res.success) {
                     notice.style.background = 'rgba(16, 185, 129, 0.2)';
