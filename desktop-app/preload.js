@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     triggerHubAction: (deviceId, action) => ipcRenderer.invoke('trigger-hub-action', deviceId, action),
     getEnvVariables: () => ipcRenderer.invoke('get-env-variables'),
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+    testTelegramAlert: (credentials) => ipcRenderer.invoke('test-telegram-alert', credentials),
+    getProofImage: () => ipcRenderer.invoke('get-proof-image'),
 
     // Modular Hot-Update APIs
     checkModuleUpdates: () => ipcRenderer.invoke('check-module-updates'),

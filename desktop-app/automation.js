@@ -162,8 +162,46 @@ async function humanClick(page, targetFrame, selector, targetHandle) {
 async function captureProofSnapshot(page) {
   if (!page || typeof page.screenshot !== 'function') return null;
   try {
-    // 1. Try finding specific attendance summary card / table inside frames
+    // Redact sensitive personal identity info (NRIC / Staff ID / IC) before capturing visual proof
+    const blurSensitiveData = () => {
+      try {
+        const sensitiveSelectors = [
+          '#no_kp', '#nokp', '#ic_no', '#staff_id', '#no_pekerja',
+          '.user-id', '.user-ic', '.staff-info', '.profile-info',
+          'input[type="password"]', '[name*="password"]'
+        ];
+        document.querySelectorAll(sensitiveSelectors.join(',')).forEach(el => {
+          el.style.filter = 'blur(6px)';
+          el.style.userSelect = 'none';
+        });
+
+        // Scan text nodes for Malaysian NRIC pattern (\d{6}-\d{2}-\d{4} or 12 consecutive digits)
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while ((node = walker.nextNode())) {
+          const val = node.nodeValue || '';
+          if (/\b\d{6}-\d{2}-\d{4}\b/.test(val) || /\b\d{12}\b/.test(val)) {
+            if (node.parentElement && !node.parentElement.dataset.blurred) {
+              node.parentElement.style.filter = 'blur(6px)';
+              node.parentElement.style.userSelect = 'none';
+              node.parentElement.dataset.blurred = 'true';
+            }
+          }
+        }
+      } catch (_) {}
+    };
+
+    if (typeof page.evaluate === 'function') {
+      await page.evaluate(blurSensitiveData).catch(() => null);
+    }
     const frames = typeof page.frames === 'function' ? page.frames() : [];
+    for (const frame of frames) {
+      if (typeof frame.evaluate === 'function') {
+        await frame.evaluate(blurSensitiveData).catch(() => null);
+      }
+    }
+
+    // 1. Try finding specific attendance summary card / table inside frames
     for (const frame of frames) {
       try {
         const targetElement = await frame.$('table.table, .table-responsive, #table-perakam, form[name="form1"]').catch(() => null);
@@ -192,6 +230,35 @@ async function captureProofSnapshot(page) {
   } catch (err) {
     console.warn('[PLAYWRIGHT] Proof snapshot capture skipped:', err.message);
     return null;
+  }
+}
+
+async function testTelegramAlert(credentials = {}) {
+  const config = (typeof cacheManager.getDeviceConfig === 'function') ? cacheManager.getDeviceConfig() : {};
+  const token = credentials.token || credentials.botToken || credentials.telegram_bot_token || process.env.TELEGRAM_BOT_TOKEN || config.telegram_bot_token;
+  const chatId = credentials.chatId || credentials.telegram_chat_id || process.env.TELEGRAM_CHAT_ID || config.telegram_chat_id;
+  if (!token || !chatId) {
+    return { success: false, error: 'Both Telegram Bot Token and Chat ID are required.' };
+  }
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const messageText = credentials.message || '⚡ <b>[ALS Desktop Engine]</b>\nTest notification successful!\nYour Telegram bot is properly configured and ready to receive real-time attendance alerts and verified visual proof snapshots.';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: messageText,
+        parse_mode: 'HTML'
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && (data.ok || data.ok === undefined)) {
+      return { success: true };
+    }
+    return { success: false, error: data.description || `HTTP ${res.status}: ${res.statusText}` };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -707,6 +774,15 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
       }
     }
 
+    // 1. Capture visual proof snapshot (with sensitive personal data blurred)
+    const proofSnapshot = await captureProofSnapshot(page);
+    let proofThumbnail = null;
+    let thumbnailDataUrl = null;
+    if (proofSnapshot && typeof cacheManager.saveProofThumbnail === 'function') {
+      proofThumbnail = cacheManager.saveProofThumbnail(proofSnapshot, standardDate);
+      thumbnailDataUrl = typeof proofThumbnail === 'object' && proofThumbnail ? proofThumbnail.dataUrl : proofThumbnail;
+    }
+
     try {
       if (clientToUse && typeof clientToUse.from === 'function') {
         let authUserId;
@@ -722,16 +798,51 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
           updated_at: new Date().toISOString()
         };
         if (authUserId) proofPayload.user_id = authUserId;
+        if (thumbnailDataUrl) proofPayload.proof_thumbnail = thumbnailDataUrl;
 
-        const { error } = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
-        if (error) throw error;
-        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: true });
+        let synced = false;
+        try {
+          const { error } = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
+          if (!error) {
+            synced = true;
+          } else if (proofPayload.proof_thumbnail) {
+            delete proofPayload.proof_thumbnail;
+            const retry = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
+            if (!retry.error) synced = true;
+          }
+        } catch (_) {
+          if (proofPayload.proof_thumbnail) {
+            delete proofPayload.proof_thumbnail;
+            try {
+              const retry = await clientToUse.from('todays_proof').upsert(proofPayload, { onConflict: 'date, device_id' });
+              if (!retry.error) synced = true;
+            } catch (_) {}
+          }
+        }
+        cacheManager.updateCache('todays_proof', {
+          date: standardDate,
+          clock_in: postProofData.clockIn,
+          clock_out: postProofData.clockOut,
+          thumbnail: thumbnailDataUrl,
+          synced
+        });
       } else {
-        cacheManager.updateCache('todays_proof', { date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut, synced: false });
+        cacheManager.updateCache('todays_proof', {
+          date: standardDate,
+          clock_in: postProofData.clockIn,
+          clock_out: postProofData.clockOut,
+          thumbnail: thumbnailDataUrl,
+          synced: false
+        });
       }
     } catch (err) {
       console.error('[PLAYWRIGHT] Supabase offline! Queueing automated proof to local cache.');
-      cacheManager.queueOfflineProof({ date: standardDate, clock_in: postProofData.clockIn, clock_out: postProofData.clockOut });
+      cacheManager.queueOfflineProof({
+        date: standardDate,
+        clock_in: postProofData.clockIn,
+        clock_out: postProofData.clockOut,
+        thumbnail: proofThumbnail
+      });
     }
 
     if (global.updateTrayTooltip) global.updateTrayTooltip();
@@ -766,7 +877,6 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
     if (clientToUse && typeof clientToUse.from === 'function') {
       await remoteLog(clientToUse, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`, targetDeviceId);
     }
-    const proofSnapshot = await captureProofSnapshot(page);
     const inTime = postProofData?.clockIn || '--:--';
     const outTime = postProofData?.clockOut || '--:--';
     const proofDate = postProofData?.date || standardDate;
@@ -1118,13 +1228,16 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.9';
+const VERSION = '1.6.11';
 
 module.exports = {
   VERSION,
   executeClockAction,
   openDebugBrowser,
   manualFetchProof,
+  testTelegramAlert,
+  captureProofSnapshot,
+  sendTelegramAlert,
   __test: {
     waitUntilTarget,
     applyStealthHardening,
@@ -1134,6 +1247,7 @@ module.exports = {
     executeClockActionSingleAttempt,
     manualFetchProofSingleAttempt,
     captureProofSnapshot,
-    sendTelegramAlert
+    sendTelegramAlert,
+    testTelegramAlert
   }
 };

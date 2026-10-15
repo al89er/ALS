@@ -1012,6 +1012,16 @@
                             style="margin-top: 1rem; text-align: right; font-size: 0.75rem; color: var(--text-secondary);">
                             Last Synced: <span id="proofUpdated">--:--</span>
                         </div>
+
+                        <!-- Proof Visual Snapshot Thumbnail -->
+                        <div id="proofThumbnailContainerWeb" style="display: none; margin-top: 1rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: rgba(0, 0, 0, 0.4); text-align: center; position: relative;">
+                            <div style="padding: 0.4rem 0.6rem; font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                                <span>📷 Portal Timestamp Snapshot</span>
+                                <span style="font-size: 0.7rem; color: var(--accent-blue); cursor: pointer;" onclick="openProofLightboxWeb()">Click to zoom</span>
+                            </div>
+                            <img id="proofThumbnailImgWeb" src="" alt="Portal Proof Snapshot" style="max-width: 100%; height: auto; max-height: 140px; object-fit: contain; cursor: pointer; display: block; margin: 0 auto; transition: transform 0.2s;" onclick="openProofLightboxWeb()" />
+                        </div>
+
                         <button id="syncProofBtn" class="btn"
                             style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;"
                             onclick="startAttendanceModal('manual_proof_sync')">Sync Proof Now</button>
@@ -1704,6 +1714,12 @@
                 proofIn.innerText = '--:--';
                 proofOut.innerText = '--:--';
                 proofUpdated.innerText = '--:--';
+                const thumbContainer = document.getElementById('proofThumbnailContainerWeb');
+                const thumbImg = document.getElementById('proofThumbnailImgWeb');
+                if (thumbContainer && thumbImg) {
+                    thumbContainer.style.display = 'none';
+                    thumbImg.src = '';
+                }
                 triggerAttendanceModalSuccess(null);
                 return;
             }
@@ -1711,7 +1727,38 @@
             proofIn.innerText = proof.clock_in || '--:--';
             proofOut.innerText = proof.clock_out || '--:--';
             proofUpdated.innerText = proof.updated_at ? new Date(proof.updated_at).toLocaleTimeString() : '--:--';
+
+            const thumbContainer = document.getElementById('proofThumbnailContainerWeb');
+            const thumbImg = document.getElementById('proofThumbnailImgWeb');
+            if (thumbContainer && thumbImg) {
+                const thumbnailSrc = proof.proof_thumbnail || proof.thumbnail || null;
+                if (thumbnailSrc && thumbnailSrc.startsWith('data:image')) {
+                    thumbImg.src = thumbnailSrc;
+                    thumbContainer.style.display = 'block';
+                } else {
+                    thumbContainer.style.display = 'none';
+                    thumbImg.src = '';
+                }
+            }
+
             triggerAttendanceModalSuccess(proof);
+        }
+
+        function openProofLightboxWeb() {
+            const thumbImg = document.getElementById('proofThumbnailImgWeb');
+            const lightbox = document.getElementById('proofLightboxModalWeb');
+            const lightboxImg = document.getElementById('proofLightboxImgWeb');
+            if (thumbImg && thumbImg.src && lightbox && lightboxImg) {
+                lightboxImg.src = thumbImg.src;
+                lightbox.style.display = 'flex';
+            }
+        }
+
+        function closeProofLightboxWeb() {
+            const lightbox = document.getElementById('proofLightboxModalWeb');
+            if (lightbox) {
+                lightbox.style.display = 'none';
+            }
         }
 
         function updateScheduleUI(sched) {
@@ -2292,6 +2339,9 @@
             setTimeout(() => ripple.remove(), 650);
         });
 
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeProofLightboxWeb();
+        });
     </script>
     <!-- ==================== PROOF SYNC MODAL ==================== -->
     <div id="proofSyncModalOverlay" role="dialog" aria-modal="true" aria-labelledby="proofModalTitle"
@@ -2306,6 +2356,20 @@
             </div>
             <div id="proofModalActionsArea" class="proof-modal-actions" style="display: none;">
                 <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox Modal for Proof Image (Web App) -->
+    <div id="proofLightboxModalWeb" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem; flex-direction: column; cursor: pointer;" onclick="closeProofLightboxWeb()">
+        <div style="max-width: 900px; width: 100%; position: relative;" onclick="event.stopPropagation()">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <span style="font-weight: 600; color: #fff; font-size: 0.95rem;">Verified Attendance Portal Snapshot</span>
+                <button onclick="closeProofLightboxWeb()" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: #fff; border-radius: 6px; padding: 0.3rem 0.75rem; cursor: pointer; font-size: 0.85rem;">Close ✕</button>
+            </div>
+            <img id="proofLightboxImgWeb" src="" alt="Full Proof Snapshot" style="width: 100%; height: auto; max-height: 80vh; object-fit: contain; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.8);" />
+            <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); text-align: center;">
+                Personal identification numbers are automatically blurred for security and privacy.
             </div>
         </div>
     </div>

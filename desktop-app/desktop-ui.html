@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.6.11 -->
+<!-- VERSION: 1.6.12 -->
 <html lang="en">
 
 <head>
@@ -509,7 +509,7 @@
         <div class="nav-container">
             <div class="brand">
                 <span id="appBrandTitle">ALS Automation Engine</span>
-                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.11</span>
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.6.12</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -548,6 +548,16 @@
                     <div style="margin-top: 1rem; text-align: right; font-size: 0.75rem; color: var(--text-secondary);">
                         Last Synced: <span id="proofUpdated">--:--</span>
                     </div>
+
+                    <!-- Proof Visual Snapshot Thumbnail -->
+                    <div id="proofThumbnailContainer" style="display: none; margin-top: 1rem; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: rgba(0, 0, 0, 0.4); text-align: center; position: relative;">
+                        <div style="padding: 0.4rem 0.6rem; font-size: 0.75rem; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                            <span>📷 Portal Timestamp Snapshot</span>
+                            <span style="font-size: 0.7rem; color: var(--accent-blue); cursor: pointer;" onclick="openProofLightbox()">Click to zoom</span>
+                        </div>
+                        <img id="proofThumbnailImg" src="" alt="Portal Proof Snapshot" style="max-width: 100%; height: auto; max-height: 140px; object-fit: contain; cursor: pointer; display: block; margin: 0 auto; transition: transform 0.2s;" onclick="openProofLightbox()" />
+                    </div>
+
                     <button class="btn" style="background: rgba(255,255,255,0.1); width: 100%; margin-top: 1rem; padding: 0.75rem; font-size: 0.9rem;" onclick="requestManualProof()">Sync Proof Now</button>
                 </div>
 
@@ -715,6 +725,34 @@
                     <div class="btn-group">
                         <button class="btn btn-primary" onclick="saveLocalSettings()">Save Engine Settings</button>
                         <button class="btn" style="background: rgba(255,255,255,0.1);" onclick="openDebugBrowser()">Test Launch Browser</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telegram Bot Alerts Panel (Single Agent Only) -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">Telegram Notifications</h2>
+                    <span class="panel-subtitle">Receive instant visual proof photos and clock-in/out alerts</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="grid-2">
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Telegram Bot Token</label>
+                            <input type="password" id="telegramBotTokenInput" placeholder="e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <label style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Telegram Chat ID</label>
+                            <input type="text" id="telegramChatIdInput" placeholder="e.g. 987654321" style="padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); color: #fff; font-family: var(--font-family); font-size: 0.95rem; outline: none;" />
+                        </div>
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">
+                        Tip: Create a bot with <strong>@BotFather</strong> to obtain a token, then obtain your chat ID from <strong>@userinfobot</strong> or message your bot and call <code>getUpdates</code>.
+                    </div>
+                    <div id="telegramStatusNotice" style="display: none; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem;"></div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveTelegramSettingsUI()">Save Telegram Settings</button>
+                        <button class="btn" style="background: rgba(255,255,255,0.1);" id="sendTestTelegramBtn" onclick="testTelegramNotificationUI()">⚡ Send Test Notification</button>
                     </div>
                 </div>
             </div>
@@ -1259,12 +1297,57 @@
             }
         }
 
-        function updateProofUI(proof) {
+        async function updateProofUI(proof) {
             if (!proof) return;
             proofDate.innerText = proof.date || '--:--';
             proofIn.innerText = proof.clock_in || '--:--';
             proofOut.innerText = proof.clock_out || '--:--';
             proofUpdated.innerText = proof.updated_at ? new Date(proof.updated_at).toLocaleTimeString() : '--:--';
+
+            const thumbContainer = document.getElementById('proofThumbnailContainer');
+            const thumbImg = document.getElementById('proofThumbnailImg');
+            if (thumbContainer && thumbImg) {
+                let thumbnailSrc = null;
+                if (proof.proof_thumbnail && proof.proof_thumbnail.startsWith('data:image')) {
+                    thumbnailSrc = proof.proof_thumbnail;
+                } else if (proof.thumbnail && proof.thumbnail.startsWith('data:image')) {
+                    thumbnailSrc = proof.thumbnail;
+                } else if (window.electronAPI && window.electronAPI.getProofImage) {
+                    try {
+                        const localImg = await window.electronAPI.getProofImage(proof.date);
+                        if (localImg && localImg.dataUrl) {
+                            thumbnailSrc = localImg.dataUrl;
+                        }
+                    } catch (e) {
+                        console.warn('[DESKTOP-UI] getProofImage error:', e);
+                    }
+                }
+
+                if (thumbnailSrc) {
+                    thumbImg.src = thumbnailSrc;
+                    thumbContainer.style.display = 'block';
+                } else {
+                    thumbContainer.style.display = 'none';
+                    thumbImg.src = '';
+                }
+            }
+        }
+
+        function openProofLightbox() {
+            const thumbImg = document.getElementById('proofThumbnailImg');
+            const lightbox = document.getElementById('proofLightboxModal');
+            const lightboxImg = document.getElementById('proofLightboxImg');
+            if (thumbImg && thumbImg.src && lightbox && lightboxImg) {
+                lightboxImg.src = thumbImg.src;
+                lightbox.style.display = 'flex';
+            }
+        }
+
+        function closeProofLightbox() {
+            const lightbox = document.getElementById('proofLightboxModal');
+            if (lightbox) {
+                lightbox.style.display = 'none';
+            }
         }
 
         function updateScheduleUI(sched) {
@@ -1386,6 +1469,8 @@ async function bindChannels() {
                     if (document.getElementById('supabasePasswordInput')) document.getElementById('supabasePasswordInput').value = config.supabase_password || '';
                     if (document.getElementById('supabaseUrlInput')) document.getElementById('supabaseUrlInput').value = config.supabase_url || '';
                     if (document.getElementById('supabaseKeyInput')) document.getElementById('supabaseKeyInput').value = config.supabase_key || '';
+                    if (document.getElementById('telegramBotTokenInput')) document.getElementById('telegramBotTokenInput').value = config.telegram_bot_token || '';
+                    if (document.getElementById('telegramChatIdInput')) document.getElementById('telegramChatIdInput').value = config.telegram_chat_id || '';
                     
                     const isAuto = typeof config.auto_clock_enabled === 'boolean' ? config.auto_clock_enabled : true;
                     if (document.getElementById('autoClockToggle')) {
@@ -1410,6 +1495,8 @@ async function bindChannels() {
                     supabase_password: document.getElementById('supabasePasswordInput') ? document.getElementById('supabasePasswordInput').value : '',
                     supabase_url: document.getElementById('supabaseUrlInput').value.trim(),
                     supabase_key: document.getElementById('supabaseKeyInput').value.trim(),
+                    telegram_bot_token: document.getElementById('telegramBotTokenInput') ? document.getElementById('telegramBotTokenInput').value.trim() : '',
+                    telegram_chat_id: document.getElementById('telegramChatIdInput') ? document.getElementById('telegramChatIdInput').value.trim() : '',
                     auto_clock_enabled: document.getElementById('autoClockToggle') ? document.getElementById('autoClockToggle').checked : true,
                     clock_in_base_time: document.getElementById('clockInTimeInput') ? document.getElementById('clockInTimeInput').value || '07:45' : '07:45',
                     clock_out_base_time: document.getElementById('clockOutTimeInput') ? document.getElementById('clockOutTimeInput').value || '17:05' : '17:05',
@@ -1417,6 +1504,100 @@ async function bindChannels() {
                 };
                 await window.electronAPI.saveDeviceConfig(config);
                 alert('Device & Schedule Settings saved successfully! Please restart the app from the system tray for the new credentials to take effect.');
+            }
+        }
+
+        async function saveTelegramSettingsUI() {
+            if (!window.electronAPI || !window.electronAPI.saveDeviceConfig) return;
+            const token = document.getElementById('telegramBotTokenInput').value.trim();
+            const chatId = document.getElementById('telegramChatIdInput').value.trim();
+            const notice = document.getElementById('telegramStatusNotice');
+
+            try {
+                const currentCfg = (await window.electronAPI.getDeviceConfig()) || {};
+                currentCfg.telegram_bot_token = token;
+                currentCfg.telegram_chat_id = chatId;
+                await window.electronAPI.saveDeviceConfig(currentCfg);
+
+                if (notice) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                    notice.style.color = 'var(--status-online)';
+                    notice.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    notice.textContent = 'Telegram settings saved successfully to local configuration!';
+                    setTimeout(() => { notice.style.display = 'none'; }, 4000);
+                }
+            } catch (err) {
+                if (notice) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    notice.textContent = 'Failed to save Telegram settings: ' + err.message;
+                }
+            }
+        }
+
+        async function testTelegramNotificationUI() {
+            if (!window.electronAPI || !window.electronAPI.testTelegramAlert) return;
+            const token = document.getElementById('telegramBotTokenInput').value.trim();
+            const chatId = document.getElementById('telegramChatIdInput').value.trim();
+            const notice = document.getElementById('telegramStatusNotice');
+            const btn = document.getElementById('sendTestTelegramBtn');
+
+            if (!token || !chatId) {
+                if (notice) {
+                    notice.style.display = 'block';
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    notice.textContent = 'Please enter both Telegram Bot Token and Chat ID before testing.';
+                }
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Testing Connection...';
+            }
+            if (notice) {
+                notice.style.display = 'block';
+                notice.style.background = 'rgba(59, 130, 246, 0.2)';
+                notice.style.color = 'var(--accent-blue)';
+                notice.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                notice.textContent = 'Sending test notification to Telegram...';
+            }
+
+            try {
+                const res = await window.electronAPI.testTelegramAlert({
+                    botToken: token,
+                    chatId: chatId,
+                    message: '🔔 <b>ALS Desktop Test Notification</b>\n\nYour Telegram bot alerts are configured successfully! You will receive verified proof snapshots and clock action statuses directly in this chat.'
+                });
+
+                if (res.success) {
+                    notice.style.background = 'rgba(16, 185, 129, 0.2)';
+                    notice.style.color = 'var(--status-online)';
+                    notice.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                    notice.textContent = 'Test notification sent! Check your Telegram chat to confirm.';
+                } else {
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    notice.textContent = 'Telegram test failed: ' + (res.error || 'Unknown error');
+                }
+            } catch (err) {
+                if (notice) {
+                    notice.style.background = 'rgba(239, 68, 68, 0.2)';
+                    notice.style.color = 'var(--status-offline)';
+                    notice.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                    notice.textContent = 'Telegram test error: ' + err.message;
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '⚡ Send Test Notification';
+                }
             }
         }
 
@@ -1725,7 +1906,24 @@ async function bindChannels() {
         // Initialize App
         initDesktopClient();
 
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeProofLightbox();
+        });
     </script>
+
+    <!-- Lightbox Modal for Proof Image -->
+    <div id="proofLightboxModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center; padding: 1.5rem; flex-direction: column; cursor: pointer;" onclick="closeProofLightbox()">
+        <div style="max-width: 900px; width: 100%; position: relative;" onclick="event.stopPropagation()">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                <span style="font-weight: 600; color: #fff; font-size: 0.95rem;">Verified Attendance Portal Snapshot</span>
+                <button onclick="closeProofLightbox()" style="background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: #fff; border-radius: 6px; padding: 0.3rem 0.75rem; cursor: pointer; font-size: 0.85rem;">Close ✕</button>
+            </div>
+            <img id="proofLightboxImg" src="" alt="Full Proof Snapshot" style="width: 100%; height: auto; max-height: 80vh; object-fit: contain; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 10px 30px rgba(0,0,0,0.8);" />
+            <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); text-align: center;">
+                Personal identification numbers are automatically blurred for security and privacy.
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

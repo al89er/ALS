@@ -174,6 +174,27 @@ app.whenReady().then(() => {
     return updated;
   });
 
+  ipcMain.handle('test-telegram-alert', async (event, credentials) => {
+    try {
+      const autom = moduleLoader.loadModule('automation', require('./automation'));
+      if (autom && typeof autom.testTelegramAlert === 'function') {
+        return await autom.testTelegramAlert(credentials);
+      }
+      return { success: false, error: 'Telegram alert engine not available.' };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('get-proof-image', (event, dateStr) => {
+    try {
+      if (typeof cacheManager.getLatestProofImage === 'function') {
+        return cacheManager.getLatestProofImage(dateStr);
+      }
+    } catch (_) {}
+    return null;
+  });
+
   ipcMain.handle('save-settings', async (event, settings) => {
     const targetUrl = settings.targetUrl || 'https://perakamwaktu.upm.edu.my/';
     const showBrowser = !!settings.showBrowser;

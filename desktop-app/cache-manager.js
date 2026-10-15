@@ -321,7 +321,58 @@ function saveEngineConfig(config = {}) {
   return { target_url, show_browser };
 }
 
-const VERSION = '1.5.10';
+function getProofImagesDir() {
+  try {
+    const { app } = require('electron');
+    if (app && typeof app.getPath === 'function') {
+      const proofsDir = path.join(app.getPath('userData'), 'proofs');
+      if (!fs.existsSync(proofsDir)) fs.mkdirSync(proofsDir, { recursive: true });
+      return proofsDir;
+    }
+  } catch (_) {}
+  const fallback = path.join(require('os').tmpdir(), 'als-proofs');
+  if (!fs.existsSync(fallback)) fs.mkdirSync(fallback, { recursive: true });
+  return fallback;
+}
+
+function saveProofThumbnail(buffer, dateStr) {
+  if (!buffer || !Buffer.isBuffer(buffer)) return null;
+  const date = dateStr || new Date().toISOString().split('T')[0];
+  const dataUrl = `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  try {
+    const dir = getProofImagesDir();
+    const filePath = path.join(dir, `proof_${date}.jpg`);
+    const latestPath = path.join(dir, 'proof_latest.jpg');
+    fs.writeFileSync(filePath, buffer);
+    fs.writeFileSync(latestPath, buffer);
+    return { filePath, dataUrl, date };
+  } catch (err) {
+    console.warn('[CACHE] Could not save proof thumbnail to disk:', err.message);
+    return { dataUrl, date, filePath: null };
+  }
+}
+
+function getLatestProofImage(dateStr) {
+  try {
+    const dir = getProofImagesDir();
+    let targetPath = path.join(dir, 'proof_latest.jpg');
+    if (dateStr) {
+      const specific = path.join(dir, `proof_${dateStr}.jpg`);
+      if (fs.existsSync(specific)) targetPath = specific;
+    }
+    if (fs.existsSync(targetPath)) {
+      const buf = fs.readFileSync(targetPath);
+      return {
+        dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`,
+        filePath: targetPath,
+        date: dateStr || new Date().toISOString().split('T')[0]
+      };
+    }
+  } catch (_) {}
+  return null;
+}
+
+const VERSION = '1.5.12';
 
 module.exports = {
   VERSION,
@@ -339,6 +390,9 @@ module.exports = {
   saveDeviceConfig,
   getEngineConfig,
   saveEngineConfig,
+  getProofImagesDir,
+  saveProofThumbnail,
+  getLatestProofImage,
   getAppEdition,
   getHubAccounts,
   saveHubAccount,

@@ -677,6 +677,54 @@ test('Reliability Improvements', async (t) => {
       global.fetch = originalFetch;
     }
   });
+
+  await t.test('Visual Proof: cacheManager saveProofThumbnail & automation testTelegramAlert', async () => {
+    const cacheManager = require('../cache-manager');
+    const fakeBuffer = Buffer.from('FAKE_THUMBNAIL_DATA_FOR_UNIT_TEST');
+    const todayStr = '2026-10-15';
+    
+    // Test saveProofThumbnail
+    const saved = cacheManager.saveProofThumbnail(fakeBuffer, todayStr);
+    assert.ok(saved);
+    assert.ok(saved.filePath);
+    assert.ok(saved.dataUrl.startsWith('data:image/jpeg;base64,'));
+    assert.strictEqual(saved.date, todayStr);
+
+    // Test getLatestProofImage
+    const latest = cacheManager.getLatestProofImage(todayStr);
+    assert.ok(latest);
+    assert.strictEqual(latest.date, todayStr);
+    assert.ok(latest.dataUrl.startsWith('data:image/jpeg;base64,'));
+
+    // Test testTelegramAlert failure without token/chatId
+    const failRes = await automation.testTelegramAlert({});
+    assert.strictEqual(failRes.success, false);
+    assert.ok(failRes.error.includes('Both Telegram Bot Token and Chat ID are required'));
+
+    // Test testTelegramAlert success with mock fetch
+    const originalFetch = global.fetch;
+    let dispatchedUrl = null;
+    let dispatchedBody = null;
+    global.fetch = async (url, opts) => {
+      dispatchedUrl = url;
+      dispatchedBody = JSON.parse(opts.body);
+      return { ok: true, status: 200, text: async () => '{"ok":true}', json: async () => ({ ok: true }) };
+    };
+
+    try {
+      const okRes = await automation.testTelegramAlert({
+        botToken: '123456:ABC-DEF',
+        chatId: '987654321',
+        message: 'Hello World'
+      });
+      assert.strictEqual(okRes.success, true);
+      assert.ok(dispatchedUrl.includes('123456:ABC-DEF/sendMessage'));
+      assert.strictEqual(dispatchedBody.chat_id, '987654321');
+      assert.strictEqual(dispatchedBody.text, 'Hello World');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });
 
 
