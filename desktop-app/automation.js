@@ -10,6 +10,155 @@ const DEFAULT_BROWSER_ARGS = [
   '--disable-blink-features=AutomationControlled'
 ];
 
+/**
+ * Injects anti-bot stealth scripts to mask navigator and browser runtime properties
+ */
+async function applyStealthHardening(context) {
+  if (!context || typeof context.addInitScript !== 'function') return;
+  try {
+    await context.addInitScript(() => {
+      // 1. Mask navigator.webdriver
+      try {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+      } catch (e) {}
+
+      // 2. Mock chrome runtime object expected by Blink security checks
+      try {
+        if (!window.chrome) {
+          window.chrome = {
+            runtime: {},
+            loadTimes: function() {},
+            csi: function() {},
+            app: {}
+          };
+        }
+      } catch (e) {}
+
+      // 3. Mock realistic plugin array
+      try {
+        if (!navigator.plugins || navigator.plugins.length === 0) {
+          const fakePlugins = [
+            { name: 'PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+            { name: 'Chrome PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+            { name: 'Microsoft Edge PDF Viewer', filename: 'internal-pdf-viewer', description: 'Portable Document Format' }
+          ];
+          Object.defineProperty(navigator, 'plugins', { get: () => fakePlugins });
+        }
+      } catch (e) {}
+
+      // 4. Mock regional languages
+      try {
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'ms'] });
+      } catch (e) {}
+    });
+  } catch (err) {
+    console.warn('[PLAYWRIGHT STEALTH] addInitScript warning:', err.message);
+  }
+}
+
+/**
+ * Humanizes input typing cadence with subtle randomized intervals and pauses
+ */
+async function humanType(page, selector, text) {
+  if (!text) return;
+  try {
+    if (process.env.NODE_ENV === 'test' || !page || typeof page.fill !== 'function') {
+      if (page && typeof page.fill === 'function') await page.fill(selector, text);
+      return;
+    }
+
+    // Focus field and clear prior content
+    await page.click(selector).catch(() => {});
+    await page.fill(selector, '').catch(() => {});
+
+    // Realistic human cadence: 45ms to 95ms per keystroke
+    for (const char of text) {
+      const delay = Math.floor(Math.random() * 50) + 45;
+      if (typeof page.type === 'function') {
+        await page.type(selector, char, { delay }).catch(async () => {
+          await page.fill(selector, text);
+        });
+      } else {
+        await page.fill(selector, text);
+        break;
+      }
+
+      // 5% chance of a slight reading hesitation (100ms - 200ms)
+      if (Math.random() < 0.05 && typeof page.waitForTimeout === 'function') {
+        await page.waitForTimeout(Math.floor(Math.random() * 100) + 100);
+      }
+    }
+  } catch (err) {
+    console.warn(`[PLAYWRIGHT STEALTH] humanType fallback for ${selector}:`, err.message);
+    if (page && typeof page.fill === 'function') {
+      await page.fill(selector, text).catch(() => {});
+    }
+  }
+}
+
+/**
+ * Moves cursor with smooth trajectory and clicks within natural element bounds
+ */
+async function humanClick(page, targetFrame, selector, targetHandle) {
+  try {
+    if (process.env.NODE_ENV === 'test') {
+      if (targetHandle && typeof targetHandle.click === 'function') {
+        await targetHandle.click();
+      } else if (targetFrame && typeof targetFrame.click === 'function') {
+        await targetFrame.click(selector);
+      }
+      return;
+    }
+
+    let box = null;
+    if (targetHandle && typeof targetHandle.boundingBox === 'function') {
+      box = await targetHandle.boundingBox().catch(() => null);
+    }
+    if (!box && targetFrame && typeof targetFrame.locator === 'function') {
+      box = await targetFrame.locator(selector).first().boundingBox().catch(() => null);
+    }
+
+    if (box && box.width > 0 && box.height > 0) {
+      // Pick random coordinates within inner 25% - 75% of button
+      const offsetX = box.width * (0.25 + Math.random() * 0.5);
+      const offsetY = box.height * (0.25 + Math.random() * 0.5);
+
+      // Smooth mouse approach if page.mouse is available
+      if (page && page.mouse && typeof page.mouse.move === 'function') {
+        const steps = Math.floor(Math.random() * 6) + 4;
+        await page.mouse.move(box.x + offsetX, box.y + offsetY, { steps }).catch(() => {});
+        if (typeof page.waitForTimeout === 'function') {
+          await page.waitForTimeout(Math.floor(Math.random() * 150) + 120);
+        }
+      }
+
+      const clickOptions = {
+        position: { x: offsetX, y: offsetY },
+        delay: Math.floor(Math.random() * 40) + 30
+      };
+
+      if (targetHandle && typeof targetHandle.click === 'function') {
+        await targetHandle.click(clickOptions);
+      } else if (targetFrame && typeof targetFrame.click === 'function') {
+        await targetFrame.click(selector, clickOptions);
+      }
+    } else {
+      if (targetHandle && typeof targetHandle.click === 'function') {
+        await targetHandle.click();
+      } else if (targetFrame && typeof targetFrame.click === 'function') {
+        await targetFrame.click(selector);
+      }
+    }
+  } catch (err) {
+    console.warn(`[PLAYWRIGHT STEALTH] humanClick fallback for ${selector}:`, err.message);
+    if (targetHandle && typeof targetHandle.click === 'function') {
+      await targetHandle.click().catch(() => {});
+    } else if (targetFrame && typeof targetFrame.click === 'function') {
+      await targetFrame.click(selector).catch(() => {});
+    }
+  }
+}
+
 async function sendTelegramAlert(message, deviceId = 'home_desktop_agent') {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
@@ -248,6 +397,8 @@ async function executeClockAction(actionType, supabase, options = {}) {
       userAgent: DEFAULT_USER_AGENT
     });
 
+    await applyStealthHardening(context);
+
     const page = await context.newPage();
 
     // 3. Portal Navigation
@@ -278,11 +429,11 @@ async function executeClockAction(actionType, supabase, options = {}) {
         console.warn('[PLAYWRIGHT] Missing UPM Username or Password in device settings!');
       }
 
-      await page.fill('#username', username ? username.trim() : '');
-      await page.fill('#password', password ? password.trim() : '');
+      await humanType(page, '#username', username ? username.trim() : '');
+      await humanType(page, '#password', password ? password.trim() : '');
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
-        page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login')
+        humanClick(page, page, 'button[type="submit"], input[type="submit"], #btn-login, .btn-login')
       ]);
     }
 
@@ -369,7 +520,7 @@ async function executeClockAction(actionType, supabase, options = {}) {
       ? null
       : actualClickAt.getTime() - targetMs;
 
-    await targetFrame.click(selector);
+    await humanClick(page, targetFrame, selector, targetHandle);
 
     // 6. Post-Flight
     console.log('[PLAYWRIGHT] Element triggered successfully. Verifying DOM for proof...');
@@ -553,6 +704,7 @@ async function openDebugBrowser(supabase, options = {}) {
     args: DEFAULT_BROWSER_ARGS,
     userAgent: DEFAULT_USER_AGENT
   });
+  await applyStealthHardening(context);
   const page = await context.newPage();
   await page.goto(config.targetUrl);
   return true;
@@ -593,6 +745,8 @@ async function manualFetchProof(supabase, options = {}) {
       userAgent: DEFAULT_USER_AGENT
     });
 
+    await applyStealthHardening(context);
+
     const page = await context.newPage();
     await page.goto(config.targetUrl);
 
@@ -614,11 +768,11 @@ async function manualFetchProof(supabase, options = {}) {
         username = deviceConfig.upm_username || process.env.UPM_USERNAME || '';
         password = deviceConfig.upm_password || process.env.UPM_PASSWORD || '';
       }
-      await page.fill('#username', username ? username.trim() : '');
-      await page.fill('#password', password ? password.trim() : '');
+      await humanType(page, '#username', username ? username.trim() : '');
+      await humanType(page, '#password', password ? password.trim() : '');
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle', timeout: 30000 }).catch(() => {}),
-        page.click('button[type="submit"], input[type="submit"], #btn-login, .btn-login')
+        humanClick(page, page, 'button[type="submit"], input[type="submit"], #btn-login, .btn-login')
       ]);
     }
 
@@ -761,7 +915,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.6';
+const VERSION = '1.6.7';
 
 module.exports = {
   VERSION,
@@ -769,6 +923,9 @@ module.exports = {
   openDebugBrowser,
   manualFetchProof,
   __test: {
-    waitUntilTarget
+    waitUntilTarget,
+    applyStealthHardening,
+    humanType,
+    humanClick
   }
 };

@@ -456,4 +456,40 @@ test('Reliability Improvements', async (t) => {
       showBrowser: false
     });
   });
+
+  await t.test('Stealth helpers: applyStealthHardening, humanType, and humanClick execute safely', async () => {
+    const { applyStealthHardening, humanType, humanClick } = automation.__test;
+    assert.strictEqual(typeof applyStealthHardening, 'function');
+    assert.strictEqual(typeof humanType, 'function');
+    assert.strictEqual(typeof humanClick, 'function');
+
+    // 1. Verify applyStealthHardening handles empty/mock context safely
+    let scriptInjected = false;
+    const testContext = {
+      addInitScript: async (fn) => {
+        scriptInjected = true;
+        assert.strictEqual(typeof fn, 'function');
+      }
+    };
+    await applyStealthHardening(testContext);
+    assert.strictEqual(scriptInjected, true, 'addInitScript should be registered');
+    await applyStealthHardening(null); // Should not throw
+
+    // 2. Verify humanType safely handles empty or valid text
+    let typedValue = null;
+    const testPage = {
+      fill: async (selector, text) => { typedValue = text; }
+    };
+    await humanType(testPage, '#username', 'testuser');
+    assert.strictEqual(typedValue, 'testuser');
+    await humanType(testPage, '#username', ''); // Should safely no-op
+
+    // 3. Verify humanClick delegates to element click
+    let clickedSelector = null;
+    const testFrame = {
+      click: async (sel) => { clickedSelector = sel; }
+    };
+    await humanClick(testPage, testFrame, '#a50', null);
+    assert.strictEqual(clickedSelector, '#a50');
+  });
 });

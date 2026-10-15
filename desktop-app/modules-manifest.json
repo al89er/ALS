@@ -1,14 +1,14 @@
 {
   "version": "1.6.12",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-14T01:15:33.522Z",
+  "updatedAt": "2026-10-15T04:24:21.210Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.6",
+      "version": "1.6.7",
       "type": "engine",
-      "sizeBytes": 33611,
-      "sha256": "12c0137b8ddd689b7a833d5723837e7f4803d52812142f456ff7e764a2894cef",
+      "sizeBytes": 39339,
+      "sha256": "53c4a0530415957caefd4bf505bdaa24549d2f67918cf8ed2c24fbbf1ab237e9",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
