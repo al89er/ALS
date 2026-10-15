@@ -492,4 +492,55 @@ test('Reliability Improvements', async (t) => {
     await humanClick(testPage, testFrame, '#a50', null);
     assert.strictEqual(clickedSelector, '#a50');
   });
+
+  await t.test('WAF & Gateway auto-retry: isRetryableGatewayError & retry loop recovery', async () => {
+    const { isRetryableGatewayError } = automation.__test;
+    assert.strictEqual(typeof isRetryableGatewayError, 'function');
+
+    // 1. Verify error classification
+    assert.strictEqual(isRetryableGatewayError(new Error('PORTAL_BLOCKED: Security Gateway Blocked')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('FortiGuard web filtering')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('FortiWeb custom block')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('Selector #a50 not found in any frame')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('page.waitForSelector: Timeout 20000ms exceeded')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('net::ERR_CONNECTION_RESET')), true);
+    assert.strictEqual(isRetryableGatewayError(new Error('Request failed with status code 502')), true);
+
+    // Non-retryable
+    assert.strictEqual(isRetryableGatewayError(new Error('CAPTIVE_PORTAL')), false);
+    assert.strictEqual(isRetryableGatewayError(new Error('Target time has already passed')), false);
+    assert.strictEqual(isRetryableGatewayError(new Error('Scheduled target time expired')), false);
+    assert.strictEqual(isRetryableGatewayError(new Error('Invalid action type: invalid_action')), false);
+
+    // 2. Test transient gateway error retry recovery in executeClockAction
+    let callCount = 0;
+    mockPage.title = async () => {
+      callCount++;
+      if (callCount === 1) {
+        return 'FortiGuard Web Filtering Blocked';
+      }
+      return 'UPM Attendance Dashboard';
+    };
+
+    const res = await automation.executeClockAction('clock_in', mockSupabase, {
+      maxAttempts: 2,
+      retryDelayMs: 5
+    });
+
+    assert.strictEqual(res, true, 'Action should succeed on retry attempt 2');
+    assert.strictEqual(callCount, 2, 'Should have made 2 attempts before succeeding');
+
+    // Verify warnings were logged for attempt 1 and success for attempt 2, but NO failed logs
+    const failureLogs = mockSupabase._inserts.filter(i => i.status === 'failed');
+    const warningLogs = mockSupabase._inserts.filter(i => i.status === 'warning');
+    const successLogs = mockSupabase._inserts.filter(i => i.status === 'success');
+
+    assert.strictEqual(failureLogs.length, 0, 'No failed logs should be recorded when retry succeeds');
+    assert.strictEqual(warningLogs.some(w => w.message.includes('gateway issue')), true, 'Transient warning should be logged on retryable failure');
+    assert.strictEqual(successLogs.length > 0, true, 'Success log must be recorded upon successful completion');
+
+    // Reset title
+    mockPage.title = async () => 'UPM Attendance Dashboard';
+  });
 });
+

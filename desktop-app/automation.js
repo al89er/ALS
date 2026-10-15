@@ -294,7 +294,42 @@ async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
   }
 }
 
-async function executeClockAction(actionType, supabase, options = {}) {
+function isRetryableGatewayError(error) {
+  if (!error) return false;
+  const msg = String(error.message || error).toLowerCase();
+
+  // Explicit non-retryable errors
+  if (msg.includes('captive_portal')) return false;
+  if (msg.includes('target time has already passed')) return false;
+  if (msg.includes('expired')) return false;
+  if (msg.includes('invalid target time')) return false;
+  if (msg.includes('invalid action type')) return false;
+
+  // Retryable transient gateway/WAF/network errors
+  if (
+    msg.includes('portal_blocked') ||
+    msg.includes('blocked by security gateway') ||
+    msg.includes('fortiguard') ||
+    msg.includes('fortiweb') ||
+    msg.includes('access denied') ||
+    msg.includes('not found in any frame') ||
+    msg.includes('timeout') ||
+    msg.includes('net::err_') ||
+    msg.includes('econnreset') ||
+    msg.includes('econnrefused') ||
+    msg.includes('etimedout') ||
+    msg.includes('enotfound') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function executeClockActionSingleAttempt(actionType, supabase, options = {}) {
   const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
   let context;
   try {
@@ -406,7 +441,14 @@ async function executeClockAction(actionType, supabase, options = {}) {
     await page.goto(config.targetUrl);
 
     const pageTitle = typeof page.title === 'function' ? await page.title().catch(() => '') : '';
-    if (pageTitle && (pageTitle.toLowerCase().includes('blocked') || pageTitle.toLowerCase().includes('forbidden'))) {
+    const titleLower = pageTitle.toLowerCase();
+    if (
+      titleLower.includes('blocked') ||
+      titleLower.includes('forbidden') ||
+      titleLower.includes('fortiguard') ||
+      titleLower.includes('fortiweb') ||
+      titleLower.includes('access denied')
+    ) {
       throw new Error(`PORTAL_BLOCKED: Target portal access was blocked by security gateway (${pageTitle}).`);
     }
 
@@ -665,15 +707,57 @@ async function executeClockAction(actionType, supabase, options = {}) {
     return true;
 
   } catch (error) {
-    console.error(`[PLAYWRIGHT] Execution failed: ${error.message}`);
-    await remoteLog(supabase, actionType, 'failed', `Error during execution: ${error.message}`, targetDeviceId);
-
-    if (error.message !== 'CAPTIVE_PORTAL') {
-      await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`, targetDeviceId);
+    if (context) {
+      try {
+        await context.close();
+      } catch (closeErr) {
+        console.warn('[PLAYWRIGHT] Error closing context on failure:', closeErr.message);
+      }
     }
-
-    if (context) await context.close();
     throw error;
+  }
+}
+
+async function executeClockAction(actionType, supabase, options = {}) {
+  const maxAttempts = (options && options.maxAttempts) ? options.maxAttempts : 2;
+  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (attempt > 1) {
+        console.log(`[PLAYWRIGHT] Retrying clock action ${actionType} (attempt ${attempt}/${maxAttempts})...`);
+      }
+      return await executeClockActionSingleAttempt(actionType, supabase, options);
+    } catch (error) {
+      const isRetryable = isRetryableGatewayError(error);
+      const hasRetriesLeft = attempt < maxAttempts;
+
+      if (isRetryable && hasRetriesLeft) {
+        const defaultDelay = (process.env.NODE_ENV === 'test')
+          ? 10
+          : (Math.floor(Math.random() * 15000) + 20000); // 20s - 35s jitter in production
+        const retryDelayMs = (options && typeof options.retryDelayMs === 'number')
+          ? options.retryDelayMs
+          : defaultDelay;
+
+        console.warn(`[PLAYWRIGHT] Attempt ${attempt}/${maxAttempts} encountered transient gateway error (${error.message}). Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`);
+        try {
+          await remoteLog(supabase, actionType, 'warning', `Attempt ${attempt}/${maxAttempts} encountered gateway issue: ${error.message}. Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`, targetDeviceId);
+        } catch (_) {}
+
+        await new Promise(res => setTimeout(res, retryDelayMs));
+        continue;
+      }
+
+      console.error(`[PLAYWRIGHT] Execution failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
+      await remoteLog(supabase, actionType, 'failed', `Error during execution: ${error.message}`, targetDeviceId);
+
+      if (error.message !== 'CAPTIVE_PORTAL') {
+        await sendTelegramAlert(`❌ [ALS Desktop] Execution FAILED for ${actionType.toUpperCase()}: ${error.message}`, targetDeviceId);
+      }
+
+      throw error;
+    }
   }
 }
 
@@ -710,7 +794,7 @@ async function openDebugBrowser(supabase, options = {}) {
   return true;
 }
 
-async function manualFetchProof(supabase, options = {}) {
+async function manualFetchProofSingleAttempt(supabase, options = {}) {
   const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : (options && options.deviceId ? options.deviceId : cacheManager.getDeviceConfig().device_id);
   let context;
   try {
@@ -751,7 +835,14 @@ async function manualFetchProof(supabase, options = {}) {
     await page.goto(config.targetUrl);
 
     const pageTitleManual = typeof page.title === 'function' ? await page.title().catch(() => '') : '';
-    if (pageTitleManual && (pageTitleManual.toLowerCase().includes('blocked') || pageTitleManual.toLowerCase().includes('forbidden'))) {
+    const titleLowerManual = pageTitleManual.toLowerCase();
+    if (
+      titleLowerManual.includes('blocked') ||
+      titleLowerManual.includes('forbidden') ||
+      titleLowerManual.includes('fortiguard') ||
+      titleLowerManual.includes('fortiweb') ||
+      titleLowerManual.includes('access denied')
+    ) {
       throw new Error(`PORTAL_BLOCKED: Target portal access was blocked by security gateway (${pageTitleManual}).`);
     }
 
@@ -908,14 +999,56 @@ async function manualFetchProof(supabase, options = {}) {
     };
 
   } catch (error) {
-    console.error(`[PLAYWRIGHT] Manual proof sync failed: ${error.message}`);
-    await remoteLog(supabase, 'manual_proof_sync', 'failed', `Failed to sync proof manually: ${error.message}`, options && options.hubAccount ? options.hubAccount.device_id : null);
-    if (context) await context.close();
+    if (context) {
+      try {
+        await context.close();
+      } catch (closeErr) {
+        console.warn('[PLAYWRIGHT] Error closing context on proof sync failure:', closeErr.message);
+      }
+    }
     throw error;
   }
 }
 
-const VERSION = '1.6.7';
+async function manualFetchProof(supabase, options = {}) {
+  const maxAttempts = (options && options.maxAttempts) ? options.maxAttempts : 2;
+  const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : (options && options.deviceId ? options.deviceId : cacheManager.getDeviceConfig().device_id);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (attempt > 1) {
+        console.log(`[PLAYWRIGHT] Retrying manual proof sync (attempt ${attempt}/${maxAttempts})...`);
+      }
+      return await manualFetchProofSingleAttempt(supabase, options);
+    } catch (error) {
+      const isRetryable = isRetryableGatewayError(error);
+      const hasRetriesLeft = attempt < maxAttempts;
+
+      if (isRetryable && hasRetriesLeft) {
+        const defaultDelay = (process.env.NODE_ENV === 'test')
+          ? 10
+          : (Math.floor(Math.random() * 15000) + 20000);
+        const retryDelayMs = (options && typeof options.retryDelayMs === 'number')
+          ? options.retryDelayMs
+          : defaultDelay;
+
+        console.warn(`[PLAYWRIGHT] Manual proof sync attempt ${attempt}/${maxAttempts} encountered transient gateway error (${error.message}). Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`);
+        try {
+          await remoteLog(supabase, 'manual_proof_sync', 'warning', `Proof fetch attempt ${attempt}/${maxAttempts} encountered gateway issue: ${error.message}. Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`, targetDeviceId);
+        } catch (_) {}
+
+        await new Promise(res => setTimeout(res, retryDelayMs));
+        continue;
+      }
+
+      console.error(`[PLAYWRIGHT] Manual proof sync failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
+      await remoteLog(supabase, 'manual_proof_sync', 'failed', `Failed to sync proof manually: ${error.message}`, targetDeviceId);
+      throw error;
+    }
+  }
+}
+
+const VERSION = '1.6.8';
 
 module.exports = {
   VERSION,
@@ -926,6 +1059,9 @@ module.exports = {
     waitUntilTarget,
     applyStealthHardening,
     humanType,
-    humanClick
+    humanClick,
+    isRetryableGatewayError,
+    executeClockActionSingleAttempt,
+    manualFetchProofSingleAttempt
   }
 };
