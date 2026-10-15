@@ -542,5 +542,75 @@ test('Reliability Improvements', async (t) => {
     // Reset title
     mockPage.title = async () => 'UPM Attendance Dashboard';
   });
+
+  await t.test('Visual Proof: captureProofSnapshot & Telegram sendPhoto integration', async () => {
+    const { captureProofSnapshot, sendTelegramAlert } = automation.__test;
+    assert.strictEqual(typeof captureProofSnapshot, 'function');
+    assert.strictEqual(typeof sendTelegramAlert, 'function');
+
+    // 1. captureProofSnapshot with null / empty page
+    assert.strictEqual(await captureProofSnapshot(null), null);
+    assert.strictEqual(await captureProofSnapshot({}), null);
+
+    // 2. captureProofSnapshot with element mock
+    const fakeBuffer = Buffer.from('FAKE_PNG_BINARY_DATA_LONG_ENOUGH_TO_PASS_500_BYTES_CHECK_'.repeat(20));
+    const mockPageWithElement = {
+      frames: () => [{
+        $: async (sel) => ({
+          screenshot: async () => fakeBuffer
+        })
+      }],
+      screenshot: async () => Buffer.from('VIEWPORT_FALLBACK')
+    };
+    const captured = await captureProofSnapshot(mockPageWithElement);
+    assert.ok(Buffer.isBuffer(captured));
+    assert.strictEqual(captured.toString(), fakeBuffer.toString());
+
+    // 3. sendTelegramAlert without tokens skips network safely
+    await sendTelegramAlert('Test message', 'home_desktop_agent'); // Should not throw
+
+    // 4. sendTelegramAlert with photoBuffer dispatches sendPhoto
+    const originalFetch = global.fetch;
+    const fetchCalls = [];
+
+    global.fetch = async (url, opts) => {
+      fetchCalls.push({ url, opts });
+      return { ok: true, status: 200, text: async () => 'ok' };
+    };
+
+    process.env.TELEGRAM_BOT_TOKEN = 'mock_bot_token_123';
+    process.env.TELEGRAM_CHAT_ID = 'mock_chat_id_456';
+
+    try {
+      // Photo alert
+      await sendTelegramAlert('Clock In Success', 'TEST_AGENT', { photoBuffer: fakeBuffer });
+      assert.strictEqual(fetchCalls.length, 1);
+      assert.ok(fetchCalls[0].url.includes('/sendPhoto'), 'Must dispatch to sendPhoto when photoBuffer is provided');
+      assert.ok(fetchCalls[0].opts.body instanceof FormData, 'Must use FormData for photo upload');
+
+      // Text alert (no photo)
+      await sendTelegramAlert('Clock Out Success', 'TEST_AGENT');
+      assert.strictEqual(fetchCalls.length, 2);
+      assert.ok(fetchCalls[1].url.includes('/sendMessage'), 'Must dispatch to sendMessage when no photo is provided');
+
+      // Photo upload fallback on 500 failure
+      global.fetch = async (url, opts) => {
+        fetchCalls.push({ url, opts });
+        if (url.includes('/sendPhoto')) {
+          return { ok: false, status: 500, text: async () => 'Internal Error' };
+        }
+        return { ok: true, status: 200, text: async () => 'ok' };
+      };
+      await sendTelegramAlert('Fallback Test', 'TEST_AGENT', { photoBuffer: fakeBuffer });
+      assert.ok(fetchCalls.some(c => c.url.includes('/sendPhoto')), 'Attempted photo');
+      assert.ok(fetchCalls.some(c => c.url.includes('/sendMessage')), 'Fell back to text message on photo failure');
+
+    } finally {
+      delete process.env.TELEGRAM_BOT_TOKEN;
+      delete process.env.TELEGRAM_CHAT_ID;
+      global.fetch = originalFetch;
+    }
+  });
 });
+
 

@@ -159,14 +159,77 @@ async function humanClick(page, targetFrame, selector, targetHandle) {
   }
 }
 
-async function sendTelegramAlert(message, deviceId = 'home_desktop_agent') {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
+async function captureProofSnapshot(page) {
+  if (!page || typeof page.screenshot !== 'function') return null;
+  try {
+    // 1. Try finding specific attendance summary card / table inside frames
+    const frames = typeof page.frames === 'function' ? page.frames() : [];
+    for (const frame of frames) {
+      try {
+        const targetElement = await frame.$('table.table, .table-responsive, #table-perakam, form[name="form1"]').catch(() => null);
+        if (targetElement && typeof targetElement.screenshot === 'function') {
+          const buffer = await targetElement.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
+          if (buffer && buffer.length > 500) {
+            return buffer;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Try on main page
+    try {
+      const mainElement = await page.$('table.table, .table-responsive, #table-perakam, form[name="form1"]').catch(() => null);
+      if (mainElement && typeof mainElement.screenshot === 'function') {
+        const buffer = await mainElement.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
+        if (buffer && buffer.length > 500) {
+          return buffer;
+        }
+      }
+    } catch (_) {}
+
+    // 3. Viewport fallback
+    return await page.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
+  } catch (err) {
+    console.warn('[PLAYWRIGHT] Proof snapshot capture skipped:', err.message);
+    return null;
+  }
+}
+
+async function sendTelegramAlert(message, deviceId = 'home_desktop_agent', options = {}) {
+  const config = (typeof cacheManager.getDeviceConfig === 'function') ? cacheManager.getDeviceConfig() : {};
+  const token = process.env.TELEGRAM_BOT_TOKEN || config.telegram_bot_token;
+  const chatId = process.env.TELEGRAM_CHAT_ID || config.telegram_chat_id;
   if (!token || !chatId) {
     console.warn('[TELEGRAM] Token or Chat ID missing. Skipping alert.');
     return;
   }
   const formattedMessage = message.replace('[ALS Desktop]', `[ALS Desktop: ${deviceId}]`);
+  const photoBuffer = options.photoBuffer || options.screenshotBuffer;
+
+  if (photoBuffer && Buffer.isBuffer(photoBuffer)) {
+    try {
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('caption', formattedMessage);
+      formData.append('photo', new Blob([photoBuffer], { type: 'image/jpeg' }), 'attendance_proof.jpg');
+
+      const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData
+      });
+      if (res && res.ok) {
+        console.log('[TELEGRAM] Visual proof photo sent successfully.');
+        return;
+      } else {
+        const errText = res ? await res.text().catch(() => '') : 'no response';
+        console.warn(`[TELEGRAM] Failed to send photo (${res ? res.status : 'error'}: ${errText}), falling back to text message...`);
+      }
+    } catch (photoErr) {
+      console.warn('[TELEGRAM] Error uploading photo, falling back to text message:', photoErr.message);
+    }
+  }
+
   try {
     const url = `https://api.telegram.org/bot${token}/sendMessage`;
     await fetch(url, {
@@ -487,7 +550,8 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
     let isAlreadyDone = await checkDashboardStatus(page, actionType, supabase, targetDeviceId);
     if (isAlreadyDone) {
       console.log(`[PLAYWRIGHT] Manual action detected, skipping automated click for ${actionType}`);
-      await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId);
+      const proofSnapshot = await captureProofSnapshot(page);
+      await sendTelegramAlert(`✅ [ALS Desktop] Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId, { photoBuffer: proofSnapshot });
       await context.close();
       return true;
     }
@@ -500,7 +564,8 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
       isAlreadyDone = await checkDashboardStatus(page, actionType, supabase, targetDeviceId);
       if (isAlreadyDone) {
         console.log(`[PLAYWRIGHT] Manual action detected during wait, skipping automated click for ${actionType}`);
-        await sendTelegramAlert(`✅ [ALS Desktop] Final Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId);
+        const proofSnapshot = await captureProofSnapshot(page);
+        await sendTelegramAlert(`✅ [ALS Desktop] Final Pre-Flight Check: ${actionType.toUpperCase()} already completed! Skipping automated action.`, targetDeviceId, { photoBuffer: proofSnapshot });
         await context.close();
         return true;
       }
@@ -701,7 +766,12 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
     if (clientToUse && typeof clientToUse.from === 'function') {
       await remoteLog(clientToUse, actionType, 'success', `Successfully clicked ${selector}. ${timingDescription}`, targetDeviceId);
     }
-    await sendTelegramAlert(`✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}`, targetDeviceId);
+    const proofSnapshot = await captureProofSnapshot(page);
+    const inTime = postProofData?.clockIn || '--:--';
+    const outTime = postProofData?.clockOut || '--:--';
+    const proofDate = postProofData?.date || standardDate;
+    const caption = `✅ [ALS Desktop] Successfully executed ${actionType.toUpperCase()} at ${new Date().toLocaleTimeString()}\n📅 Date: ${proofDate}\n🟢 In: ${inTime}\n🔴 Out: ${outTime}`;
+    await sendTelegramAlert(caption, targetDeviceId, { photoBuffer: proofSnapshot });
 
     await context.close();
     return true;
@@ -1048,7 +1118,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.8';
+const VERSION = '1.6.9';
 
 module.exports = {
   VERSION,
@@ -1062,6 +1132,8 @@ module.exports = {
     humanClick,
     isRetryableGatewayError,
     executeClockActionSingleAttempt,
-    manualFetchProofSingleAttempt
+    manualFetchProofSingleAttempt,
+    captureProofSnapshot,
+    sendTelegramAlert
   }
 };

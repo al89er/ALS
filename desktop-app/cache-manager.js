@@ -177,6 +177,8 @@ function createDeviceConfig(parsed = {}, env = process.env, edition = getAppEdit
     clock_in_base_time: parsed.clock_in_base_time || '07:45',
     clock_out_base_time: parsed.clock_out_base_time || '17:05',
     random_period_minutes: typeof parsed.random_period_minutes === 'number' ? parsed.random_period_minutes : 5,
+    telegram_bot_token: parsed.telegram_bot_token || env.TELEGRAM_BOT_TOKEN || '',
+    telegram_chat_id: parsed.telegram_chat_id || env.TELEGRAM_CHAT_ID || '',
     edition
   };
 }
@@ -319,7 +321,7 @@ function saveEngineConfig(config = {}) {
   return { target_url, show_browser };
 }
 
-const VERSION = '1.5.9';
+const VERSION = '1.5.10';
 
 module.exports = {
   VERSION,

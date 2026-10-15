@@ -1,14 +1,14 @@
 {
   "version": "1.6.12",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-15T04:53:20.402Z",
+  "updatedAt": "2026-10-15T04:58:10.966Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.8",
+      "version": "1.6.9",
       "type": "engine",
-      "sizeBytes": 44511,
-      "sha256": "0c7b1f1a494a6b12716db7d0536eeb876bba2c5658684c4c84d221874a427b1f",
+      "sizeBytes": 47755,
+      "sha256": "5f50a20eb30a05e3e2639bcedca79ec6fb860a92f555ffd0b4728bfcb34d3292",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
@@ -37,10 +37,10 @@
     },
     "cache-manager": {
       "file": "cache-manager.js",
-      "version": "1.5.9",
+      "version": "1.5.10",
       "type": "storage",
-      "sizeBytes": 10578,
-      "sha256": "91870762f12faadf55adfd72ac68459b2a795829790cba6eadb9b59e835a1aae",
+      "sizeBytes": 10739,
+      "sha256": "425f256753eae7ad7ab3e8c3df7e81fe05a31d3cc92a23d51fe5b1096fdcca5d",
       "description": "Local JSON cache, settings persistence, and hub accounts manager"
     },
     "tray-manager": {
