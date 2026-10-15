@@ -254,3 +254,60 @@ test('Hub Client Hardening: Active client returns cached instance immediately', 
   hubClient.__test.activeClients.delete('TEST_DEV');
 });
 
+test('Hub Client Hardening: Multi-account sequential staggering calculation and queue pacing', async () => {
+  const { getStaggerDelayMs, setTestStaggerDelayMs, resetStaggerState, enqueueCommand } = hubClient.__test;
+
+  resetStaggerState();
+
+  // 1. Missing deviceId -> 0ms
+  assert.strictEqual(getStaggerDelayMs(null, 'DEV1'), 0);
+  assert.strictEqual(getStaggerDelayMs('DEV1', null), 0);
+
+  // 2. Same device -> 0 in test
+  assert.strictEqual(getStaggerDelayMs('DEV1', 'DEV1'), 0);
+
+  // 3. Different device -> 10 in test
+  assert.strictEqual(getStaggerDelayMs('DEV1', 'DEV2'), 10);
+
+  // 4. Custom test delay override
+  setTestStaggerDelayMs(35);
+  assert.strictEqual(getStaggerDelayMs('DEV1', 'DEV2'), 35);
+  setTestStaggerDelayMs(null);
+
+  // 5. Production calculation verification
+  const prevEnv = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    assert.strictEqual(getStaggerDelayMs('DEV1', 'DEV1'), 2000, 'Same device gets 2s breather in production');
+    const prodDelay = getStaggerDelayMs('DEV1', 'DEV2');
+    assert.ok(prodDelay >= 15000 && prodDelay <= 45000, `Delay (${prodDelay}) should be within 15s-45s range in production`);
+  } finally {
+    process.env.NODE_ENV = prevEnv;
+  }
+
+  // 6. Test actual queue pacing between distinct accounts
+  const executionTimeline = [];
+  setTestStaggerDelayMs(40); // 40ms stagger for test
+
+  const taskA = async () => {
+    executionTimeline.push({ device: 'DEV_ALPHA', time: Date.now() });
+  };
+  const taskB = async () => {
+    executionTimeline.push({ device: 'DEV_BETA', time: Date.now() });
+  };
+
+  enqueueCommand(taskA, { deviceId: 'DEV_ALPHA', action: 'clock_in' });
+  enqueueCommand(taskB, { deviceId: 'DEV_BETA', action: 'clock_in' });
+
+  await hubClient.__test.processQueue();
+
+  assert.strictEqual(executionTimeline.length, 2, 'Both account tasks must complete');
+  assert.strictEqual(executionTimeline[0].device, 'DEV_ALPHA');
+  assert.strictEqual(executionTimeline[1].device, 'DEV_BETA');
+  const elapsedBetween = executionTimeline[1].time - executionTimeline[0].time;
+  assert.ok(elapsedBetween >= 30, `Elapsed time between different accounts (${elapsedBetween}ms) must respect stagger delay`);
+
+  resetStaggerState();
+});
+
+

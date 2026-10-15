@@ -248,6 +248,12 @@ app.whenReady().then(() => {
         }
       }
       const res = await automation.manualFetchProof(targetClient, options);
+      if (edition === 'hub' && deviceId) {
+        try {
+          const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+          if (typeof hubClient.recordExecution === 'function') hubClient.recordExecution(deviceId);
+        } catch (_) {}
+      }
       return { success: true, result: res };
     } catch (err) {
       console.error('Failed to fetch proof manually:', err);
@@ -273,6 +279,12 @@ app.whenReady().then(() => {
         hubAccount: account,
         source: 'hub_manual'
       });
+      if (edition === 'hub' && deviceId) {
+        try {
+          const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
+          if (typeof hubClient.recordExecution === 'function') hubClient.recordExecution(deviceId);
+        } catch (_) {}
+      }
       return { success: true, result: res };
     } catch (err) {
       console.error(`Failed to trigger hub action ${action} for ${deviceId}:`, err);

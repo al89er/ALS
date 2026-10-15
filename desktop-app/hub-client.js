@@ -24,6 +24,72 @@ const activeClients = new Map();
 const activeChannels = new Map();
 const activeIntervals = new Map();
 const activeRecoveries = new Set();
+let lastExecutedDeviceId = null;
+let lastExecutionTime = 0;
+let activeStaggerAbort = null;
+let testStaggerDelayMs = null;
+
+function getStaggerDelayMs(prevDeviceId, nextDeviceId) {
+  if (!prevDeviceId || !nextDeviceId) return 0;
+
+  if (testStaggerDelayMs !== null) {
+    return testStaggerDelayMs;
+  }
+
+  // Same device: 0 in test, 2000ms in production for a slight socket breather
+  if (prevDeviceId === nextDeviceId) {
+    return process.env.NODE_ENV === 'test' ? 0 : 2000;
+  }
+
+  // Different accounts: in test mode, keep fast
+  if (process.env.NODE_ENV === 'test') {
+    return 10;
+  }
+
+  const config = (typeof cacheManager.getDeviceConfig === 'function')
+    ? cacheManager.getDeviceConfig()
+    : {};
+  const minSec = (typeof config.hub_stagger_min_sec === 'number' && config.hub_stagger_min_sec >= 0)
+    ? config.hub_stagger_min_sec
+    : 15;
+  const maxSec = (typeof config.hub_stagger_max_sec === 'number' && config.hub_stagger_max_sec >= minSec)
+    ? config.hub_stagger_max_sec
+    : 45;
+
+  const minMs = minSec * 1000;
+  const maxMs = maxSec * 1000;
+  return Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
+}
+
+function sleepWithAbort(ms) {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timer = null;
+    const onAbort = () => {
+      if (timer) clearTimeout(timer);
+      resolve();
+    };
+    activeStaggerAbort = onAbort;
+    timer = setTimeout(() => {
+      activeStaggerAbort = null;
+      resolve();
+    }, ms);
+  });
+}
+
+function recordExecution(deviceId) {
+  lastExecutedDeviceId = deviceId;
+  lastExecutionTime = Date.now();
+}
+
+function enqueueCommand(taskFn, meta = {}) {
+  const task = typeof taskFn === 'function' ? taskFn : () => taskFn;
+  if (meta.deviceId) task.deviceId = meta.deviceId;
+  if (meta.action) task.action = meta.action;
+  if (meta.cmdId) task.cmdId = meta.cmdId;
+  commandQueue.push(task);
+  return processQueue();
+}
 
 function processQueue() {
   if (isExecuting) return queuePromise;
@@ -31,10 +97,26 @@ function processQueue() {
   queuePromise = (async () => {
     while (commandQueue.length > 0) {
       const task = commandQueue.shift();
+      const nextDeviceId = task ? task.deviceId : null;
+
+      if (lastExecutedDeviceId && nextDeviceId) {
+        const requiredStaggerMs = getStaggerDelayMs(lastExecutedDeviceId, nextDeviceId);
+        const elapsedMs = Date.now() - lastExecutionTime;
+        const waitMs = requiredStaggerMs - elapsedMs;
+
+        if (waitMs > 0) {
+          console.log(`[HUB] Staggering execution between accounts (${lastExecutedDeviceId} -> ${nextDeviceId}) by ${(waitMs / 1000).toFixed(1)}s to avoid WAF rate-limiting...`);
+          await sleepWithAbort(waitMs);
+        }
+      }
+
       try {
         await task();
       } catch (err) {
         console.error('[HUB] Execution error:', err);
+      } finally {
+        lastExecutedDeviceId = nextDeviceId || lastExecutedDeviceId;
+        lastExecutionTime = Date.now();
       }
     }
     isExecuting = false;
@@ -217,6 +299,12 @@ function removeSingleAccount(deviceId) {
 }
 
 function stopHubAccounts() {
+  if (activeStaggerAbort) {
+    activeStaggerAbort();
+    activeStaggerAbort = null;
+  }
+  commandQueue.length = 0;
+
   for (const [deviceId, intervalId] of activeIntervals.entries()) {
     clearInterval(intervalId);
   }
@@ -311,7 +399,11 @@ function startHubCommandListener(supabase, account) {
         if (!cmd) return;
         console.log(`[HUB] Received realtime command for ${deviceId}: ${cmd.action} (id=${cmd.id})`);
         
-        commandQueue.push(() => processHubCommand(supabase, account, cmd, 'realtime'));
+        const task = () => processHubCommand(supabase, account, cmd, 'realtime');
+        task.deviceId = account.device_id;
+        task.action = cmd.action;
+        task.cmdId = cmd.id;
+        commandQueue.push(task);
         processQueue();
       }
     )
@@ -354,7 +446,11 @@ async function recoverPendingCommands(supabase, account, source = 'recovery') {
       if (pendingCommands && pendingCommands.length > 0) {
         console.log(`[HUB] Found ${pendingCommands.length} pending commands for ${deviceId} (source=${source}, batch ${iterations}).`);
         for (const cmd of pendingCommands) {
-          commandQueue.push(() => processHubCommand(supabase, account, cmd, source));
+          const task = () => processHubCommand(supabase, account, cmd, source);
+          task.deviceId = account.device_id;
+          task.action = cmd.action;
+          task.cmdId = cmd.id;
+          commandQueue.push(task);
         }
         await processQueue();
         if (pendingCommands.length < 20) {
@@ -411,7 +507,7 @@ async function getHubClientForDevice(deviceId) {
   return await initSingleAccount(account);
 }
 
-const VERSION = '1.6.7';
+const VERSION = '1.6.8';
 
 module.exports = {
   VERSION,
@@ -421,12 +517,15 @@ module.exports = {
   stopHubAccounts,
   getHubAccountStatus,
   getHubClientForDevice,
+  recordExecution,
+  enqueueCommand,
   __test: {
     processHubCommand,
     recoverPendingCommands,
     startHubHeartbeat,
     startHubCommandListener,
     processQueue,
+    enqueueCommand,
     setRuntimeDependenciesForTest,
     resetRuntimeDependencies,
     PENDING_COMMAND_MAX_AGE_MS,
@@ -434,7 +533,19 @@ module.exports = {
     activeChannels,
     activeIntervals,
     activeRecoveries,
-    commandQueue
+    commandQueue,
+    getStaggerDelayMs,
+    setTestStaggerDelayMs: (ms) => { testStaggerDelayMs = ms; },
+    resetStaggerState: () => {
+      lastExecutedDeviceId = null;
+      lastExecutionTime = 0;
+      testStaggerDelayMs = null;
+      if (activeStaggerAbort) {
+        activeStaggerAbort();
+        activeStaggerAbort = null;
+      }
+      commandQueue.length = 0;
+    }
   }
 };
 
