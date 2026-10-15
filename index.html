@@ -715,8 +715,34 @@
             <h1 style="margin-bottom: 0.5rem; font-size: 1.5rem; color: #fff;">ALS Authorization</h1>
             <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 0.9rem;">Please sign in to access
                 the dashboard. <span
-                    style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 4px;">v1.5.8</span>
+                    style="font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; border-radius: 4px;">v1.6.0</span>
             </p>
+
+            <!-- Biometric Quick Unlock Area (shown when enrolled on this device) -->
+            <div id="biometricArea" style="display: none; margin-bottom: 1.25rem;">
+                <div style="padding: 1.25rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 0.75rem;">
+                    <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); display: flex; align-items: center; justify-content: center;">
+                        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04A15.932 15.932 0 0 0 12 21c4.418 0 8-3.582 8-8V9a8 8 0 1 0-16 0v2"></path>
+                            <path d="M12 7a4 4 0 0 0-4 4c0 1.61.94 3.01 2.31 3.68"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.95rem; font-weight: 600; color: #fff;">Biometric Quick Unlock</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.15rem;">Touch ID, Face ID or Windows Hello</div>
+                    </div>
+                    <button type="button" id="biometricUnlockBtn" onclick="handleBiometricUnlock()" class="btn btn-primary" style="width: 100%; justify-content: center; gap: 0.5rem; margin-top: 0.25rem;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.5-1 6.8-2.8 9.6m-3.4-2A15.9 15.9 0 0 0 12 21c4.4 0 8-3.6 8-8V9a8 8 0 1 0-16 0v2"></path></svg>
+                        Unlock with Biometrics
+                    </button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.75rem; width: 100%; margin: 1.25rem 0 0.5rem 0; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase;">
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.08);"></div>
+                    <span>or use password</span>
+                    <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.08);"></div>
+                </div>
+            </div>
+
             <form id="loginForm" onsubmit="handleLogin(event)"
                 style="display: flex; flex-direction: column; gap: 1rem;">
                 <input type="email" id="emailInput" placeholder="Email" required
@@ -752,6 +778,12 @@
                         style="background: rgba(0,0,0,0.4); color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; outline: none; cursor: pointer; flex: 1; max-width: 250px;">
                         <option value="home_desktop_agent">Office PC (home_desktop_agent)</option>
                     </select>
+                    <button id="navBioBtn" onclick="toggleBiometricEnrollment()"
+                        style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; transition: all 0.2s;"
+                        title="Biometric Security">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.5-1 6.8-2.8 9.6m-3.4-2A15.9 15.9 0 0 0 12 21c4.4 0 8-3.6 8-8V9a8 8 0 1 0-16 0v2"></path></svg>
+                        <span id="navBioLabel">Biometrics</span>
+                    </button>
                     <button onclick="handleSignOut()"
                         style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 0.4rem 0.8rem; font-family: var(--font-family); font-size: 0.85rem; cursor: pointer; transition: all 0.2s;"
                         onmouseover="this.style.background='rgba(239, 68, 68, 0.25)'"
@@ -1547,6 +1579,224 @@
             }
         });
 
+        // ==========================================
+        // WEBAUTHN BIOMETRIC AUTHENTICATION
+        // ==========================================
+        const BIO_CRED_KEY = 'als_webauthn_credential_id';
+        const BIO_SESSION_KEY = 'als_bio_session';
+
+        function bufferToBase64Url(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let str = '';
+            for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+            return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        function base64UrlToBuffer(base64url) {
+            const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return bytes.buffer;
+        }
+
+        async function isBiometricSupported() {
+            try {
+                if (!window.PublicKeyCredential) return false;
+                if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') return false;
+                return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function checkBiometricState() {
+            const supported = await isBiometricSupported();
+            const credId = localStorage.getItem(BIO_CRED_KEY);
+            const savedSession = localStorage.getItem(BIO_SESSION_KEY);
+            const bioArea = document.getElementById('biometricArea');
+
+            if (supported && credId && savedSession) {
+                if (bioArea) bioArea.style.display = 'block';
+            } else {
+                if (bioArea) bioArea.style.display = 'none';
+            }
+
+            const navBioBtn = document.getElementById('navBioBtn');
+            const navBioLabel = document.getElementById('navBioLabel');
+            if (navBioBtn && navBioLabel) {
+                if (!supported) {
+                    navBioBtn.style.display = 'none';
+                } else {
+                    navBioBtn.style.display = 'flex';
+                    if (credId) {
+                        navBioLabel.innerText = 'Biometrics (Active)';
+                        navBioBtn.style.color = '#34d399';
+                        navBioBtn.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                        navBioBtn.style.background = 'rgba(52, 211, 153, 0.15)';
+                    } else {
+                        navBioLabel.innerText = 'Enable Biometrics';
+                        navBioBtn.style.color = '#60a5fa';
+                        navBioBtn.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+                        navBioBtn.style.background = 'rgba(59, 130, 246, 0.15)';
+                    }
+                }
+            }
+        }
+
+        async function handleBiometricUnlock() {
+            const credId = localStorage.getItem(BIO_CRED_KEY);
+            const rawSession = localStorage.getItem(BIO_SESSION_KEY);
+            if (!credId || !rawSession) {
+                alert('No biometric credentials found on this device. Please sign in with password first.');
+                return;
+            }
+
+            const bioBtn = document.getElementById('biometricUnlockBtn');
+            if (bioBtn) {
+                bioBtn.disabled = true;
+                bioBtn.innerHTML = 'Verifying Sensor...';
+            }
+
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                const assertion = await navigator.credentials.get({
+                    publicKey: {
+                        challenge: challenge.buffer,
+                        allowCredentials: [{
+                            id: base64UrlToBuffer(credId),
+                            type: 'public-key'
+                        }],
+                        userVerification: 'required',
+                        timeout: 60000
+                    }
+                });
+
+                if (!assertion) throw new Error('Biometric verification cancelled or unavailable.');
+
+                const parsed = JSON.parse(rawSession);
+                if (!parsed || !parsed.refresh_token) throw new Error('Stored biometric session expired.');
+
+                const { data, error } = await _supabase.auth.setSession({
+                    access_token: parsed.access_token || '',
+                    refresh_token: parsed.refresh_token
+                });
+
+                if (error) {
+                    const { data: refData, error: refErr } = await _supabase.auth.refreshSession({
+                        refresh_token: parsed.refresh_token
+                    });
+                    if (refErr) throw refErr;
+                    if (refData && refData.session) {
+                        localStorage.setItem(BIO_SESSION_KEY, JSON.stringify({
+                            access_token: refData.session.access_token,
+                            refresh_token: refData.session.refresh_token,
+                            email: refData.session.user?.email || parsed.email
+                        }));
+                    }
+                } else if (data && data.session) {
+                    localStorage.setItem(BIO_SESSION_KEY, JSON.stringify({
+                        access_token: data.session.access_token,
+                        refresh_token: data.session.refresh_token,
+                        email: data.session.user?.email || parsed.email
+                    }));
+                }
+
+                await checkSession();
+
+            } catch (err) {
+                console.warn('[WEBAUTHN] Biometric unlock error:', err.message);
+                const loginError = document.getElementById('loginError');
+                if (loginError) {
+                    loginError.innerText = 'Biometric check failed: ' + (err.message || 'Please use password.');
+                    loginError.style.display = 'block';
+                }
+            } finally {
+                if (bioBtn) {
+                    bioBtn.disabled = false;
+                    bioBtn.innerHTML = `
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 11c0 3.5-1 6.8-2.8 9.6m-3.4-2A15.9 15.9 0 0 0 12 21c4.4 0 8-3.6 8-8V9a8 8 0 1 0-16 0v2"></path></svg>
+                        Unlock with Biometrics
+                    `;
+                }
+            }
+        }
+
+        async function toggleBiometricEnrollment() {
+            const credId = localStorage.getItem(BIO_CRED_KEY);
+            if (credId) {
+                if (confirm('Biometric unlock is currently active on this device.\n\nDo you want to REMOVE biometric credentials from this browser?')) {
+                    localStorage.removeItem(BIO_CRED_KEY);
+                    localStorage.removeItem(BIO_SESSION_KEY);
+                    checkBiometricState();
+                    alert('Biometric credentials removed from this device.');
+                }
+                return;
+            }
+
+            const supported = await isBiometricSupported();
+            if (!supported) {
+                alert('Biometric authentication (Touch ID, Face ID, Windows Hello) is not supported or not configured on this device.');
+                return;
+            }
+
+            const { data: { session } } = await _supabase.auth.getSession();
+            if (!session || !session.user) {
+                alert('Please sign in before setting up biometrics.');
+                return;
+            }
+
+            try {
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                const userIdBytes = new TextEncoder().encode(session.user.id);
+                const userEmail = session.user.email || 'ALS User';
+
+                const credential = await navigator.credentials.create({
+                    publicKey: {
+                        challenge: challenge.buffer,
+                        rp: {
+                            name: 'ALS Attendance Hub'
+                        },
+                        user: {
+                            id: userIdBytes.buffer,
+                            name: userEmail,
+                            displayName: userEmail
+                        },
+                        pubKeyCredParams: [
+                            { alg: -7, type: 'public-key' },
+                            { alg: -257, type: 'public-key' }
+                        ],
+                        authenticatorSelection: {
+                            authenticatorAttachment: 'platform',
+                            userVerification: 'required'
+                        },
+                        timeout: 60000
+                    }
+                });
+
+                if (!credential) throw new Error('Biometric enrollment cancelled.');
+
+                const base64CredId = bufferToBase64Url(credential.rawId);
+                localStorage.setItem(BIO_CRED_KEY, base64CredId);
+                localStorage.setItem(BIO_SESSION_KEY, JSON.stringify({
+                    access_token: session.access_token,
+                    refresh_token: session.refresh_token,
+                    email: userEmail
+                }));
+
+                checkBiometricState();
+                alert('✅ Biometric quick unlock registered successfully!\nYou can now unlock the dashboard with Touch ID, Face ID, or Windows Hello.');
+
+            } catch (err) {
+                console.error('[WEBAUTHN] Enrollment failed:', err);
+                alert('Biometric setup could not be completed: ' + err.message);
+            }
+        }
+
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
 
@@ -1554,6 +1804,15 @@
                 const urlParamDeviceId = new URLSearchParams(window.location.search).get('device_id');
                 if (urlParamDeviceId) {
                     activeDeviceId = urlParamDeviceId;
+                }
+
+                // Keep biometric session refresh token up-to-date if registered
+                if (localStorage.getItem(BIO_CRED_KEY)) {
+                    localStorage.setItem(BIO_SESSION_KEY, JSON.stringify({
+                        access_token: session.access_token,
+                        refresh_token: session.refresh_token,
+                        email: session.user?.email || ''
+                    }));
                 }
 
                 // Hide System Status card and Skips Tab for non-admin users
@@ -1570,10 +1829,12 @@
 
                 loginOverlay.style.display = 'none';
                 appContainer.style.display = 'block';
+                checkBiometricState();
                 initializeApp();
             } else {
                 loginOverlay.style.display = 'flex';
                 appContainer.style.display = 'none';
+                checkBiometricState();
             }
         }
 
@@ -1592,6 +1853,13 @@
                 loginError.style.display = 'block';
                 loginBtn.innerText = 'Sign In';
             } else {
+                if (data && data.session && localStorage.getItem(BIO_CRED_KEY)) {
+                    localStorage.setItem(BIO_SESSION_KEY, JSON.stringify({
+                        access_token: data.session.access_token,
+                        refresh_token: data.session.refresh_token,
+                        email: data.session.user?.email || email
+                    }));
+                }
                 checkSession();
             }
         }
