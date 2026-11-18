@@ -272,6 +272,10 @@ app.whenReady().then(() => {
           const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
           if (typeof hubClient.recordExecution === 'function') hubClient.recordExecution(deviceId);
         } catch (_) {}
+      } else if (edition !== 'hub' && typeof scheduler.reconcileSchedule === 'function') {
+        try {
+          await scheduler.reconcileSchedule(supabase, { triggerSource: 'manual_proof_sync', force: true });
+        } catch (_) {}
       }
       return { success: true, result: res };
     } catch (err) {
@@ -312,6 +316,9 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('reload-ui', () => {
+    if (edition !== 'hub' && typeof scheduler.runHealthCheck === 'function') {
+      scheduler.runHealthCheck(supabase).catch(() => {});
+    }
     if (mainWindow && !mainWindow.isDestroyed()) {
       const currentTargetUI = edition === 'hub' ? 'hub-ui.html' : 'desktop-ui.html';
       const latestUIPath = moduleLoader.resolveUIPath(currentTargetUI, path.join(__dirname, currentTargetUI));
@@ -428,6 +435,47 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle('get-scheduler-diagnostics', () => {
+    if (edition === 'hub') {
+      return { authorized: false, healthStatus: 'disabled', reason: 'Hub edition does not use auto scheduling' };
+    }
+    const diag = typeof scheduler.getDiagnosticsSnapshot === 'function'
+      ? scheduler.getDiagnosticsSnapshot()
+      : (typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : { initialized: false, healthStatus: 'not_running' });
+    const cache = cacheManager.readCache ? cacheManager.readCache() : {};
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    return {
+      ...diag,
+      connectivityState: global.connectivityState,
+      cachedTodaySchedule: (cache && cache.daily_schedule && cache.daily_schedule.date === todayStr) ? cache.daily_schedule : null
+    };
+  });
+
+  ipcMain.handle('recheck-schedule', async () => {
+    if (edition === 'hub') {
+      return { success: false, skipped: true, reason: 'Hub edition does not use auto scheduling' };
+    }
+    try {
+      let result = null;
+      const snap = typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : {};
+      if (!snap.initialized && typeof scheduler.init === 'function') {
+        result = await scheduler.init(supabase);
+      } else if (typeof scheduler.reconcileSchedule === 'function') {
+        result = await scheduler.reconcileSchedule(supabase, {
+          triggerSource: 'manual_recheck_button',
+          checkMissed: true,
+          force: true
+        });
+      }
+      const diagnostics = typeof scheduler.getDiagnosticsSnapshot === 'function'
+        ? scheduler.getDiagnosticsSnapshot()
+        : (typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : null);
+      return { success: true, result, diagnostics };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('relaunch-app', () => {
     return moduleUpdater.relaunchApp();
   });
@@ -445,12 +493,13 @@ app.whenReady().then(() => {
     const hubClient = moduleLoader.loadModule('hub-client', require('./hub-client'));
     hubClient.initHubAccounts();
   } else {
-    initSupabase();
-    if (typeof scheduler.reconcileSchedule === 'function') {
+    // Wait up to 8s for initial Supabase auth so scheduler.init() executes with an authenticated JWT
+    Promise.race([
+      Promise.resolve(initSupabase()).catch(() => {}),
+      new Promise(resolve => setTimeout(resolve, 8000))
+    ]).finally(() => {
       scheduler.init(supabase);
-    } else {
-      scheduler.init(supabase);
-    }
+    });
     if (powerMonitor && typeof powerMonitor.on === 'function') {
       powerMonitor.on('resume', () => {
         console.log('[POWER] Windows system resumed from sleep. Triggering schedule & connectivity reconciliation...');

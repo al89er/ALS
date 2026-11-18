@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getProofImage: () => ipcRenderer.invoke('get-proof-image'),
     getSchedulePolicy: () => ipcRenderer.invoke('get-schedule-policy'),
     reconcileSchedule: (options) => ipcRenderer.invoke('reconcile-schedule', options),
+    getSchedulerDiagnostics: () => ipcRenderer.invoke('get-scheduler-diagnostics'),
+    recheckSchedule: (options) => ipcRenderer.invoke('recheck-schedule', options),
 
     // Modular Hot-Update APIs
     checkModuleUpdates: () => ipcRenderer.invoke('check-module-updates'),

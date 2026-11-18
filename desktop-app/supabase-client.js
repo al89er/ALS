@@ -59,6 +59,9 @@ let processingPromise = Promise.resolve();
 let schedulingChannel = null;
 let commandChannel = null;
 let heartbeatTimer = null;
+let isAuthenticated = false;
+let authPromise = null;
+let lastAuthError = null;
 
 function isHomeAutoScheduleAgent() {
   const config = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
@@ -152,6 +155,20 @@ async function processCommandById(commandId, source = 'unknown') {
             .eq('id', commandId);
           if (compError) console.error(`[SUPABASE] Error marking command ${commandId} as completed:`, compError.message);
           else console.log(`[SUPABASE] Command ${commandId} marked as completed.`);
+
+          if (isHomeAutoScheduleAgent() && (action === 'clock_in' || action === 'clock_out' || action === 'manual_proof_sync')) {
+            try {
+              const scheduler = require('./scheduler');
+              if (typeof scheduler.reconcileSchedule === 'function') {
+                await scheduler.reconcileSchedule(supabase, {
+                  triggerSource: `command_${action}`,
+                  force: true
+                });
+              }
+            } catch (recErr) {
+              console.warn('[SUPABASE] Post-command schedule reconciliation warning:', recErr.message);
+            }
+          }
         } catch (execError) {
           const { error: failError } = await supabase
             .from('commands')
@@ -310,9 +327,13 @@ async function reconcileCache() {
 async function checkAndReconcileScheduleRevision(wasOffline = false) {
   if (!isHomeAutoScheduleAgent()) return null;
   const scheduler = require('./scheduler');
-  const snap = typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : { currentAppliedRevision: 0 };
+  const snap = typeof scheduler.getDiagnosticsSnapshot === 'function'
+    ? scheduler.getDiagnosticsSnapshot()
+    : (typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : { currentAppliedRevision: 0 });
 
+  const todayStr = new Date().toLocaleDateString('en-CA');
   let remoteRevision = null;
+  let remoteAppliedRevision = null;
   try {
     const { data, error } = await supabase
       .from('schedule_policy_state')
@@ -322,27 +343,78 @@ async function checkAndReconcileScheduleRevision(wasOffline = false) {
 
     if (!error && data && data.revision !== undefined) {
       remoteRevision = Number(data.revision) || 0;
+      remoteAppliedRevision = Number(data.applied_revision || 0);
       if (typeof scheduler.notifyIncomingRevision === 'function') {
         scheduler.notifyIncomingRevision(remoteRevision);
       }
     }
   } catch (_) {}
 
-  if (wasOffline || (remoteRevision !== null && remoteRevision > (snap.currentAppliedRevision || 0))) {
-    const triggerSource = wasOffline ? 'heartbeat_reconnect' : 'heartbeat_revision_poll';
-    console.log(`[SUPABASE] Triggering schedule reconciliation (source=${triggerSource}, remoteRev=${remoteRevision}, appliedRev=${snap.currentAppliedRevision})...`);
+  const needsHealthRecovery =
+    !snap.initialized ||
+    (snap.healthStatus && snap.healthStatus !== 'healthy' && snap.healthStatus !== 'disabled') ||
+    (snap.todayDate && snap.lastEvaluatedDate && snap.lastEvaluatedDate !== todayStr);
+
+  const remoteAckPending = remoteRevision !== null && remoteAppliedRevision !== null && remoteAppliedRevision < remoteRevision;
+
+  if (wasOffline || needsHealthRecovery || remoteAckPending || (remoteRevision !== null && remoteRevision > (snap.currentAppliedRevision || 0))) {
+    const triggerSource = wasOffline
+      ? 'heartbeat_reconnect'
+      : (needsHealthRecovery ? 'heartbeat_health_recovery' : 'heartbeat_revision_poll');
+    console.log(`[SUPABASE] Triggering schedule reconciliation (source=${triggerSource}, remoteRev=${remoteRevision}, appliedRev=${snap.currentAppliedRevision}, health=${snap.healthStatus || 'unknown'})...`);
     return await scheduler.reconcileSchedule(supabase, {
       triggerSource,
       eventRevision: remoteRevision,
       force: true,
-      checkMissed: wasOffline
+      checkMissed: wasOffline || needsHealthRecovery
     });
   }
   return null;
 }
 
+async function ensureAuthenticatedSession() {
+  if (isAuthenticated) return { authenticated: true, justAuthenticated: false };
+  const config = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
+  if (!config.supabase_email || !config.supabase_password) {
+    return { authenticated: false, justAuthenticated: false, skipped: true };
+  }
+  if (authPromise) return authPromise;
+
+  authPromise = (async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: config.supabase_email,
+        password: config.supabase_password
+      });
+      if (error) {
+        lastAuthError = error.message;
+        console.error('[SUPABASE] Authentication failed:', error.message);
+        return { authenticated: false, justAuthenticated: false, error: error.message };
+      }
+      isAuthenticated = true;
+      lastAuthError = null;
+      console.log('[SUPABASE] Authentication successful.');
+      if (data && data.session && data.session.access_token && supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
+        try { supabase.realtime.setAuth(data.session.access_token); } catch (_) {}
+      }
+      return { authenticated: true, justAuthenticated: true };
+    } catch (err) {
+      lastAuthError = err.message;
+      console.error('[SUPABASE] Authentication exception:', err.message);
+      return { authenticated: false, justAuthenticated: false, error: err.message };
+    } finally {
+      authPromise = null;
+    }
+  })();
+
+  return authPromise;
+}
+
 async function pingHeartbeatOnce() {
   try {
+    const authRes = await ensureAuthenticatedSession();
+    const justAuthenticated = Boolean(authRes && authRes.justAuthenticated);
+
     const deviceId = getDeviceId();
     const deviceName = getDeviceName();
 
@@ -370,7 +442,7 @@ async function pingHeartbeatOnce() {
     // Connection alive, try resolving offline queue
     await reconcileCache();
 
-    if (wasOffline) {
+    if (wasOffline || justAuthenticated) {
       await recoverPendingCommands();
     }
 
@@ -383,8 +455,8 @@ async function pingHeartbeatOnce() {
       startCommandListener();
     }
 
-    await checkAndReconcileScheduleRevision(wasOffline);
-    return { online: true, wasOffline };
+    await checkAndReconcileScheduleRevision(wasOffline || justAuthenticated);
+    return { online: true, wasOffline, justAuthenticated };
   } catch (err) {
     console.error('[SUPABASE] Heartbeat exception (Network drop?):', err.message);
     global.connectivityState = 'Offline';
@@ -524,11 +596,14 @@ async function initSupabase() {
 
   if (supabase.auth && typeof supabase.auth.onAuthStateChange === 'function') {
     supabase.auth.onAuthStateChange((event, session) => {
-      if (session && session.access_token && supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
-        try {
-          supabase.realtime.setAuth(session.access_token);
-        } catch (authErr) {
-          console.warn('[SUPABASE] Failed to sync realtime auth token:', authErr.message);
+      if (session && session.access_token) {
+        isAuthenticated = true;
+        if (supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
+          try {
+            supabase.realtime.setAuth(session.access_token);
+          } catch (authErr) {
+            console.warn('[SUPABASE] Failed to sync realtime auth token:', authErr.message);
+          }
         }
       }
     });
@@ -537,28 +612,17 @@ async function initSupabase() {
   const config = cacheManager.getDeviceConfig();
   if (config.supabase_email && config.supabase_password) {
     console.log(`[SUPABASE] Authenticating as ${config.supabase_email}...`);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: config.supabase_email,
-      password: config.supabase_password
-    });
-    
-    if (error) {
-      console.error('[SUPABASE] Authentication failed! Check your credentials in Settings.', error.message);
-    } else {
-      console.log('[SUPABASE] Authentication successful.');
-      if (data && data.session && data.session.access_token && supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
-        try { supabase.realtime.setAuth(data.session.access_token); } catch (_) {}
-      }
-    }
+    await ensureAuthenticatedSession();
   } else {
     console.warn('[SUPABASE] No Supabase email/password configured. Unauthenticated requests may be blocked by RLS.');
   }
 
   startHeartbeat();
   startCommandListener();
+  return { authenticated: isAuthenticated, lastAuthError };
 }
 
-const VERSION = '1.7.0';
+const VERSION = '1.7.2';
 
 module.exports = {
   VERSION,
@@ -572,10 +636,16 @@ module.exports = {
     recoverPendingCommands,
     reconcileCache,
     pingHeartbeatOnce,
+    ensureAuthenticatedSession,
     checkAndReconcileScheduleRevision,
     handleScheduleRealtimeEvent,
     startCommandListener,
     setRuntimeDependenciesForTest,
-    resetRuntimeDependencies
+    resetRuntimeDependencies,
+    resetAuthStateForTest: () => {
+      isAuthenticated = false;
+      authPromise = null;
+      lastAuthError = null;
+    }
   }
 };

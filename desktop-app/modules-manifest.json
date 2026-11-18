@@ -1,7 +1,7 @@
 {
-  "version": "1.7.0",
+  "version": "1.7.1",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-11-18T02:27:39.897Z",
+  "updatedAt": "2026-11-18T09:13:08.226Z",
   "modules": {
     "automation": {
       "file": "automation.js",
@@ -21,18 +21,18 @@
     },
     "scheduler": {
       "file": "scheduler.js",
-      "version": "1.7.0",
+      "version": "1.7.2",
       "type": "engine",
-      "sizeBytes": 58910,
-      "sha256": "8bceb6bd1c06b7da573a0a270dffafced3f1dc12380f42c6f892300df38df0cc",
+      "sizeBytes": 72818,
+      "sha256": "7fd9d5c1c3718f0188692b1bab6cee2fdea9bed9746a9bf57544e2fd5f14764a",
       "description": "Daily schedule generator, node-cron triggers, and missed action recovery"
     },
     "supabase-client": {
       "file": "supabase-client.js",
-      "version": "1.7.0",
+      "version": "1.7.2",
       "type": "network",
-      "sizeBytes": 21566,
-      "sha256": "8be85494e7f0a3e269e8cc82a683786ee4e18761a29f81c766ec66941eca4a4a",
+      "sizeBytes": 24532,
+      "sha256": "36deace2d1bc2a6d62d7d7bfbc9cec3694f005184f65e053d0026b5b6a82d208",
       "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
     },
     "cache-manager": {
@@ -61,10 +61,10 @@
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.7.0",
+      "version": "1.7.1",
       "type": "ui",
-      "sizeBytes": 181377,
-      "sha256": "9f76a8525bea058d52df35d1b3eb24f9fe54c7200b99a531d1acfe53062abf6a",
+      "sizeBytes": 193047,
+      "sha256": "b3ffbf59dc36548ac599a9c2d5a3459e35e622a25ac543302778d380835f2316",
       "description": "ALS Single Agent desktop interface"
     }
   }

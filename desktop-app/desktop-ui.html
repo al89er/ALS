@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- VERSION: 1.7.0 -->
+<!-- VERSION: 1.7.1 -->
 <html lang="en">
 
 <head>
@@ -653,7 +653,7 @@
         <div class="nav-container">
             <div class="brand">
                 <span id="appBrandTitle">ALS Automation Engine</span>
-                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.7.0</span>
+                <span class="status-badge" style="font-size: 0.65rem; padding: 0.2rem 0.5rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); border-color: rgba(59, 130, 246, 0.3);" id="appVersionBadge">v1.7.1</span>
                 <div class="status-badge" id="statusBadge">
                     <div class="status-dot"></div>
                     <span id="statusText">Connecting...</span>
@@ -747,6 +747,26 @@
                             <button type="button" class="btn-chip" onclick="applyTodayQuickAction('disable_out')">Disable Auto Clock-Out</button>
                             <button type="button" class="btn-chip" onclick="applyTodayQuickAction('disable_in')">Disable Auto Clock-In</button>
                             <button type="button" class="btn-chip btn-chip-success" onclick="applyTodayQuickAction('resume_normal')">Resume Normal Schedule</button>
+                        </div>
+                    </div>
+
+                    <!-- Scheduler Health & Diagnostics -->
+                    <div id="schedulerDiagnosticsPanel" style="margin-top: 0.95rem; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.8rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.55rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 700;">Scheduler Diagnostics</span>
+                                <span id="diagHealthPill" class="action-status-pill action-status-pending">Checking...</span>
+                            </div>
+                            <button type="button" id="recheckScheduleBtn" class="btn-chip" style="padding: 0.35rem 0.7rem; font-size: 0.74rem;" onclick="requestRecheckSchedule(false)">↻ Recheck Schedule</button>
+                        </div>
+                        <div id="diagHealthReason" style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.55rem;">Reading main-process scheduler state...</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.45rem; font-size: 0.74rem; background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 0.6rem;">
+                            <div><span style="color: var(--text-secondary);">Mode:</span> <strong id="diagMode">--</strong></div>
+                            <div><span style="color: var(--text-secondary);">Applied Rev:</span> <strong id="diagRevision">--</strong></div>
+                            <div><span style="color: var(--text-secondary);">Clock-In Cron:</span> <strong id="diagClockIn">--</strong></div>
+                            <div><span style="color: var(--text-secondary);">Clock-Out Cron:</span> <strong id="diagClockOut">--</strong></div>
+                            <div style="grid-column: 1 / -1;"><span style="color: var(--text-secondary);">Last Reconcile:</span> <strong id="diagLastSync">--</strong></div>
+                            <div id="diagErrorRow" style="grid-column: 1 / -1; display: none; color: #fca5a5;"><span style="color: #f87171; font-weight: 600;">Last Error:</span> <span id="diagLastError">--</span></div>
                         </div>
                     </div>
                 </div>
@@ -1384,7 +1404,8 @@
             fetchInitialStatus();
             fetchLogs();
             fetchConfig();
-            fetchTodaysData();
+            await fetchTodaysData();
+            await refreshSchedulerDiagnostics(true);
             loadLocalSettings();
         }
         
@@ -2551,6 +2572,14 @@
                 }
             }
             
+            // Cross-check live main-process scheduler diagnostics so UI neither hides failures nor displays stale desync
+            let diag = null;
+            if (window.electronAPI && typeof window.electronAPI.getSchedulerDiagnostics === 'function') {
+                try {
+                    diag = await window.electronAPI.getSchedulerDiagnostics();
+                } catch (_) {}
+            }
+
             if (cloudProof) {
                 currentTodayProof = { ...cloudProof };
                 updateProofUI(cloudProof);
@@ -2562,9 +2591,176 @@
             if (cloudSched) {
                 currentTodaySchedule = { ...cloudSched };
                 updateScheduleUI(cloudSched);
+            } else if (diag && diag.cachedTodaySchedule && diag.healthStatus === 'healthy') {
+                currentTodaySchedule = { ...diag.cachedTodaySchedule };
+                updateScheduleUI(diag.cachedTodaySchedule);
             } else {
                 currentTodaySchedule = null;
                 updateScheduleUI(null);
+            }
+
+            if (diag) {
+                renderSchedulerDiagnostics(diag, Boolean(cloudSched));
+            }
+        }
+
+        function renderSchedulerDiagnostics(diag, hasUiSchedule = Boolean(currentTodaySchedule)) {
+            const panel = document.getElementById('schedulerDiagnosticsPanel');
+            if (!panel) return;
+            if (!isHomeAutoScheduleAuthorized()) {
+                panel.style.display = 'none';
+                return;
+            }
+            panel.style.display = 'block';
+
+            const pill = document.getElementById('diagHealthPill');
+            const reasonEl = document.getElementById('diagHealthReason');
+            const modeEl = document.getElementById('diagMode');
+            const revEl = document.getElementById('diagRevision');
+            const inEl = document.getElementById('diagClockIn');
+            const outEl = document.getElementById('diagClockOut');
+            const lastSyncEl = document.getElementById('diagLastSync');
+            const errRow = document.getElementById('diagErrorRow');
+            const errEl = document.getElementById('diagLastError');
+
+            const status = (diag && diag.healthStatus) || 'not_running';
+            const issues = (diag && Array.isArray(diag.healthIssues)) ? diag.healthIssues : [];
+            const uiDesync = Boolean(diag && diag.healthStatus === 'healthy' && diag.todayDate === new Date().toLocaleDateString('en-CA') && !hasUiSchedule);
+
+            let badgeClass = 'action-status-pending';
+            let badgeText = 'Initializing';
+            let reasonText = 'Waiting for scheduler initialization...';
+
+            if (!diag || !diag.initialized || status === 'not_running') {
+                badgeClass = 'action-status-missed';
+                badgeText = 'Scheduler Not Running';
+                reasonText = 'Main-process scheduler is not initialized yet. Click Recheck Schedule to initialize.';
+            } else if (status === 'unhealthy') {
+                badgeClass = 'action-status-missed';
+                if (diag.lastErrorCategory === 'generation_failure') {
+                    badgeText = 'Generation Failure';
+                } else if (issues.some(i => i.code === 'CRON_JOB_NOT_REGISTERED')) {
+                    badgeText = 'Cron Not Registered';
+                } else {
+                    badgeText = 'Unhealthy';
+                }
+                reasonText = diag.lastError || (issues[0] && issues[0].message) || 'Scheduler health check detected missing or invalid schedule.';
+            } else if (status === 'degraded') {
+                badgeClass = 'action-status-cancelled';
+                if (diag.lastErrorCategory === 'retrieval_failure') {
+                    badgeText = 'Retrieval Failure';
+                } else if (diag.lastErrorCategory === 'supabase_sync_delay') {
+                    badgeText = 'Supabase Sync Delay';
+                } else {
+                    badgeText = 'Degraded';
+                }
+                reasonText = diag.lastError || 'Running on local policy while awaiting Supabase sync.';
+            } else if (uiDesync) {
+                badgeClass = 'action-status-cancelled';
+                badgeText = 'UI Out of Sync';
+                reasonText = 'Scheduler is active in background, but UI has not received today\'s row yet. Click Recheck Schedule to refresh.';
+            } else if (status === 'healthy') {
+                badgeClass = 'action-status-completed';
+                badgeText = 'Healthy';
+                reasonText = 'Today\'s policy, cron jobs, and Supabase revision are verified and aligned.';
+            }
+
+            if (pill) {
+                pill.className = `action-status-pill ${badgeClass}`;
+                pill.innerText = badgeText;
+            }
+            if (reasonEl) reasonEl.innerText = reasonText;
+
+            const modeKey = (diag && diag.effectiveMode) || 'normal';
+            const modeMeta = MODE_META[modeKey] || { label: modeKey };
+            if (modeEl) modeEl.innerText = modeMeta.label;
+            if (revEl) revEl.innerText = diag && diag.currentAppliedRevision ? `v${diag.version || '1.7.1'} · Rev #${diag.currentAppliedRevision}` : '--';
+
+            const fmtCron = (info) => {
+                if (!info) return '--';
+                const t = info.scheduledTime || '--:--';
+                const st = formatActionStatusLabel(info.status || (info.done ? 'completed' : 'pending'));
+                const armed = info.cronRegistered ? ' · Cron Armed' : (info.status === 'pending' && !info.done ? ' · NOT ARMED' : '');
+                return `${t} (${st}${armed})`;
+            };
+            if (inEl) inEl.innerText = fmtCron(diag && diag.clockIn);
+            if (outEl) outEl.innerText = fmtCron(diag && diag.clockOut);
+            if (lastSyncEl) {
+                lastSyncEl.innerText = diag && diag.lastSuccessReconcileAt
+                    ? `${new Date(diag.lastSuccessReconcileAt).toLocaleTimeString()} (${diag.lastReconcileTrigger || 'auto'})`
+                    : (diag && diag.lastReconcileAt ? `Attempted ${new Date(diag.lastReconcileAt).toLocaleTimeString()}` : 'Never');
+            }
+            if (errRow && errEl) {
+                if (diag && diag.lastError) {
+                    errRow.style.display = 'block';
+                    errEl.innerText = diag.lastError;
+                } else {
+                    errRow.style.display = 'none';
+                    errEl.innerText = '';
+                }
+            }
+        }
+
+        async function refreshSchedulerDiagnostics(autoRecoverOnLoad = false) {
+            if (!isHomeAutoScheduleAuthorized()) return null;
+            let diag = null;
+            if (window.electronAPI && typeof window.electronAPI.getSchedulerDiagnostics === 'function') {
+                try {
+                    diag = await window.electronAPI.getSchedulerDiagnostics();
+                } catch (_) {}
+            } else if (window.electronAPI && typeof window.electronAPI.getSchedulePolicy === 'function') {
+                try {
+                    const info = await window.electronAPI.getSchedulePolicy();
+                    diag = info && info.runtime ? info.runtime : null;
+                } catch (_) {}
+            }
+            if (diag) {
+                renderSchedulerDiagnostics(diag, Boolean(currentTodaySchedule));
+                const todayStr = new Date().toLocaleDateString('en-CA');
+                const needsAutoRepair = autoRecoverOnLoad && (
+                    !diag.initialized ||
+                    diag.healthStatus === 'unhealthy' ||
+                    diag.healthStatus === 'not_running' ||
+                    (diag.todayDate && diag.todayDate !== todayStr) ||
+                    !currentTodaySchedule
+                );
+                if (needsAutoRepair) {
+                    await requestRecheckSchedule(true);
+                }
+            }
+            return diag;
+        }
+
+        let isRecheckingSchedule = false;
+        async function requestRecheckSchedule(isAuto = false) {
+            if (isRecheckingSchedule) return;
+            isRecheckingSchedule = true;
+            const btn = document.getElementById('recheckScheduleBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = isAuto ? 'Auto-Recovering...' : 'Rechecking...';
+            }
+            try {
+                if (window.electronAPI && typeof window.electronAPI.recheckSchedule === 'function') {
+                    const res = await window.electronAPI.recheckSchedule();
+                    await fetchTodaysData();
+                    if (res && res.diagnostics) {
+                        renderSchedulerDiagnostics(res.diagnostics, Boolean(currentTodaySchedule));
+                    }
+                } else if (window.electronAPI && typeof window.electronAPI.reconcileSchedule === 'function') {
+                    await window.electronAPI.reconcileSchedule({ triggerSource: isAuto ? 'ui_auto_recover' : 'manual_recheck_button' });
+                    await fetchTodaysData();
+                } else {
+                    await fetchTodaysData();
+                }
+            } catch (err) {
+                console.warn('[DESKTOP-UI] Recheck schedule error:', err);
+            } finally {
+                isRecheckingSchedule = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = '↻ Recheck Schedule';
+                }
             }
         }
 
@@ -2971,7 +3167,7 @@ async function bindChannels() {
                 const info = activeDesktopModules[m.name] || {};
                 let ver = info.version;
                 if (!ver || ver === 'factory') {
-                    ver = '1.7.0';
+                    ver = '1.7.1';
                 }
                 const source = info.source || 'factory';
                 const update = pendingDesktopUpdates.find(u => u.name === m.name || u.file === m.name || (m.name === 'desktop-ui' && (u.name === 'desktop-ui.html' || u.file === 'desktop-ui.html')));

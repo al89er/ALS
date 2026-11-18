@@ -1,10 +1,12 @@
 const cron = require('node-cron');
 const cacheManager = require('./cache-manager');
 
-const VERSION = '1.7.0';
+const VERSION = '1.7.2';
 const HOME_DEVICE_ID = 'home_desktop_agent';
 const GRACE_PERIOD_MS = 300000; // 5 minutes
 const SLEEP_JUMP_THRESHOLD_MS = 45000;
+const HEALTH_CHECK_INTERVAL_MS = 60000;
+const MAX_BACKOFF_RETRIES = 5;
 const VALID_DAY_MODES = ['normal', 'full_skip', 'clock_in_only', 'clock_out_only'];
 
 const runtimeDependencies = {
@@ -31,6 +33,8 @@ function getSchedulerState() {
       diagnosticTask: null,
       midnightTask: null,
       sleepDetectorTimer: null,
+      healthTimer: null,
+      retryTimer: null,
       lastWallClockMs: Date.now(),
       clockInJobId: 0,
       clockOutJobId: 0,
@@ -47,7 +51,23 @@ function getSchedulerState() {
       inFlightClaims: new Set(),
       inFlightExecution: null,
       reconcileChain: Promise.resolve(),
-      activeSupabase: null
+      activeSupabase: null,
+      initialized: false,
+      initAttempts: 0,
+      consecutiveFailures: 0,
+      lastReconcileAt: null,
+      lastSuccessReconcileAt: null,
+      lastReconcileTrigger: null,
+      lastError: null,
+      lastErrorCategory: null,
+      lastEvaluatedDate: null,
+      lastHealthCheckAt: null,
+      healthStatus: 'initializing',
+      healthIssues: [],
+      nextRetryAt: null,
+      scheduleWriteSynced: false,
+      lastEvaluation: null,
+      lastSchedulePayload: null
     };
   }
   return global.__alsSchedulerState;
@@ -1156,6 +1176,10 @@ async function performReconcile(supabase, options = {}) {
   if (!authCheck.allowed) {
     stopCronJobs();
     if (identity.deviceId !== HOME_DEVICE_ID || identity.edition !== 'full') {
+      state.healthStatus = 'disabled';
+      state.healthIssues = [];
+      state.lastError = null;
+      state.lastErrorCategory = null;
       return { skipped: true, authorized: false, reason: authCheck.reason, deviceId: identity.deviceId, edition: identity.edition };
     }
   }
@@ -1163,6 +1187,10 @@ async function performReconcile(supabase, options = {}) {
   const today = new Date();
   const todayStr = getLocalDateString(today);
   const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  state.lastReconcileAt = nowIso;
+  state.lastReconcileTrigger = options.triggerSource || 'reconcile';
+  state.lastEvaluatedDate = todayStr;
 
   const { policy, supabaseOnline, schemaReady } = await fetchAuthoritativePolicy(supabase, identity.deviceId);
   const effectiveRevision = Math.max(
@@ -1192,16 +1220,24 @@ async function performReconcile(supabase, options = {}) {
   const proofHasClockIn = Boolean(proof && isValidProofTime(proof.clock_in));
   const proofHasClockOut = Boolean(proof && isValidProofTime(proof.clock_out));
 
+  // Completion requires reliable DB flag or verified portal proof time (never assumed from click alone)
   const clockInDone = Boolean((existingSched && existingSched.clock_in_done) || proofHasClockIn);
   const clockOutDone = Boolean((existingSched && existingSched.clock_out_done) || proofHasClockOut);
 
   let plannedIn = existingSched && (existingSched.planned_clock_in || existingSched.scheduled_clock_in) || null;
   let plannedOut = existingSched && (existingSched.planned_clock_out || existingSched.scheduled_clock_out) || null;
 
-  if (evalResult.clockInEnabled && !plannedIn) {
+  if (clockInDone && !plannedIn && proofHasClockIn) {
+    plannedIn = String(proof.clock_in).trim().slice(0, 5);
+  }
+  if (clockOutDone && !plannedOut && proofHasClockOut) {
+    plannedOut = String(proof.clock_out).trim().slice(0, 5);
+  }
+
+  if (evalResult.clockInEnabled && !clockInDone && !plannedIn) {
     plannedIn = generateRandomTimeStr(identity.deviceConfig.clock_in_base_time || '07:45', identity.deviceConfig.random_period_minutes);
   }
-  if (evalResult.clockOutEnabled && !plannedOut) {
+  if (evalResult.clockOutEnabled && !clockOutDone && !plannedOut) {
     plannedOut = generateRandomTimeStr(identity.deviceConfig.clock_out_base_time || '17:05', identity.deviceConfig.random_period_minutes);
   }
 
@@ -1243,6 +1279,7 @@ async function performReconcile(supabase, options = {}) {
   // Check if an active click is already underway for a now-disabled action
   let ackStatus = 'applied';
   let ackMessage = `Reconciled rev #${effectiveRevision} (${evalResult.effectiveMode}, source=${options.triggerSource || 'reconcile'})`;
+  let cronError = null;
 
   const syncActionJob = ({ actionType, enabled, done, status, plannedTime }) => {
     const isClockIn = actionType === 'clock_in';
@@ -1262,12 +1299,17 @@ async function performReconcile(supabase, options = {}) {
       cancelActionCronJob(actionType);
     } else if (shouldRearmCronJob(state[taskKey], state[timeKey], plannedTime, state[dateKey], todayStr, status, done)) {
       cancelActionCronJob(actionType);
-      armSingleActionCron(actionType, {
-        date: todayStr,
-        device_id: identity.deviceId,
-        scheduled_clock_in: plannedIn,
-        scheduled_clock_out: plannedOut
-      }, effectiveRevision, supabase);
+      try {
+        armSingleActionCron(actionType, {
+          date: todayStr,
+          device_id: identity.deviceId,
+          scheduled_clock_in: plannedIn,
+          scheduled_clock_out: plannedOut
+        }, effectiveRevision, supabase);
+      } catch (armErr) {
+        cronError = `Failed to register ${actionType} cron: ${armErr.message}`;
+        console.error(`[SCHEDULER] ${cronError}`);
+      }
     } else {
       state[revKey] = effectiveRevision;
     }
@@ -1295,6 +1337,7 @@ async function performReconcile(supabase, options = {}) {
   };
 
   let scheduleSynced = false;
+  let ackSynced = !schemaReady;
   if (supabaseOnline && supabase && typeof supabase.from === 'function') {
     try {
       let schedWriteRes = await supabase.from('daily_schedules').upsert(nextSchedulePayload, { onConflict: 'date, device_id' });
@@ -1318,7 +1361,7 @@ async function performReconcile(supabase, options = {}) {
 
     if (schemaReady) {
       try {
-        await supabase
+        const ackRes = await supabase
           .from('schedule_policy_state')
           .update({
             applied_revision: effectiveRevision,
@@ -1333,7 +1376,16 @@ async function performReconcile(supabase, options = {}) {
             effective_rule_source: evalResult.ruleSource
           })
           .eq('device_id', identity.deviceId);
-      } catch (_) {}
+        if (ackRes && ackRes.error) {
+          console.warn(`[SCHEDULER] Failed to acknowledge revision #${effectiveRevision} in Supabase:`, ackRes.error.message);
+          ackSynced = false;
+        } else {
+          ackSynced = true;
+        }
+      } catch (ackErr) {
+        console.warn(`[SCHEDULER] Exception acknowledging revision #${effectiveRevision}:`, ackErr.message);
+        ackSynced = false;
+      }
     }
 
     if (ackStatus === 'warning_in_progress') {
@@ -1350,6 +1402,9 @@ async function performReconcile(supabase, options = {}) {
 
   state.currentAppliedRevision = effectiveRevision;
   state.knownLatestRevision = Math.max(state.knownLatestRevision, effectiveRevision);
+  state.scheduleWriteSynced = scheduleSynced;
+  state.lastEvaluation = evalResult;
+  state.lastSchedulePayload = nextSchedulePayload;
 
   cacheManager.mergeDailySchedule({ ...nextSchedulePayload, _allowResetDone: !existingSched }, scheduleSynced);
   if (typeof cacheManager.saveSchedulePolicy === 'function') {
@@ -1369,6 +1424,53 @@ async function performReconcile(supabase, options = {}) {
     await checkMissedActions(nextSchedulePayload, supabase);
   }
 
+  // Evaluate schedule integrity & self-healing status
+  const issues = validateTodayScheduleIntegrity({
+    evalResult,
+    schedule: nextSchedulePayload,
+    state,
+    todayStr,
+    supabaseOnline,
+    scheduleSynced,
+    cronError
+  });
+  state.healthIssues = issues;
+
+  if (cronError) {
+    state.lastError = cronError;
+    state.lastErrorCategory = 'generation_failure';
+    state.healthStatus = 'unhealthy';
+    scheduleBoundedRecoveryRetry(supabase, cronError);
+  } else if (!supabaseOnline) {
+    state.lastError = 'Supabase unreachable during schedule reconciliation (using local policy)';
+    state.lastErrorCategory = 'retrieval_failure';
+    state.healthStatus = 'degraded';
+    scheduleBoundedRecoveryRetry(supabase, state.lastError);
+  } else if (!scheduleSynced || !ackSynced) {
+    state.lastError = !ackSynced
+      ? `Revision #${effectiveRevision} applied locally, awaiting schedule_policy_state acknowledgement in Supabase`
+      : 'Schedule computed locally, awaiting Supabase daily_schedules sync';
+    state.lastErrorCategory = 'supabase_sync_delay';
+    state.healthStatus = 'degraded';
+    scheduleBoundedRecoveryRetry(supabase, state.lastError);
+  } else if (issues.some(i => i.severity === 'error')) {
+    state.lastError = issues.map(i => i.message).join('; ');
+    state.lastErrorCategory = issues[0].category || 'generation_failure';
+    state.healthStatus = 'unhealthy';
+    scheduleBoundedRecoveryRetry(supabase, state.lastError);
+  } else {
+    state.lastError = null;
+    state.lastErrorCategory = null;
+    state.healthStatus = 'healthy';
+    state.consecutiveFailures = 0;
+    state.nextRetryAt = null;
+    state.lastSuccessReconcileAt = nowIso;
+    if (state.retryTimer) {
+      clearTimeout(state.retryTimer);
+      state.retryTimer = null;
+    }
+  }
+
   if (global.updateTrayTooltip) global.updateTrayTooltip();
 
   return {
@@ -1378,6 +1480,9 @@ async function performReconcile(supabase, options = {}) {
     ackMessage,
     supabaseOnline,
     schemaReady,
+    scheduleSynced,
+    healthStatus: state.healthStatus,
+    healthIssues: issues,
     evaluation: evalResult,
     schedule: nextSchedulePayload,
     jobs: {
@@ -1388,11 +1493,159 @@ async function performReconcile(supabase, options = {}) {
   };
 }
 
+function validateTodayScheduleIntegrity({ evalResult, schedule, state, todayStr, supabaseOnline = true, scheduleSynced = true, cronError = null }) {
+  const issues = [];
+  if (cronError) {
+    issues.push({ code: 'CRON_REGISTRATION_FAILED', category: 'generation_failure', severity: 'error', message: cronError });
+  }
+  if (!schedule || schedule.date !== todayStr) {
+    issues.push({ code: 'MISSING_DAILY_SCHEDULE', category: 'generation_failure', severity: 'error', message: `No schedule payload for ${todayStr}` });
+    return issues;
+  }
+  if (evalResult && evalResult.clockInEnabled && !schedule.clock_in_done && schedule.clock_in_status === 'pending') {
+    if (!schedule.scheduled_clock_in) {
+      issues.push({ code: 'MISSING_CLOCK_IN_TIME', category: 'generation_failure', severity: 'error', message: 'Active clock-in has no scheduled time' });
+    }
+    if (!state.clockInTask) {
+      issues.push({ code: 'CRON_JOB_NOT_REGISTERED', category: 'cron_job_missing', severity: 'error', message: 'Pending clock-in cron job is not registered in memory' });
+    }
+  }
+  if (evalResult && evalResult.clockOutEnabled && !schedule.clock_out_done && schedule.clock_out_status === 'pending') {
+    if (!schedule.scheduled_clock_out) {
+      issues.push({ code: 'MISSING_CLOCK_OUT_TIME', category: 'generation_failure', severity: 'error', message: 'Active clock-out has no scheduled time' });
+    }
+    if (!state.clockOutTask) {
+      issues.push({ code: 'CRON_JOB_NOT_REGISTERED', category: 'cron_job_missing', severity: 'error', message: 'Pending clock-out cron job is not registered in memory' });
+    }
+  }
+  if (!supabaseOnline) {
+    issues.push({ code: 'SUPABASE_OFFLINE', category: 'retrieval_failure', severity: 'warning', message: 'Supabase unavailable during sync' });
+  } else if (!scheduleSynced) {
+    issues.push({ code: 'SUPABASE_SYNC_DELAY', category: 'supabase_sync_delay', severity: 'warning', message: 'Local schedule not yet confirmed in Supabase' });
+  }
+  if (state.knownLatestRevision > state.currentAppliedRevision || state.policyUncertain) {
+    issues.push({ code: 'REVISION_MISMATCH', category: 'supabase_sync_delay', severity: 'warning', message: `Applied rev #${state.currentAppliedRevision} behind latest #${state.knownLatestRevision}` });
+  }
+  return issues;
+}
+
+function scheduleBoundedRecoveryRetry(supabase, reason) {
+  const state = getSchedulerState();
+  if (process.env.NODE_ENV === 'test') return false;
+  if (state.retryTimer) return true;
+  if (state.consecutiveFailures >= MAX_BACKOFF_RETRIES) {
+    state.nextRetryAt = null;
+    return false;
+  }
+
+  state.consecutiveFailures += 1;
+  const delayMs = Math.min(300000, 15000 * Math.pow(2, state.consecutiveFailures - 1));
+  state.nextRetryAt = new Date(Date.now() + delayMs).toISOString();
+  console.warn(`[SCHEDULER] Scheduling bounded recovery attempt ${state.consecutiveFailures}/${MAX_BACKOFF_RETRIES} in ${Math.round(delayMs / 1000)}s (${reason})...`);
+
+  state.retryTimer = setTimeout(async () => {
+    state.retryTimer = null;
+    state.nextRetryAt = null;
+    try {
+      await reconcileSchedule(supabase, {
+        triggerSource: `backoff_retry_${state.consecutiveFailures}`,
+        checkMissed: true,
+        force: true
+      });
+    } catch (err) {
+      console.error('[SCHEDULER] Bounded recovery retry failed:', err.message);
+    }
+  }, delayMs);
+
+  if (typeof state.retryTimer.unref === 'function') {
+    state.retryTimer.unref();
+  }
+  return true;
+}
+
+async function runHealthCheck(supabase) {
+  const state = getSchedulerState();
+  state.lastHealthCheckAt = new Date().toISOString();
+
+  const identity = resolveRuntimeIdentity();
+  const authCheck = isAuthorizedAutoScheduleIdentity(identity);
+  if (!authCheck.allowed) {
+    state.healthStatus = 'disabled';
+    state.healthIssues = [];
+    return { healthy: true, disabled: true, status: 'disabled' };
+  }
+
+  const todayStr = getLocalDateString();
+  const cache = cacheManager.readCache();
+  const cachedSched = cache && cache.daily_schedule && cache.daily_schedule.date === todayStr ? cache.daily_schedule : null;
+  const activeSched = (state.lastSchedulePayload && state.lastSchedulePayload.date === todayStr) ? state.lastSchedulePayload : cachedSched;
+  const evalResult = state.lastEvaluation && state.lastEvaluation.date === todayStr
+    ? state.lastEvaluation
+    : evaluateDatePolicy(todayStr, cacheManager.getSchedulePolicy ? cacheManager.getSchedulePolicy() : {});
+
+  const issues = [];
+  if (!state.initialized) {
+    issues.push({ code: 'SCHEDULER_NOT_INITIALIZED', category: 'generation_failure', severity: 'error', message: 'Scheduler has not completed initialization' });
+  }
+  if (state.lastEvaluatedDate && state.lastEvaluatedDate !== todayStr) {
+    issues.push({ code: 'DATE_ROLLOVER_STALE', category: 'generation_failure', severity: 'error', message: `Date changed from ${state.lastEvaluatedDate} to ${todayStr}` });
+  }
+  issues.push(...validateTodayScheduleIntegrity({
+    evalResult,
+    schedule: activeSched,
+    state,
+    todayStr,
+    supabaseOnline: global.connectivityState !== 'Offline',
+    scheduleSynced: state.scheduleWriteSynced
+  }));
+
+  state.healthIssues = issues;
+  const needsRecovery = issues.some(i => i.severity === 'error') || state.healthStatus === 'unhealthy' || state.knownLatestRevision > state.currentAppliedRevision;
+
+  if (needsRecovery && supabase) {
+    console.warn(`[SCHEDULER] Health monitor detected ${issues.map(i => i.code).join(', ') || state.healthStatus}; running self-healing reconciliation...`);
+    const recRes = await reconcileSchedule(supabase, {
+      triggerSource: 'health_monitor_self_heal',
+      checkMissed: true,
+      force: true
+    });
+    return { healthy: state.healthStatus === 'healthy', recovered: true, status: state.healthStatus, result: recRes };
+  }
+
+  return { healthy: state.healthStatus === 'healthy', recovered: false, status: state.healthStatus, issues };
+}
+
+function startHealthMonitor(supabase) {
+  const state = getSchedulerState();
+  if (state.healthTimer) {
+    clearInterval(state.healthTimer);
+  }
+  state.healthTimer = setInterval(() => {
+    runHealthCheck(supabase).catch((err) => {
+      console.error('[SCHEDULER] Periodic health check error:', err.message);
+    });
+  }, HEALTH_CHECK_INTERVAL_MS);
+  if (typeof state.healthTimer.unref === 'function') {
+    state.healthTimer.unref();
+  }
+}
+
 function reconcileSchedule(supabase, options = {}) {
   const state = getSchedulerState();
   state.reconcileChain = state.reconcileChain
     .catch(() => {})
-    .then(() => performReconcile(supabase, options));
+    .then(async () => {
+      try {
+        return await performReconcile(supabase, options);
+      } catch (err) {
+        state.lastError = err.message || String(err);
+        state.lastErrorCategory = 'generation_failure';
+        state.healthStatus = 'unhealthy';
+        state.healthIssues = [{ code: 'RECONCILE_EXCEPTION', category: 'generation_failure', severity: 'error', message: state.lastError }];
+        scheduleBoundedRecoveryRetry(supabase, state.lastError);
+        throw err;
+      }
+    });
   return state.reconcileChain;
 }
 
@@ -1414,9 +1667,10 @@ function startSleepResumeDetector(supabase) {
     const now = Date.now();
     const elapsed = now - state.lastWallClockMs;
     state.lastWallClockMs = now;
-    if (elapsed > SLEEP_JUMP_THRESHOLD_MS) {
-      console.log(`[SCHEDULER] Detected wall-clock jump (${Math.round(elapsed / 1000)}s), triggering wake reconciliation...`);
-      reconcileSchedule(supabase, { triggerSource: 'sleep_resume_detector', checkMissed: true, force: true });
+    const todayStr = getLocalDateString();
+    if (elapsed > SLEEP_JUMP_THRESHOLD_MS || (state.lastEvaluatedDate && state.lastEvaluatedDate !== todayStr)) {
+      console.log(`[SCHEDULER] Detected wall-clock jump (${Math.round(elapsed / 1000)}s) or date rollover, triggering reconciliation...`);
+      reconcileSchedule(supabase, { triggerSource: elapsed > SLEEP_JUMP_THRESHOLD_MS ? 'sleep_resume_detector' : 'date_rollover_detector', checkMissed: true, force: true });
     }
   }, 15000);
   if (typeof state.sleepDetectorTimer.unref === 'function') {
@@ -1427,12 +1681,24 @@ function startSleepResumeDetector(supabase) {
 async function init(supabase) {
   const state = getSchedulerState();
   state.activeSupabase = supabase;
+  state.initAttempts += 1;
 
-  const result = await reconcileSchedule(supabase, {
-    triggerSource: 'startup',
-    checkMissed: true,
-    force: true
-  });
+  let result = null;
+  try {
+    result = await reconcileSchedule(supabase, {
+      triggerSource: 'startup',
+      checkMissed: true,
+      force: true
+    });
+  } catch (err) {
+    state.lastError = err.message || String(err);
+    state.lastErrorCategory = 'generation_failure';
+    state.healthStatus = 'unhealthy';
+    console.error('[SCHEDULER] Initial reconcile failed:', state.lastError);
+    scheduleBoundedRecoveryRetry(supabase, state.lastError);
+  } finally {
+    state.initialized = true;
+  }
 
   if (global.midnightTask) {
     try { global.midnightTask.stop(); } catch (_) {}
@@ -1442,20 +1708,14 @@ async function init(supabase) {
     try {
       await reconcileSchedule(supabase, { triggerSource: 'midnight_rollover', force: true });
     } catch (err) {
-      console.error('[SCHEDULER] Midnight schedule generation failed, will retry in 5 minutes:', err.message);
-      setTimeout(async () => {
-        try {
-          await reconcileSchedule(supabase, { triggerSource: 'midnight_retry', force: true });
-          console.log('[SCHEDULER] Midnight schedule retry succeeded.');
-        } catch (retryErr) {
-          console.error('[SCHEDULER] Midnight schedule retry also failed:', retryErr.message);
-        }
-      }, 5 * 60 * 1000);
+      console.error('[SCHEDULER] Midnight schedule generation failed, will retry:', err.message);
+      scheduleBoundedRecoveryRetry(supabase, `midnight_rollover: ${err.message}`);
     }
   });
 
   if (process.env.NODE_ENV !== 'test') {
     startSleepResumeDetector(supabase);
+    startHealthMonitor(supabase);
   }
 
   return result;
@@ -1471,6 +1731,15 @@ function stop() {
     clearInterval(state.sleepDetectorTimer);
     state.sleepDetectorTimer = null;
   }
+  if (state.healthTimer) {
+    clearInterval(state.healthTimer);
+    state.healthTimer = null;
+  }
+  if (state.retryTimer) {
+    clearTimeout(state.retryTimer);
+    state.retryTimer = null;
+  }
+  state.nextRetryAt = null;
   stopCronJobs();
 }
 
@@ -1478,6 +1747,19 @@ function getRuntimeSnapshot() {
   const state = getSchedulerState();
   return {
     version: VERSION,
+    initialized: state.initialized,
+    healthStatus: state.healthStatus,
+    healthIssues: [...(state.healthIssues || [])],
+    lastError: state.lastError,
+    lastErrorCategory: state.lastErrorCategory,
+    lastReconcileAt: state.lastReconcileAt,
+    lastSuccessReconcileAt: state.lastSuccessReconcileAt,
+    lastReconcileTrigger: state.lastReconcileTrigger,
+    lastEvaluatedDate: state.lastEvaluatedDate,
+    lastHealthCheckAt: state.lastHealthCheckAt,
+    consecutiveFailures: state.consecutiveFailures,
+    nextRetryAt: state.nextRetryAt,
+    scheduleWriteSynced: state.scheduleWriteSynced,
     currentAppliedRevision: state.currentAppliedRevision,
     knownLatestRevision: state.knownLatestRevision,
     policyUncertain: state.policyUncertain,
@@ -1491,6 +1773,37 @@ function getRuntimeSnapshot() {
     clockInJobId: state.clockInJobId,
     clockOutJobId: state.clockOutJobId,
     inFlightExecution: state.inFlightExecution ? { ...state.inFlightExecution } : null
+  };
+}
+
+function getDiagnosticsSnapshot() {
+  const state = getSchedulerState();
+  const todayStr = getLocalDateString();
+  const sched = (state.lastSchedulePayload && state.lastSchedulePayload.date === todayStr) ? state.lastSchedulePayload : null;
+  const evalRes = (state.lastEvaluation && state.lastEvaluation.date === todayStr) ? state.lastEvaluation : null;
+
+  return {
+    ...getRuntimeSnapshot(),
+    todayDate: todayStr,
+    effectiveMode: (sched && sched.effective_mode) || (evalRes && evalRes.effectiveMode) || null,
+    ruleSource: (sched && sched.rule_source) || (evalRes && evalRes.ruleSource) || null,
+    ruleLabel: (evalRes && evalRes.ruleLabel) || null,
+    clockIn: {
+      status: sched ? sched.clock_in_status : null,
+      scheduledTime: sched ? sched.scheduled_clock_in : state.clockInTargetTime,
+      done: Boolean(sched && sched.clock_in_done),
+      cronRegistered: Boolean(state.clockInTask),
+      boundRevision: state.clockInBoundRevision,
+      jobId: state.clockInJobId
+    },
+    clockOut: {
+      status: sched ? sched.clock_out_status : null,
+      scheduledTime: sched ? sched.scheduled_clock_out : state.clockOutTargetTime,
+      done: Boolean(sched && sched.clock_out_done),
+      cronRegistered: Boolean(state.clockOutTask),
+      boundRevision: state.clockOutBoundRevision,
+      jobId: state.clockOutJobId
+    }
   };
 }
 
@@ -1512,6 +1825,22 @@ function resetSchedulerStateForTest() {
   state.inFlightClaims.clear();
   state.inFlightExecution = null;
   state.reconcileChain = Promise.resolve();
+  state.initialized = false;
+  state.initAttempts = 0;
+  state.consecutiveFailures = 0;
+  state.lastReconcileAt = null;
+  state.lastSuccessReconcileAt = null;
+  state.lastReconcileTrigger = null;
+  state.lastError = null;
+  state.lastErrorCategory = null;
+  state.lastEvaluatedDate = null;
+  state.lastHealthCheckAt = null;
+  state.healthStatus = 'initializing';
+  state.healthIssues = [];
+  state.nextRetryAt = null;
+  state.scheduleWriteSynced = false;
+  state.lastEvaluation = null;
+  state.lastSchedulePayload = null;
 }
 
 module.exports = {
@@ -1521,6 +1850,7 @@ module.exports = {
   init,
   stop,
   reconcileSchedule,
+  runHealthCheck,
   notifyIncomingRevision,
   evaluateDatePolicy,
   evaluateCalendarRange,
@@ -1530,6 +1860,7 @@ module.exports = {
   verifyPreExecutionGate,
   runPortalHealthDiagnostics,
   getRuntimeSnapshot,
+  getDiagnosticsSnapshot,
   __test: {
     buildLocalTargetDate,
     generateRandomTimeStr,
@@ -1537,6 +1868,8 @@ module.exports = {
     checkMissedActions,
     runPortalHealthDiagnostics,
     executeGatedScheduledAction,
+    validateTodayScheduleIntegrity,
+    scheduleBoundedRecoveryRetry,
     setRuntimeDependenciesForTest,
     resetRuntimeDependencies,
     resetSchedulerStateForTest,
