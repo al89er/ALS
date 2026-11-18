@@ -1,7 +1,7 @@
 // Tray Manager - Modular Tray Tooltip & Menu Formatter
 // Version: 1.5.8
 
-const VERSION = '1.6.14';
+const VERSION = '1.7.0';
 
 /**
  * Formats the tray tooltip string according to the active edition and current state.
@@ -19,11 +19,18 @@ function formatTrayTooltip({ edition = 'full', connectivityState = 'Pending Conn
     let inTarget = 'Pending Generation';
     let outTarget = 'Pending Generation';
     let isSkipped = false;
+    let modeLabel = '';
     
     if (cache.daily_schedule && cache.daily_schedule.date === todayStr) {
-      inTarget = cache.daily_schedule.scheduled_clock_in || 'Pending Generation';
-      outTarget = cache.daily_schedule.scheduled_clock_out || 'Pending Generation';
-      isSkipped = !!cache.daily_schedule.skipped;
+      const sched = cache.daily_schedule;
+      isSkipped = !!sched.skipped || sched.effective_mode === 'full_skip';
+      inTarget = sched.scheduled_clock_in || (sched.clock_in_status === 'cancelled' ? 'Cancelled' : (isSkipped || sched.effective_mode === 'clock_out_only' ? 'Disabled' : 'Pending Generation'));
+      outTarget = sched.scheduled_clock_out || (sched.clock_out_status === 'cancelled' ? 'Cancelled' : (isSkipped || sched.effective_mode === 'clock_in_only' ? 'Disabled' : 'Pending Generation'));
+      if (sched.clock_in_done && sched.scheduled_clock_in) inTarget = `${sched.scheduled_clock_in} (Done)`;
+      if (sched.clock_out_done && sched.scheduled_clock_out) outTarget = `${sched.scheduled_clock_out} (Done)`;
+      if (sched.effective_mode === 'clock_in_only') modeLabel = ' [In Only]';
+      else if (sched.effective_mode === 'clock_out_only') modeLabel = ' [Out Only]';
+      else if (isSkipped) modeLabel = ' (Skipped)';
     }
     
     let inProof = '--:--';
@@ -33,15 +40,13 @@ function formatTrayTooltip({ edition = 'full', connectivityState = 'Pending Conn
       outProof = cache.todays_proof.clock_out || '--:--';
     }
 
-    const skipText = isSkipped ? ' (Skipped)' : '';
-
     if (edition === 'hub') {
       const activeCount = Array.isArray(accounts) ? accounts.length : 0;
       return `[HUB v${VERSION}] Active Accounts: ${activeCount}\nStatus: ${connectivityState}`;
     } else if (edition === 'lite') {
       return `[LITE v${VERSION}] Connectivity: ${connectivityState}\nProof In: ${inProof} | Out: ${outProof}`;
     } else {
-      return `[ALS v${VERSION}] Connectivity: ${connectivityState}\nTarget In: ${inTarget}${skipText} | Out: ${outTarget}${skipText}\nProof In: ${inProof} | Out: ${outProof}`;
+      return `[ALS v${VERSION}] Connectivity: ${connectivityState}${modeLabel}\nTarget In: ${inTarget} | Out: ${outTarget}\nProof In: ${inProof} | Out: ${outProof}`;
     }
   } catch (err) {
     return `ALS Automation Engine v${VERSION}`;

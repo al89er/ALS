@@ -455,11 +455,13 @@
             animation: proofCardPulse 2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
-        /* --- CALENDAR --- */
+        /* --- CALENDAR & ADVANCED SCHEDULING --- */
         .calendar-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 0.75rem;
             margin-bottom: 1rem;
         }
 
@@ -467,48 +469,127 @@
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border-color);
             color: #fff;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
+            padding: 0.45rem 0.85rem;
+            min-height: 36px;
+            border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
         }
 
         .calendar-nav-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .schedule-sync-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            padding: 0.85rem 1.1rem;
+            border-radius: 12px;
+            margin-bottom: 1.25rem;
+            font-size: 0.85rem;
+            border: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        .sync-saving, .sync-awaiting {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.12);
+            color: #93c5fd;
+        }
+
+        .sync-applied {
+            border-color: rgba(16, 185, 129, 0.45);
+            background: rgba(16, 185, 129, 0.12);
+            color: #6ee7b7;
+        }
+
+        .sync-warning, .sync-offline {
+            border-color: rgba(245, 158, 11, 0.45);
+            background: rgba(245, 158, 11, 0.12);
+            color: #fcd34d;
+        }
+
+        .sync-failed {
+            border-color: rgba(239, 68, 68, 0.5);
+            background: rgba(239, 68, 68, 0.14);
+            color: #fca5a5;
+        }
+
+        .schedule-layout {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 1.25rem;
+            align-items: start;
+        }
+
+        @media (max-width: 880px) {
+            .schedule-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .calendar-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 0.85rem;
+            margin-bottom: 0.9rem;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .legend-swatch {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+            display: inline-block;
         }
 
         .calendar-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            gap: 0.5rem;
+            gap: 0.45rem;
         }
 
         .calendar-day-header {
             text-align: center;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: var(--text-secondary);
             font-weight: 600;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
             text-transform: uppercase;
         }
 
         .calendar-tile {
             aspect-ratio: 1;
+            min-height: 46px;
+            position: relative;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            gap: 2px;
             background-color: var(--surface-card);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 10px;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+            padding: 0.25rem;
+            user-select: none;
         }
 
         .calendar-tile:hover {
             background-color: var(--surface-card-hover);
             border-color: var(--border-glow);
-            transform: scale(1.06);
+            transform: scale(1.04);
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
             z-index: 2;
         }
@@ -517,21 +598,207 @@
             transform: scale(0.96);
         }
 
+        .calendar-tile strong {
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.1;
+        }
+
+        .tile-mode-tag {
+            font-family: var(--font-mono);
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            padding: 1px 4px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .tile-markers {
+            position: absolute;
+            top: 3px;
+            right: 4px;
+            display: flex;
+            gap: 2px;
+            font-size: 0.62rem;
+            line-height: 1;
+        }
+
+        .calendar-tile.mode-normal {
+            border-bottom: 2px solid rgba(16, 185, 129, 0.55);
+        }
+
+        .calendar-tile.mode-normal .tile-mode-tag {
+            color: #6ee7b7;
+            background: rgba(16, 185, 129, 0.14);
+        }
+
+        .calendar-tile.mode-full_skip,
         .calendar-tile.active {
-            background-color: rgba(239, 68, 68, 0.2);
+            background-color: rgba(239, 68, 68, 0.18);
             border-color: rgba(239, 68, 68, 0.45);
             color: #fca5a5;
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.25);
+        }
+
+        .calendar-tile.mode-full_skip .tile-mode-tag {
+            color: #fca5a5;
+            background: rgba(239, 68, 68, 0.22);
+        }
+
+        .calendar-tile.is-weekend-default.mode-full_skip {
+            background-color: rgba(100, 116, 139, 0.15);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: #cbd5e1;
+        }
+
+        .calendar-tile.is-weekend-default.mode-full_skip .tile-mode-tag {
+            color: #94a3b8;
+            background: rgba(148, 163, 184, 0.15);
+        }
+
+        .calendar-tile.mode-clock_in_only {
+            background-color: rgba(14, 165, 233, 0.16);
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #bae6fd;
+        }
+
+        .calendar-tile.mode-clock_in_only .tile-mode-tag {
+            color: #7dd3fc;
+            background: rgba(14, 165, 233, 0.22);
+        }
+
+        .calendar-tile.mode-clock_out_only {
+            background-color: rgba(168, 85, 247, 0.16);
+            border-color: rgba(192, 132, 252, 0.45);
+            color: #e9d5ff;
+        }
+
+        .calendar-tile.mode-clock_out_only .tile-mode-tag {
+            color: #d8b4fe;
+            background: rgba(168, 85, 247, 0.22);
+        }
+
+        .calendar-tile.is-suggested-holiday:not(.mode-full_skip) {
+            border-style: dashed;
+            border-color: rgba(245, 158, 11, 0.55);
         }
 
         .calendar-tile.today {
-            border: 1px solid var(--accent-blue);
-            box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 0 2px var(--accent-blue), 0 0 12px rgba(59, 130, 246, 0.35);
         }
 
-        .calendar-tile strong {
-            font-size: 1rem;
-            font-weight: 500;
+        .calendar-tile.is-selected-date {
+            outline: 2px solid #ffffff;
+            outline-offset: -2px;
+            z-index: 3;
+        }
+
+        .calendar-tile.is-bulk-selected {
+            outline: 2px solid #22d3ee;
+            outline-offset: -2px;
+            background-color: rgba(34, 211, 238, 0.18);
+        }
+
+        .mode-pill, .action-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.22rem 0.6rem;
+            border-radius: 9999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        .mode-pill-normal { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.35); }
+        .mode-pill-full_skip { background: rgba(239, 68, 68, 0.18); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.35); }
+        .mode-pill-clock_in_only { background: rgba(14, 165, 233, 0.18); color: #7dd3fc; border: 1px solid rgba(14, 165, 233, 0.35); }
+        .mode-pill-clock_out_only { background: rgba(168, 85, 247, 0.18); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.35); }
+
+        .action-status-completed { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+        .action-status-pending { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+        .action-status-cancelled { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+        .action-status-disabled { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .action-status-missed_window { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+
+        .quick-control-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.55rem;
+            margin-top: 0.9rem;
+        }
+
+        .btn-chip {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.55rem 0.7rem;
+            min-height: 40px;
+            border-radius: 9px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .btn-chip:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--border-highlight);
+        }
+
+        .btn-chip.active-chip {
+            background: rgba(59, 130, 246, 0.22);
+            border-color: rgba(59, 130, 246, 0.55);
+            color: #93c5fd;
+        }
+
+        .btn-chip-danger {
+            background: rgba(239, 68, 68, 0.14);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #fca5a5;
+        }
+
+        .btn-chip-success {
+            background: rgba(16, 185, 129, 0.14);
+            border-color: rgba(16, 185, 129, 0.35);
+            color: #6ee7b7;
+        }
+
+        .field-input, .field-select {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            min-height: 40px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: rgba(0, 0, 0, 0.35);
+            color: #fff;
+            font-family: var(--font-family);
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .field-input:focus, .field-select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .sub-panel {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .rule-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            padding: 0.65rem 0.75rem;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         /* --- LOGS --- */
@@ -981,7 +1248,7 @@
                 </div>
                 <div class="tab-menu">
                     <button class="tab-btn active" onclick="switchTab('control')">Control</button>
-                    <button class="tab-btn" onclick="switchTab('skips')">Skips</button>
+                    <button class="tab-btn" id="scheduleTabBtn" onclick="switchTab('skips')">Schedule</button>
                     <button class="tab-btn" onclick="switchTab('history')">History</button>
                 </div>
             </div>
@@ -1030,22 +1297,48 @@
                     <!-- System Status / Schedule -->
                     <div class="panel" id="systemStatusPanel">
                         <div class="panel-header">
-                            <h2 class="panel-title">System Status</h2>
-                            <span class="panel-subtitle" id="schedDate">--:--</span>
+                            <div>
+                                <h2 class="panel-title">System Status &amp; Policy</h2>
+                                <span class="panel-subtitle" id="schedDate">--:--</span>
+                            </div>
+                            <span id="schedModePill" class="mode-pill mode-pill-normal">Normal</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.85rem; font-size: 0.78rem; color: var(--text-secondary);">
+                            <span id="schedRuleSourceLabel">Rule: Checking policy...</span>
+                            <span id="controlSyncPill" style="font-family: var(--font-mono); font-size: 0.72rem; color: #93c5fd;">Syncing status...</span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div class="data-card">
-                                <span class="data-label">Target Clock In</span>
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
+                                    <span class="data-label">Target Clock In</span>
+                                    <span id="schedInStatusBadge" class="action-status-pill action-status-pending">Pending</span>
+                                </div>
                                 <span class="data-value" id="schedIn" style="color: var(--accent-blue);">--:--</span>
                             </div>
                             <div class="data-card">
-                                <span class="data-label">Target Clock Out</span>
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.4rem;">
+                                    <span class="data-label">Target Clock Out</span>
+                                    <span id="schedOutStatusBadge" class="action-status-pill action-status-pending">Pending</span>
+                                </div>
                                 <span class="data-value" id="schedOut" style="color: var(--accent-purple);">--:--</span>
                             </div>
                         </div>
                         <div id="schedSkippedTag"
-                            style="display: none; margin-top: 1rem; text-align: center; background: rgba(239, 68, 68, 0.1); color: var(--status-offline); padding: 0.5rem; border-radius: 8px; font-weight: 600; font-size: 0.85rem;">
+                            style="display: none; margin-top: 0.85rem; text-align: center; background: rgba(239, 68, 68, 0.12); color: #fca5a5; padding: 0.5rem; border-radius: 8px; font-weight: 600; font-size: 0.8rem;">
                             AUTOMATION SKIPPED FOR TODAY
+                        </div>
+                        <div id="schedPastWindowNotice"
+                            style="display: none; margin-top: 0.65rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); color: #fcd34d; padding: 0.55rem 0.75rem; border-radius: 8px; font-size: 0.76rem; line-height: 1.4;">
+                            Planned time has already passed. Automatic catch-up will not run; use Manual Override below if needed.
+                        </div>
+                        <div style="margin-top: 0.9rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.75rem;">
+                            <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); font-weight: 600;">Quick Controls for Today</div>
+                            <div class="quick-control-grid">
+                                <button type="button" class="btn-chip btn-chip-danger" onclick="applyTodayQuickAction('cancel_remaining')">Cancel Remaining Today</button>
+                                <button type="button" class="btn-chip" onclick="applyTodayQuickAction('disable_out')">Disable Auto Clock-Out</button>
+                                <button type="button" class="btn-chip" onclick="applyTodayQuickAction('disable_in')">Disable Auto Clock-In</button>
+                                <button type="button" class="btn-chip btn-chip-success" onclick="applyTodayQuickAction('resume_normal')">Resume Normal Schedule</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1081,23 +1374,284 @@
 
             </div>
 
-            <!-- ==================== SKIPS TAB ==================== -->
+            <!-- ==================== ADVANCED SCHEDULE TAB ==================== -->
             <div id="tab-skips" class="tab-content">
-                <div class="panel">
-                    <div class="calendar-header">
-                        <div>
-                            <h2 class="panel-title">Automation Calendar</h2>
-                            <span class="panel-subtitle">Select dates to halt the bot</span>
+                <div id="scheduleSyncBanner" class="schedule-sync-banner sync-awaiting">
+                    <div>
+                        <strong id="scheduleSyncTitle">Checking scheduling policy...</strong>
+                        <div id="scheduleSyncDetail" style="font-size: 0.78rem; opacity: 0.9; margin-top: 0.15rem;">Loading desktop scheduler acknowledgement state...</div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button type="button" id="scheduleRetrySyncBtn" class="btn-chip" style="display: none;" onclick="retryScheduleSyncCheck()">Refresh Sync</button>
+                    </div>
+                </div>
+
+                <div id="scheduleSchemaWarning" style="display: none; margin-bottom: 1.25rem; padding: 0.9rem 1rem; border-radius: 12px; border: 1px solid rgba(239, 68, 68, 0.45); background: rgba(239, 68, 68, 0.12); color: #fca5a5; font-size: 0.82rem; line-height: 1.45;">
+                    <strong>Database Migration Pending:</strong> New advanced scheduling tables were not found in Supabase. Apply <code>supabase/09_advanced_scheduling_upgrade.sql</code> before using 4-mode controls, recurring rules, and bulk actions.
+                </div>
+
+                <div class="schedule-layout">
+                    <!-- Left Column: Calendar & Bulk Selection -->
+                    <div class="panel">
+                        <div class="calendar-header">
+                            <div>
+                                <h2 class="panel-title">Advanced Schedule Calendar</h2>
+                                <span class="panel-subtitle">Click any date to inspect or configure its automatic clock mode</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button class="calendar-nav-btn" onclick="changeMonth(-1)">&lt;</button>
+                                <span id="currentMonthLabel" style="font-weight: 600; min-width: 130px; text-align: center; font-size: 0.9rem;">--</span>
+                                <button class="calendar-nav-btn" onclick="changeMonth(1)">&gt;</button>
+                            </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <button class="calendar-nav-btn" onclick="changeMonth(-1)">&lt;</button>
-                            <span id="currentMonthLabel"
-                                style="font-weight: 600; min-width: 120px; text-align: center;">--</span>
-                            <button class="calendar-nav-btn" onclick="changeMonth(1)">&gt;</button>
+
+                        <div class="calendar-legend">
+                            <span class="legend-item"><span class="legend-swatch" style="background: #10b981;"></span>Normal</span>
+                            <span class="legend-item"><span class="legend-swatch" style="background: #ef4444;"></span>Full Skip</span>
+                            <span class="legend-item"><span class="legend-swatch" style="background: #0ea5e9;"></span>Clock-in Only</span>
+                            <span class="legend-item"><span class="legend-swatch" style="background: #a855f7;"></span>Clock-out Only</span>
+                            <span class="legend-item"><span class="legend-swatch" style="background: #64748b;"></span>Weekend</span>
+                            <span class="legend-item">✎ Override</span>
+                            <span class="legend-item">↻ Recurring</span>
+                            <span class="legend-item">★ Holiday</span>
+                        </div>
+
+                        <!-- Selection Mode Toolbar -->
+                        <div class="sub-panel" style="margin-bottom: 1rem;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; justify-content: space-between; margin-bottom: 0.65rem;">
+                                <span style="font-size: 0.74rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary);">Selection Mode</span>
+                                <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+                                    <button type="button" class="btn-chip active-chip" id="selModeSingleBtn" onclick="setBulkSelectionMode('single')" style="min-height: 32px; padding: 0.3rem 0.6rem;">Single</button>
+                                    <button type="button" class="btn-chip" id="selModeMultipleBtn" onclick="setBulkSelectionMode('multiple')" style="min-height: 32px; padding: 0.3rem 0.6rem;">Multi-Select</button>
+                                    <button type="button" class="btn-chip" id="selModeRangeBtn" onclick="setBulkSelectionMode('range_all')" style="min-height: 32px; padding: 0.3rem 0.6rem;">Date Range</button>
+                                </div>
+                            </div>
+
+                            <div id="bulkPanelControls" style="display: none; flex-direction: column; gap: 0.65rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.65rem;">
+                                <div id="bulkRangeInputs" style="display: none; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                                    <div>
+                                        <label style="font-size: 0.7rem; color: var(--text-secondary);">Start Date</label>
+                                        <input type="date" id="bulkStartDate" class="field-input" onchange="updateBulkPreview()" />
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.7rem; color: var(--text-secondary);">End Date</label>
+                                        <input type="date" id="bulkEndDate" class="field-input" onchange="updateBulkPreview()" />
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.7rem; color: var(--text-secondary);">Filter</label>
+                                        <select id="bulkRangeFilter" class="field-select" onchange="setBulkRangeFilter(this.value)">
+                                            <option value="range_all">All Days</option>
+                                            <option value="range_weekdays">Weekdays (Mon–Fri)</option>
+                                            <option value="range_weekends">Weekends (Sat–Sun)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                    <div>
+                                        <label style="font-size: 0.7rem; color: var(--text-secondary);">Target Mode</label>
+                                        <select id="bulkTargetMode" class="field-select" onchange="updateBulkPreview()">
+                                            <option value="full_skip">Full Skip (Disable In &amp; Out)</option>
+                                            <option value="normal">Normal (Enable In &amp; Out)</option>
+                                            <option value="clock_in_only">Clock-in Only</option>
+                                            <option value="clock_out_only">Clock-out Only</option>
+                                            <option value="__clear__">Clear Manual Overrides (Restore Defaults)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 0.7rem; color: var(--text-secondary);">Reason (Optional)</label>
+                                        <input type="text" id="bulkReasonInput" class="field-input" placeholder="e.g. Outstation / Holiday" />
+                                    </div>
+                                </div>
+                                <div id="bulkPreviewBox" style="font-size: 0.78rem; color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); line-height: 1.45;">
+                                    Select dates on the calendar or pick a date range to preview changes.
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button type="button" class="btn btn-primary" style="padding: 0.6rem; font-size: 0.85rem;" onclick="applyBulkScheduleChanges()">Confirm &amp; Apply Bulk Changes</button>
+                                    <button type="button" class="btn-chip" onclick="clearBulkSelection()">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="calendar-grid" id="calendarGrid">
+                            <!-- JS generated tiles -->
                         </div>
                     </div>
-                    <div class="calendar-grid" id="calendarGrid">
-                        <!-- JS generated tiles -->
+
+                    <!-- Right Column: Contextual Date Inspector & Today Details -->
+                    <div class="panel" id="dateInspectorPanel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title" id="inspectorDateTitle">Select a Date</h2>
+                                <span class="panel-subtitle" id="inspectorDateSubtitle">Day details &amp; policy controls</span>
+                            </div>
+                            <span id="inspectorModeBadge" class="mode-pill mode-pill-normal">Normal</span>
+                        </div>
+
+                        <div class="sub-panel" style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.74rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.35rem;">Policy Precedence &amp; Rule Source</div>
+                            <div id="inspectorRuleSource" style="font-size: 0.85rem; color: #fff; font-weight: 500;">--</div>
+                            <div id="inspectorHolidayBanner" style="display: none; margin-top: 0.5rem; font-size: 0.78rem; padding: 0.45rem 0.6rem; border-radius: 6px;"></div>
+                        </div>
+
+                        <div id="inspectorTodaySection" class="sub-panel" style="display: none; margin-bottom: 1rem;">
+                            <div style="font-size: 0.74rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; margin-bottom: 0.5rem;">Today's Execution State</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem;">
+                                <div style="background: rgba(255,255,255,0.03); padding: 0.55rem; border-radius: 8px;">
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Clock In</div>
+                                    <div id="inspectorClockInInfo" style="font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; margin-top: 0.15rem;">--:--</div>
+                                </div>
+                                <div style="background: rgba(255,255,255,0.03); padding: 0.55rem; border-radius: 8px;">
+                                    <div style="font-size: 0.7rem; color: var(--text-secondary);">Clock Out</div>
+                                    <div id="inspectorClockOutInfo" style="font-family: var(--font-mono); font-size: 0.9rem; font-weight: 600; margin-top: 0.15rem;">--:--</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.65rem;">
+                            <label style="font-size: 0.74rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Set Day Mode (Controls Future Automatic Executions)</label>
+                            <input type="text" id="inspectorReasonInput" class="field-input" placeholder="Optional reason (e.g. Official outstation afternoon)" />
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <button type="button" id="modeBtn_normal" class="btn-chip btn-chip-success" onclick="applySelectedDateMode('normal')">✓ Normal (In + Out)</button>
+                                <button type="button" id="modeBtn_full_skip" class="btn-chip btn-chip-danger" onclick="applySelectedDateMode('full_skip')">✕ Full Skip</button>
+                                <button type="button" id="modeBtn_clock_in_only" class="btn-chip" onclick="applySelectedDateMode('clock_in_only')">☀ Clock-in Only</button>
+                                <button type="button" id="modeBtn_clock_out_only" class="btn-chip" onclick="applySelectedDateMode('clock_out_only')">🌙 Clock-out Only</button>
+                            </div>
+                            <button type="button" id="clearDateOverrideBtn" class="btn-chip" style="margin-top: 0.25rem;" onclick="clearSelectedDateOverride()">Reset Date to Rule / Weekly Default</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly Working-Day Defaults -->
+                <div class="panel" style="margin-top: 1.5rem;">
+                    <div class="panel-header">
+                        <div>
+                            <h2 class="panel-title">Weekly Working-Day Defaults</h2>
+                            <span class="panel-subtitle">Replaces hardcoded weekend exclusion (overridden by recurring rules &amp; specific dates)</span>
+                        </div>
+                        <button type="button" class="btn btn-primary" style="flex: 0 0 auto; padding: 0.55rem 1rem; font-size: 0.84rem;" onclick="saveWeeklyDefaultsUI()">Save Weekly Defaults</button>
+                    </div>
+                    <div id="weeklyDefaultsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 0.65rem;">
+                        <!-- JS rendered -->
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <!-- Recurring Scheduling Rules -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title">Recurring Scheduling Rules</h2>
+                                <span class="panel-subtitle">Bounded rule evaluation (Weekly &amp; Monthly patterns)</span>
+                            </div>
+                        </div>
+                        <div class="sub-panel" style="display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 1rem;">
+                            <input type="text" id="recRuleName" class="field-input" placeholder="Rule Name (e.g. First Friday Full Skip)" />
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <select id="recRuleType" class="field-select" onchange="updateRecurringFormFields()">
+                                    <option value="weekly">Every Week</option>
+                                    <option value="monthly_nth_weekday">Monthly (Nth Weekday)</option>
+                                    <option value="monthly_day">Monthly (Specific Date)</option>
+                                </select>
+                                <select id="recRuleMode" class="field-select">
+                                    <option value="full_skip">Full Skip</option>
+                                    <option value="clock_in_only">Clock-in Only</option>
+                                    <option value="clock_out_only">Clock-out Only</option>
+                                    <option value="normal">Normal</option>
+                                </select>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <select id="recRuleDow" class="field-select">
+                                    <option value="1">Monday</option>
+                                    <option value="2">Tuesday</option>
+                                    <option value="3">Wednesday</option>
+                                    <option value="4">Thursday</option>
+                                    <option value="5">Friday</option>
+                                    <option value="6">Saturday</option>
+                                    <option value="0">Sunday</option>
+                                </select>
+                                <select id="recRuleNth" class="field-select" style="display: none;">
+                                    <option value="1">1st occurrence</option>
+                                    <option value="2">2nd occurrence</option>
+                                    <option value="3">3rd occurrence</option>
+                                    <option value="4">4th occurrence</option>
+                                    <option value="-1">Last occurrence</option>
+                                </select>
+                                <input type="number" id="recRuleDom" class="field-input" min="1" max="31" value="1" placeholder="Day (1-31)" style="display: none;" />
+                                <input type="number" id="recRulePriority" class="field-input" min="1" max="999" value="50" placeholder="Priority (higher wins)" />
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <div>
+                                    <label style="font-size: 0.68rem; color: var(--text-secondary);">Effective From</label>
+                                    <input type="date" id="recRuleFrom" class="field-input" />
+                                </div>
+                                <div>
+                                    <label style="font-size: 0.68rem; color: var(--text-secondary);">Effective To (Optional)</label>
+                                    <input type="date" id="recRuleTo" class="field-input" />
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" style="padding: 0.6rem; font-size: 0.85rem;" onclick="addRecurringRuleUI()">Add Recurring Rule</button>
+                        </div>
+                        <div id="recurringRulesList" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <!-- JS rendered -->
+                        </div>
+                    </div>
+
+                    <!-- Malaysian Public Holidays -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div>
+                                <h2 class="panel-title">Malaysian Public Holidays</h2>
+                                <span class="panel-subtitle">Suggested holidays require explicit approval before changing your schedule</span>
+                            </div>
+                        </div>
+                        <div class="sub-panel" style="display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.9rem;">
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Import Malaysian Holiday Presets (Suggested)</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <select id="holidayStateSelect" class="field-select">
+                                    <option value="National">National Holidays Only</option>
+                                    <option value="Selangor">National + Selangor (UPM Serdang)</option>
+                                    <option value="WP Kuala Lumpur">National + WP Kuala Lumpur</option>
+                                    <option value="WP Putrajaya">National + WP Putrajaya</option>
+                                    <option value="Johor">National + Johor</option>
+                                    <option value="Penang">National + Penang</option>
+                                    <option value="Sarawak">National + Sarawak</option>
+                                    <option value="Sabah">National + Sabah</option>
+                                </select>
+                                <select id="holidayYearSelect" class="field-select">
+                                    <option value="2026">2026</option>
+                                    <option value="2027">2027</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button type="button" class="btn-chip" style="flex: 1;" onclick="importMalaysiaHolidayPresetUI()">Load Suggested Holidays</button>
+                                <button type="button" class="btn-chip btn-chip-success" style="flex: 1;" onclick="approveAllSuggestedHolidaysUI()">Approve Pending Holidays</button>
+                            </div>
+                        </div>
+
+                        <div class="sub-panel" style="display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.9rem;">
+                            <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary); font-weight: 600;">Add Manual Holiday / Date Range</div>
+                            <input type="text" id="manualHolidayName" class="field-input" placeholder="Holiday Name (e.g. Hari Raya Aidilfitri)" />
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <input type="date" id="manualHolidayStart" class="field-input" />
+                                <input type="date" id="manualHolidayEnd" class="field-input" />
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                                <select id="manualHolidayMode" class="field-select">
+                                    <option value="full_skip">Full Skip</option>
+                                    <option value="clock_in_only">Clock-in Only</option>
+                                    <option value="clock_out_only">Clock-out Only</option>
+                                </select>
+                                <label style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-primary); cursor: pointer;">
+                                    <input type="checkbox" id="manualHolidayApproved" style="accent-color: var(--accent-blue);" />
+                                    Approve &amp; apply now
+                                </label>
+                            </div>
+                            <button type="button" class="btn btn-primary" style="padding: 0.6rem; font-size: 0.85rem;" onclick="addManualHolidayUI()">Add Holiday Entry</button>
+                        </div>
+
+                        <div id="holidaysList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 290px; overflow-y: auto;">
+                            <!-- JS rendered -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1144,8 +1698,34 @@
         const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
         let lastSeenTimestamp = 0;
-        let skipDaysArray = [];
         let currentNavDate = new Date();
+        let currentUserSession = null;
+
+        const HOME_DEVICE_ID = 'home_desktop_agent';
+        const ADMIN_EMAIL = 'muhammadafif@upm.edu.my';
+        const MIN_SCHEDULER_VERSION = '1.7.0';
+        const DEFAULT_WEEKLY_DEFAULTS = { '0': 'full_skip', '1': 'normal', '2': 'normal', '3': 'normal', '4': 'normal', '5': 'normal', '6': 'full_skip' };
+
+        let policyState = {
+            revision: 1,
+            applied_revision: 0,
+            applied_at: null,
+            ack_status: 'pending',
+            ack_message: null,
+            scheduler_version: null,
+            weekly_defaults: { ...DEFAULT_WEEKLY_DEFAULTS },
+            date_overrides: {},
+            recurring_rules: [],
+            holidays: {},
+            skip_days: [],
+            schema_ready: true
+        };
+        let currentTodaySchedule = null;
+        let currentTodayProof = null;
+        let selectedInspectorDate = new Date().toLocaleDateString('en-CA');
+        let bulkSelectionMode = 'single'; // single, multiple, range_all, range_weekdays, range_weekends
+        let bulkSelectedDates = new Set();
+        let syncUiState = { status: 'awaiting', targetRevision: null, message: '', timerId: null };
 
         // DOM Elements
         const statusBadge = document.getElementById('statusBadge');
@@ -1166,7 +1746,30 @@
         const logsContainer = document.getElementById('logsContainer');
         const calendarGrid = document.getElementById('calendarGrid');
 
-        let activeDeviceId = new URLSearchParams(window.location.search).get('device_id') || 'home_desktop_agent';
+        let activeDeviceId = new URLSearchParams(window.location.search).get('device_id') || HOME_DEVICE_ID;
+
+        function isHomeAutoScheduleAuthorized() {
+            return Boolean(
+                currentUserSession &&
+                currentUserSession.user &&
+                currentUserSession.user.email === ADMIN_EMAIL &&
+                activeDeviceId === HOME_DEVICE_ID
+            );
+        }
+
+        function updateSchedulingVisibility() {
+            const allowed = isHomeAutoScheduleAuthorized();
+            const systemStatusPanel = document.getElementById('systemStatusPanel');
+            const skipTabBtn = document.getElementById('scheduleTabBtn') || document.querySelector('.tab-btn[onclick="switchTab(\'skips\')"]');
+            const skipsTabPanel = document.getElementById('tab-skips');
+
+            if (systemStatusPanel) systemStatusPanel.style.display = allowed ? 'block' : 'none';
+            if (skipTabBtn) skipTabBtn.style.display = allowed ? 'flex' : 'none';
+
+            if (!allowed && skipsTabPanel && skipsTabPanel.classList.contains('active')) {
+                switchTab('control');
+            }
+        }
 
         async function fetchDevices() {
             try {
@@ -1227,6 +1830,7 @@
             url.searchParams.set('device_id', newDeviceId);
             window.history.replaceState({}, '', url);
 
+            updateSchedulingVisibility();
             fetchInitialStatus();
             fetchLogs();
             fetchConfig();
@@ -1267,6 +1871,9 @@
             } else {
                 statusBadge.className = 'status-badge';
                 statusText.innerText = 'Offline';
+            }
+            if (typeof evaluateAndRenderSyncBanner === 'function' && isHomeAutoScheduleAuthorized()) {
+                evaluateAndRenderSyncBanner();
             }
         }
 
@@ -1577,21 +2184,427 @@
         }
 
         // ==========================================
-        // 4. SKIP DAYS CALENDAR
+        // 4. ADVANCED SCHEDULING ENGINE & UI
         // ==========================================
-        async function fetchConfig() {
-            const { data } = await _supabase
-                .from('skip_days')
-                .select('date, device_id')
-                .or(`device_id.eq.${activeDeviceId},device_id.is.null`);
+        const MODE_META = {
+            normal: { label: 'Normal', short: 'NRM', caps: { clockIn: true, clockOut: true } },
+            full_skip: { label: 'Full Skip', short: 'SKIP', caps: { clockIn: false, clockOut: false } },
+            clock_in_only: { label: 'Clock-in Only', short: 'IN', caps: { clockIn: true, clockOut: false } },
+            clock_out_only: { label: 'Clock-out Only', short: 'OUT', caps: { clockIn: false, clockOut: true } }
+        };
 
-            if (data) {
-                skipDaysArray = data.map(row => row.date);
+        const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        const MALAYSIA_HOLIDAY_PRESETS = {
+            '2026': [
+                { date: '2026-01-01', name: 'New Year\'s Day', scope: 'WP Kuala Lumpur,WP Putrajaya,Selangor' },
+                { date: '2026-02-01', name: 'Federal Territory Day & Thaipusam', scope: 'WP Kuala Lumpur,WP Putrajaya,Selangor,Johor,Penang' },
+                { date: '2026-02-17', name: 'Chinese New Year', scope: 'National' },
+                { date: '2026-02-18', name: 'Chinese New Year (Day 2)', scope: 'National' },
+                { date: '2026-03-07', name: 'Nuzul Al-Quran', scope: 'WP Kuala Lumpur,WP Putrajaya,Selangor,Penang' },
+                { date: '2026-03-21', name: 'Hari Raya Aidilfitri (Est.)', scope: 'National' },
+                { date: '2026-03-22', name: 'Hari Raya Aidilfitri Day 2 (Est.)', scope: 'National' },
+                { date: '2026-05-01', name: 'Labour Day', scope: 'National' },
+                { date: '2026-05-27', name: 'Hari Raya Haji (Est.)', scope: 'National' },
+                { date: '2026-05-31', name: 'Wesak Day', scope: 'National' },
+                { date: '2026-06-01', name: 'Yang di-Pertuan Agong\'s Birthday', scope: 'National' },
+                { date: '2026-06-17', name: 'Awal Muharram (Maal Hijrah)', scope: 'National' },
+                { date: '2026-08-25', name: 'Maulidur Rasul', scope: 'National' },
+                { date: '2026-08-31', name: 'National Day (Merdeka)', scope: 'National' },
+                { date: '2026-09-16', name: 'Malaysia Day', scope: 'National' },
+                { date: '2026-11-08', name: 'Deepavali (Est.)', scope: 'National' },
+                { date: '2026-12-11', name: 'Sultan of Selangor\'s Birthday', scope: 'Selangor' },
+                { date: '2026-12-25', name: 'Christmas Day', scope: 'National' }
+            ],
+            '2027': [
+                { date: '2027-01-01', name: 'New Year\'s Day', scope: 'WP Kuala Lumpur,WP Putrajaya,Selangor' },
+                { date: '2027-02-01', name: 'Federal Territory Day', scope: 'WP Kuala Lumpur,WP Putrajaya' },
+                { date: '2027-02-06', name: 'Chinese New Year', scope: 'National' },
+                { date: '2027-02-07', name: 'Chinese New Year (Day 2)', scope: 'National' },
+                { date: '2027-03-10', name: 'Hari Raya Aidilfitri (Est.)', scope: 'National' },
+                { date: '2027-03-11', name: 'Hari Raya Aidilfitri Day 2 (Est.)', scope: 'National' },
+                { date: '2027-05-01', name: 'Labour Day', scope: 'National' },
+                { date: '2027-05-17', name: 'Hari Raya Haji (Est.)', scope: 'National' },
+                { date: '2027-05-20', name: 'Wesak Day', scope: 'National' },
+                { date: '2027-06-07', name: 'Yang di-Pertuan Agong\'s Birthday', scope: 'National' },
+                { date: '2027-08-31', name: 'National Day (Merdeka)', scope: 'National' },
+                { date: '2027-09-16', name: 'Malaysia Day', scope: 'National' },
+                { date: '2027-12-11', name: 'Sultan of Selangor\'s Birthday', scope: 'Selangor' },
+                { date: '2027-12-25', name: 'Christmas Day', scope: 'National' }
+            ]
+        };
+
+        function compareSemverClient(v1, v2) {
+            if (!v1 && !v2) return 0;
+            if (!v1) return -1;
+            if (!v2) return 1;
+            const p1 = String(v1).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            const p2 = String(v2).replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+            for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+                if ((p1[i] || 0) > (p2[i] || 0)) return 1;
+                if ((p1[i] || 0) < (p2[i] || 0)) return -1;
             }
+            return 0;
+        }
+
+        function isDesktopHeartbeatOnline() {
+            return (Date.now() - lastSeenTimestamp) < 90000;
+        }
+
+        function isMissingTableOrRpcError(err) {
+            if (!err) return false;
+            const code = String(err.code || '').toUpperCase();
+            const msg = String(err.message || '').toLowerCase();
+            return code === '42P01' || code === 'PGRST205' || code === 'PGRST202' || msg.includes('does not exist') || msg.includes('could not find');
+        }
+
+        function matchesRecurringRuleClient(dateString, rule) {
+            if (!rule || rule.enabled === false || !MODE_META[rule.mode]) return false;
+            if (rule.effective_from && dateString < rule.effective_from) return false;
+            if (rule.effective_to && dateString > rule.effective_to) return false;
+            const [y, m, d] = dateString.split('-').map(Number);
+            const dt = new Date(y, m - 1, d, 12, 0, 0, 0);
+            const dow = dt.getDay();
+            if (rule.recurrence_type === 'weekly') return Number(rule.day_of_week) === dow;
+            if (rule.recurrence_type === 'monthly_day') return Number(rule.day_of_month) === d;
+            if (rule.recurrence_type === 'monthly_nth_weekday') {
+                if (Number(rule.day_of_week) !== dow) return false;
+                const nth = Number(rule.nth_week);
+                if (nth === -1) {
+                    const daysInMonth = new Date(y, m, 0).getDate();
+                    return d + 7 > daysInMonth;
+                }
+                return Math.ceil(d / 7) === nth;
+            }
+            return false;
+        }
+
+        function evaluateDatePolicyClient(dateString, state = policyState) {
+            const [y, m, d] = dateString.split('-').map(Number);
+            const dow = new Date(y, m - 1, d, 12, 0, 0, 0).getDay();
+            const override = state.date_overrides ? state.date_overrides[dateString] : null;
+            const holiday = state.holidays ? state.holidays[dateString] : null;
+            const rules = Array.isArray(state.recurring_rules) ? state.recurring_rules : [];
+            const weeklyDefaults = state.weekly_defaults || DEFAULT_WEEKLY_DEFAULTS;
+
+            if (override && MODE_META[override.mode] && override.source !== 'legacy_skip_day') {
+                return {
+                    date: dateString,
+                    dayOfWeek: dow,
+                    effectiveMode: override.mode,
+                    ruleSource: override.source || 'manual_override',
+                    ruleLabel: override.reason || `Manual Override (${MODE_META[override.mode].label})`,
+                    isManualOverride: true,
+                    isApprovedHoliday: false,
+                    isSuggestedHoliday: Boolean(holiday && !holiday.approved),
+                    holidayName: holiday ? holiday.name : null,
+                    isRecurringMatch: false,
+                    isWeekendDefault: false
+                };
+            }
+
+            if (holiday && holiday.approved === true && MODE_META[holiday.mode]) {
+                return {
+                    date: dateString,
+                    dayOfWeek: dow,
+                    effectiveMode: holiday.mode,
+                    ruleSource: 'approved_holiday',
+                    ruleLabel: `Approved Holiday: ${holiday.name}`,
+                    isManualOverride: false,
+                    isApprovedHoliday: true,
+                    isSuggestedHoliday: false,
+                    holidayName: holiday.name,
+                    isRecurringMatch: false,
+                    isWeekendDefault: false
+                };
+            }
+
+            if ((override && override.source === 'legacy_skip_day') || (Array.isArray(state.skip_days) && state.skip_days.includes(dateString))) {
+                const mode = (override && override.mode) || 'full_skip';
+                return {
+                    date: dateString,
+                    dayOfWeek: dow,
+                    effectiveMode: mode,
+                    ruleSource: 'legacy_skip_day',
+                    ruleLabel: 'Legacy Skip Day (Full Skip)',
+                    isManualOverride: true,
+                    isApprovedHoliday: false,
+                    isSuggestedHoliday: Boolean(holiday && !holiday.approved),
+                    holidayName: holiday ? holiday.name : null,
+                    isRecurringMatch: false,
+                    isWeekendDefault: false
+                };
+            }
+
+            const matchedRules = rules.filter(r => matchesRecurringRuleClient(dateString, r)).sort((a, b) => {
+                const prio = (Number(b.priority) || 0) - (Number(a.priority) || 0);
+                if (prio !== 0) return prio;
+                const spec = r => r.recurrence_type === 'monthly_day' ? 3 : (r.recurrence_type === 'monthly_nth_weekday' ? 2 : 1);
+                return spec(b) - spec(a);
+            });
+
+            if (matchedRules.length > 0) {
+                const top = matchedRules[0];
+                return {
+                    date: dateString,
+                    dayOfWeek: dow,
+                    effectiveMode: top.mode,
+                    ruleSource: 'recurring_rule',
+                    ruleLabel: `Recurring Rule: ${top.name} (Priority ${top.priority})`,
+                    isManualOverride: false,
+                    isApprovedHoliday: false,
+                    isSuggestedHoliday: Boolean(holiday && !holiday.approved),
+                    holidayName: holiday ? holiday.name : null,
+                    isRecurringMatch: true,
+                    isWeekendDefault: false
+                };
+            }
+
+            const wkMode = MODE_META[weeklyDefaults[String(dow)]] ? weeklyDefaults[String(dow)] : ((dow === 0 || dow === 6) ? 'full_skip' : 'normal');
+            return {
+                date: dateString,
+                dayOfWeek: dow,
+                effectiveMode: wkMode,
+                ruleSource: 'weekly_default',
+                ruleLabel: (dow === 0 || dow === 6) && wkMode === 'full_skip'
+                    ? 'Weekly Default (Weekend Skip)'
+                    : `Weekly Default (${MODE_META[wkMode].label})`,
+                isManualOverride: false,
+                isApprovedHoliday: false,
+                isSuggestedHoliday: Boolean(holiday && !holiday.approved),
+                holidayName: holiday ? holiday.name : null,
+                isRecurringMatch: false,
+                isWeekendDefault: (dow === 0 || dow === 6) && wkMode === 'full_skip'
+            };
+        }
+
+        function expandBulkRangeDatesClient(startStr, endStr, filterMode) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(startStr || '') || !/^\d{4}-\d{2}-\d{2}$/.test(endStr || '')) return [];
+            const [sy, sm, sd] = startStr.split('-').map(Number);
+            const [ey, em, ed] = endStr.split('-').map(Number);
+            const cur = new Date(sy, sm - 1, sd, 12, 0, 0, 0);
+            const end = new Date(ey, em - 1, ed, 12, 0, 0, 0);
+            const out = [];
+            let guard = 0;
+            while (cur <= end && guard < 180) {
+                const dow = cur.getDay();
+                const isWknd = dow === 0 || dow === 6;
+                if (filterMode === 'range_all' || (filterMode === 'range_weekdays' && !isWknd) || (filterMode === 'range_weekends' && isWknd)) {
+                    const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                    out.push(ds);
+                }
+                cur.setDate(cur.getDate() + 1);
+                guard++;
+            }
+            return out;
+        }
+
+        function evaluateAndRenderSyncBanner(overrideStatus = null, customMessage = null) {
+            const banner = document.getElementById('scheduleSyncBanner');
+            const titleEl = document.getElementById('scheduleSyncTitle');
+            const detailEl = document.getElementById('scheduleSyncDetail');
+            const retryBtn = document.getElementById('scheduleRetrySyncBtn');
+            const controlPill = document.getElementById('controlSyncPill');
+
+            const rev = Number(policyState.revision || 1);
+            const ackRev = Number(policyState.applied_revision || 0);
+            const desktopOnline = isDesktopHeartbeatOnline();
+            const outdatedAgent = desktopOnline && ackRev < rev && (!policyState.scheduler_version || compareSemverClient(policyState.scheduler_version, MIN_SCHEDULER_VERSION) < 0);
+
+            let phase = overrideStatus;
+            let title = '';
+            let detail = customMessage || '';
+
+            if (!phase) {
+                if (!policyState.schema_ready) {
+                    phase = 'failed';
+                    title = 'Schema Migration Required';
+                    detail = 'New advanced scheduling tables are missing in Supabase. Apply supabase/09_advanced_scheduling_upgrade.sql.';
+                } else if (syncUiState.status === 'saving') {
+                    phase = 'saving';
+                    title = 'Saving changes to Supabase...';
+                    detail = 'Writing policy update and assigning durable revision...';
+                } else if (syncUiState.status === 'failed') {
+                    phase = 'failed';
+                    title = 'Failed to synchronize scheduling change';
+                    detail = syncUiState.message || 'Check connection or desktop version.';
+                } else if (ackRev >= rev && rev > 0) {
+                    if (policyState.ack_status === 'warning_in_progress') {
+                        phase = 'warning';
+                        title = `Applied Rev #${rev} (Warning: Action In Progress)`;
+                        detail = policyState.ack_message || 'An automated click had already started when policy updated.';
+                    } else if (policyState.ack_status === 'error') {
+                        phase = 'failed';
+                        title = `Desktop Scheduler Error on Rev #${rev}`;
+                        detail = policyState.ack_message || 'Desktop scheduler reported an error.';
+                    } else {
+                        phase = 'applied';
+                        const ackTime = policyState.applied_at ? new Date(policyState.applied_at).toLocaleTimeString() : 'just now';
+                        title = `Successfully applied by Desktop Scheduler (Rev #${rev})`;
+                        detail = `Confirmed by desktop v${policyState.scheduler_version || '?'} at ${ackTime}${!desktopOnline ? ' (Desktop currently offline; policy cached locally)' : ''}.`;
+                    }
+                } else if (!desktopOnline) {
+                    phase = 'offline';
+                    title = `Desktop offline (Saved Rev #${rev})`;
+                    detail = `Saved in Supabase (Rev #${rev}, Desktop last applied #${ackRev}). Desktop will apply automatically upon reconnect.`;
+                } else if (outdatedAgent) {
+                    phase = 'failed';
+                    title = `Awaiting compatible desktop update (Rev #${rev} not acknowledged)`;
+                    detail = `Desktop Agent is online but running v${policyState.scheduler_version || 'legacy'} (< v${MIN_SCHEDULER_VERSION}). Install modular updates in the Desktop App.`;
+                } else {
+                    phase = 'awaiting';
+                    title = `Awaiting desktop synchronization (Rev #${rev})...`;
+                    detail = `Desktop applied #${ackRev}. Waiting for Realtime confirmation from home_desktop_agent...`;
+                }
+            } else if (phase === 'saving') {
+                title = 'Saving changes...';
+                detail = customMessage || 'Updating Supabase scheduling policy...';
+            } else if (phase === 'failed') {
+                title = 'Failed to synchronize';
+            }
+
+            if (banner && titleEl && detailEl) {
+                banner.className = `schedule-sync-banner sync-${phase}`;
+                titleEl.innerText = title;
+                detailEl.innerText = detail;
+                if (retryBtn) {
+                    retryBtn.style.display = (phase === 'failed' || phase === 'awaiting' || phase === 'offline') ? 'inline-block' : 'none';
+                }
+            }
+            if (controlPill) {
+                if (phase === 'applied') controlPill.innerText = `✓ Synced Rev #${rev}`;
+                else if (phase === 'saving') controlPill.innerText = 'Saving...';
+                else if (phase === 'awaiting') controlPill.innerText = `⏳ Awaiting Desktop (#${rev})`;
+                else if (phase === 'offline') controlPill.innerText = `⚠ Desktop Offline (Saved #${rev})`;
+                else if (phase === 'warning') controlPill.innerText = `⚠ Applied w/ Warning (#${rev})`;
+                else controlPill.innerText = '✕ Sync Issue';
+                controlPill.style.color = phase === 'applied' ? '#6ee7b7' : (phase === 'failed' ? '#fca5a5' : (phase === 'awaiting' || phase === 'saving' ? '#93c5fd' : '#fcd34d'));
+            }
+        }
+
+        function beginAwaitingAck(targetRevision) {
+            syncUiState.status = 'awaiting';
+            syncUiState.targetRevision = targetRevision;
+            if (syncUiState.timerId) clearTimeout(syncUiState.timerId);
+            evaluateAndRenderSyncBanner();
+
+            syncUiState.timerId = setTimeout(async () => {
+                if (!isHomeAutoScheduleAuthorized()) return;
+                await fetchPolicyStateOnly();
+                if (Number(policyState.applied_revision || 0) < Number(policyState.revision || 0)) {
+                    if (!isDesktopHeartbeatOnline()) {
+                        evaluateAndRenderSyncBanner();
+                    } else {
+                        syncUiState.status = 'failed';
+                        syncUiState.message = `Desktop agent did not acknowledge Rev #${policyState.revision} within 12s. Verify desktop v${MIN_SCHEDULER_VERSION}+ is running and connected.`;
+                        evaluateAndRenderSyncBanner();
+                    }
+                }
+            }, 12000);
+        }
+
+        async function retryScheduleSyncCheck() {
+            await fetchConfig();
+            await fetchTodaysData();
+            await fetchInitialStatus();
+        }
+
+        async function fetchPolicyStateOnly() {
+            const { data, error } = await _supabase
+                .from('schedule_policy_state')
+                .select('*')
+                .eq('device_id', HOME_DEVICE_ID)
+                .maybeSingle();
+
+            if (!error && data) {
+                policyState.revision = Number(data.revision || 1);
+                policyState.applied_revision = Number(data.applied_revision || 0);
+                policyState.applied_at = data.applied_at || null;
+                policyState.ack_status = data.ack_status || 'pending';
+                policyState.ack_message = data.ack_message || null;
+                policyState.scheduler_version = data.scheduler_version || null;
+                if (data.weekly_defaults) policyState.weekly_defaults = data.weekly_defaults;
+                if (policyState.applied_revision >= policyState.revision) {
+                    syncUiState.status = 'applied';
+                    if (syncUiState.timerId) { clearTimeout(syncUiState.timerId); syncUiState.timerId = null; }
+                }
+            }
+            evaluateAndRenderSyncBanner();
+        }
+
+        async function fetchConfig() {
+            if (!isHomeAutoScheduleAuthorized()) {
+                renderWeeklyDefaultsUI();
+                renderRecurringRulesUI();
+                renderHolidaysUI();
+                return;
+            }
+
+            try {
+                const [stateRes, ovRes, recRes, holRes, skipRes] = await Promise.all([
+                    _supabase.from('schedule_policy_state').select('*').eq('device_id', HOME_DEVICE_ID).maybeSingle(),
+                    _supabase.from('schedule_date_overrides').select('*').eq('device_id', HOME_DEVICE_ID),
+                    _supabase.from('schedule_recurring_rules').select('*').eq('device_id', HOME_DEVICE_ID).order('priority', { ascending: false }),
+                    _supabase.from('schedule_holidays').select('*').eq('device_id', HOME_DEVICE_ID).order('date', { ascending: true }),
+                    _supabase.from('skip_days').select('date, device_id').or(`device_id.eq.${HOME_DEVICE_ID},device_id.is.null`)
+                ]);
+
+                const schemaMissing = [stateRes, ovRes, recRes, holRes].some(r => r && r.error && isMissingTableOrRpcError(r.error));
+                policyState.schema_ready = !schemaMissing;
+                const warnEl = document.getElementById('scheduleSchemaWarning');
+                if (warnEl) warnEl.style.display = schemaMissing ? 'block' : 'none';
+
+                if (skipRes && Array.isArray(skipRes.data)) {
+                    policyState.skip_days = skipRes.data.map(r => r.date);
+                }
+
+                if (!schemaMissing) {
+                    if (stateRes && stateRes.data) {
+                        const st = stateRes.data;
+                        policyState.revision = Number(st.revision || 1);
+                        policyState.applied_revision = Number(st.applied_revision || 0);
+                        policyState.applied_at = st.applied_at || null;
+                        policyState.ack_status = st.ack_status || 'pending';
+                        policyState.ack_message = st.ack_message || null;
+                        policyState.scheduler_version = st.scheduler_version || null;
+                        policyState.weekly_defaults = st.weekly_defaults || { ...DEFAULT_WEEKLY_DEFAULTS };
+                        if (policyState.applied_revision >= policyState.revision) {
+                            syncUiState.status = 'applied';
+                            if (syncUiState.timerId) { clearTimeout(syncUiState.timerId); syncUiState.timerId = null; }
+                        }
+                    }
+
+                    const overridesMap = {};
+                    if (ovRes && Array.isArray(ovRes.data)) {
+                        ovRes.data.forEach(r => { overridesMap[r.date] = r; });
+                    }
+                    policyState.date_overrides = overridesMap;
+
+                    policyState.recurring_rules = (recRes && Array.isArray(recRes.data)) ? recRes.data : [];
+
+                    const holidaysMap = {};
+                    if (holRes && Array.isArray(holRes.data)) {
+                        holRes.data.forEach(h => { holidaysMap[h.date] = h; });
+                    }
+                    policyState.holidays = holidaysMap;
+                }
+            } catch (err) {
+                console.error('[SCHEDULE] Failed to load scheduling config:', err);
+            }
+
             renderCalendar();
+            renderDateInspector();
+            renderWeeklyDefaultsUI();
+            renderRecurringRulesUI();
+            renderHolidaysUI();
+            evaluateAndRenderSyncBanner();
+            if (currentTodaySchedule || !currentTodaySchedule) {
+                updateScheduleUI(currentTodaySchedule);
+            }
         }
 
         function renderCalendar() {
+            if (!calendarGrid) return;
             calendarGrid.innerHTML = '';
 
             const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -1604,34 +2617,51 @@
 
             const year = currentNavDate.getFullYear();
             const month = currentNavDate.getMonth();
-
             document.getElementById('currentMonthLabel').innerText = currentNavDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
             let firstDay = new Date(year, month, 1).getDay();
             firstDay = firstDay === 0 ? 6 : firstDay - 1;
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-
             const todayStr = new Date().toLocaleDateString('en-CA');
 
             for (let i = 0; i < firstDay; i++) {
-                const emptyTile = document.createElement('div');
-                calendarGrid.appendChild(emptyTile);
+                calendarGrid.appendChild(document.createElement('div'));
             }
+
+            const bulkPreviewDates = new Set(getActiveBulkTargetDates());
 
             for (let i = 1; i <= daysInMonth; i++) {
                 const mm = String(month + 1).padStart(2, '0');
                 const dd = String(i).padStart(2, '0');
                 const dateString = `${year}-${mm}-${dd}`;
+                const evalRes = evaluateDatePolicyClient(dateString, policyState);
+                const meta = MODE_META[evalRes.effectiveMode] || MODE_META.normal;
 
                 const tile = document.createElement('div');
-                let classes = 'calendar-tile';
-                if (skipDaysArray.includes(dateString)) classes += ' active';
+                let classes = `calendar-tile mode-${evalRes.effectiveMode}`;
+                if (evalRes.isWeekendDefault) classes += ' is-weekend-default';
+                if (evalRes.isManualOverride) classes += ' is-manual-override';
+                if (evalRes.isRecurringMatch) classes += ' is-recurring-match';
+                if (evalRes.isApprovedHoliday) classes += ' is-approved-holiday';
+                if (evalRes.isSuggestedHoliday) classes += ' is-suggested-holiday';
                 if (dateString === todayStr) classes += ' today';
+                if (bulkSelectionMode === 'single' && dateString === selectedInspectorDate) classes += ' is-selected-date';
+                if (bulkSelectionMode !== 'single' && bulkPreviewDates.has(dateString)) classes += ' is-bulk-selected';
+
+                const markers = [];
+                if (evalRes.isManualOverride) markers.push('<span title="Manual override">✎</span>');
+                if (evalRes.isRecurringMatch) markers.push('<span title="Recurring rule">↻</span>');
+                if (evalRes.isApprovedHoliday) markers.push('<span title="Approved holiday">★</span>');
+                else if (evalRes.isSuggestedHoliday) markers.push('<span title="Suggested holiday (not yet approved)">☆</span>');
 
                 tile.className = classes;
-                tile.onclick = () => toggleDate(dateString);
-
-                tile.innerHTML = `<strong>${i}</strong>`;
+                tile.title = `${dateString}: ${meta.label} (${evalRes.ruleLabel})`;
+                tile.onclick = () => onCalendarDateClick(dateString);
+                tile.innerHTML = `
+                    <div class="tile-markers">${markers.join('')}</div>
+                    <strong>${i}</strong>
+                    <span class="tile-mode-tag">${meta.short}</span>
+                `;
                 calendarGrid.appendChild(tile);
             }
         }
@@ -1641,39 +2671,665 @@
             renderCalendar();
         }
 
-        async function toggleDate(dateString) {
-            const wasSkipped = skipDaysArray.includes(dateString);
-            if (wasSkipped) {
-                skipDaysArray = skipDaysArray.filter(d => d !== dateString);
-                renderCalendar();
-                try {
-                    const { error } = await _supabase
-                        .from('skip_days')
-                        .delete()
-                        .eq('date', dateString)
-                        .or(`device_id.eq.${activeDeviceId},device_id.is.null`);
-                    if (error) throw error;
-                } catch (err) {
-                    console.error('Failed to delete skip day:', err);
-                    skipDaysArray.push(dateString);
-                    renderCalendar();
-                    alert('Failed to remove skip day: ' + (err.message || err));
-                }
-            } else {
-                skipDaysArray.push(dateString);
-                renderCalendar();
-                try {
-                    const { error } = await _supabase
-                        .from('skip_days')
-                        .insert({ date: dateString, device_id: activeDeviceId });
-                    if (error) throw error;
-                } catch (err) {
-                    console.error('Failed to insert skip day:', err);
-                    skipDaysArray = skipDaysArray.filter(d => d !== dateString);
-                    renderCalendar();
-                    alert('Failed to add skip day: ' + (err.message || err));
+        function onCalendarDateClick(dateString) {
+            selectedInspectorDate = dateString;
+            if (bulkSelectionMode === 'multiple') {
+                if (bulkSelectedDates.has(dateString)) bulkSelectedDates.delete(dateString);
+                else bulkSelectedDates.add(dateString);
+                updateBulkPreview();
+            } else if (bulkSelectionMode.startsWith('range_')) {
+                const startEl = document.getElementById('bulkStartDate');
+                const endEl = document.getElementById('bulkEndDate');
+                if (startEl && endEl) {
+                    if (!startEl.value || (startEl.value && endEl.value)) {
+                        startEl.value = dateString;
+                        endEl.value = '';
+                    } else if (dateString < startEl.value) {
+                        endEl.value = startEl.value;
+                        startEl.value = dateString;
+                    } else {
+                        endEl.value = dateString;
+                    }
+                    updateBulkPreview();
                 }
             }
+            renderCalendar();
+            renderDateInspector();
+        }
+
+        function renderDateInspector() {
+            const titleEl = document.getElementById('inspectorDateTitle');
+            const subEl = document.getElementById('inspectorDateSubtitle');
+            const badgeEl = document.getElementById('inspectorModeBadge');
+            const ruleEl = document.getElementById('inspectorRuleSource');
+            const holBanner = document.getElementById('inspectorHolidayBanner');
+            const todaySection = document.getElementById('inspectorTodaySection');
+            const clearBtn = document.getElementById('clearDateOverrideBtn');
+            if (!titleEl) return;
+
+            const dateStr = selectedInspectorDate || new Date().toLocaleDateString('en-CA');
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            const dt = new Date(dateStr + 'T12:00:00');
+            const evalRes = evaluateDatePolicyClient(dateStr, policyState);
+            const meta = MODE_META[evalRes.effectiveMode] || MODE_META.normal;
+
+            titleEl.innerText = dateStr + (dateStr === todayStr ? ' (Today)' : '');
+            subEl.innerText = dt.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+            badgeEl.className = `mode-pill mode-pill-${evalRes.effectiveMode}`;
+            badgeEl.innerText = meta.label;
+            ruleEl.innerText = `Determined by: ${evalRes.ruleLabel}`;
+
+            if (holBanner) {
+                const hol = policyState.holidays ? policyState.holidays[dateStr] : null;
+                if (hol && !hol.approved) {
+                    holBanner.style.display = 'block';
+                    holBanner.style.background = 'rgba(245, 158, 11, 0.12)';
+                    holBanner.style.color = '#fcd34d';
+                    holBanner.innerText = `Suggested Holiday: ${hol.name} (Pending your approval — not yet affecting schedule)`;
+                } else if (hol && hol.approved) {
+                    holBanner.style.display = 'block';
+                    holBanner.style.background = 'rgba(16, 185, 129, 0.12)';
+                    holBanner.style.color = '#6ee7b7';
+                    holBanner.innerText = `Approved Holiday: ${hol.name} (${hol.state_scope})`;
+                } else {
+                    holBanner.style.display = 'none';
+                }
+            }
+
+            if (clearBtn) {
+                clearBtn.style.display = evalRes.isManualOverride ? 'block' : 'none';
+            }
+
+            const reasonInput = document.getElementById('inspectorReasonInput');
+            if (reasonInput) {
+                const existingOv = policyState.date_overrides ? policyState.date_overrides[dateStr] : null;
+                reasonInput.value = existingOv && existingOv.reason ? existingOv.reason : '';
+            }
+
+            if (todaySection) {
+                if (dateStr === todayStr) {
+                    todaySection.style.display = 'block';
+                    const sched = currentTodaySchedule;
+                    const proof = currentTodayProof;
+                    const inEl = document.getElementById('inspectorClockInInfo');
+                    const outEl = document.getElementById('inspectorClockOutInfo');
+                    const inStatus = (sched && sched.clock_in_status) || (evalRes.effectiveMode === 'full_skip' || evalRes.effectiveMode === 'clock_out_only' ? 'disabled' : 'pending');
+                    const outStatus = (sched && sched.clock_out_status) || (evalRes.effectiveMode === 'full_skip' || evalRes.effectiveMode === 'clock_in_only' ? 'disabled' : 'pending');
+                    const inTime = (proof && proof.clock_in && proof.clock_in !== '?') ? proof.clock_in : ((sched && (sched.scheduled_clock_in || sched.planned_clock_in)) || '--:--');
+                    const outTime = (proof && proof.clock_out && proof.clock_out !== '?') ? proof.clock_out : ((sched && (sched.scheduled_clock_out || sched.planned_clock_out)) || '--:--');
+                    if (inEl) inEl.innerText = `${inTime} (${formatActionStatusLabel(sched && sched.clock_in_done ? 'completed' : inStatus)})`;
+                    if (outEl) outEl.innerText = `${outTime} (${formatActionStatusLabel(sched && sched.clock_out_done ? 'completed' : outStatus)})`;
+                } else {
+                    todaySection.style.display = 'none';
+                }
+            }
+        }
+
+        function formatActionStatusLabel(status) {
+            const labels = {
+                completed: 'Completed',
+                pending: 'Pending',
+                cancelled: 'Cancelled',
+                disabled: 'Disabled',
+                missed_window: 'Past Window'
+            };
+            return labels[status] || 'Pending';
+        }
+
+        async function executeBulkOverridesRpc(dates, mode, reason, source, clear = false) {
+            if (!isHomeAutoScheduleAuthorized()) {
+                alert('Restricted: Only the home_desktop_agent account may modify scheduling policies.');
+                return false;
+            }
+            if (!policyState.schema_ready) {
+                alert('Database migration required (supabase/09_advanced_scheduling_upgrade.sql).');
+                return false;
+            }
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', `Applying changes to ${dates.length} date(s)...`);
+
+            const { data, error } = await _supabase.rpc('save_bulk_schedule_overrides', {
+                p_dates: dates,
+                p_mode: clear ? 'normal' : mode,
+                p_reason: reason || null,
+                p_source: source,
+                p_clear: !!clear
+            });
+
+            if (error) {
+                syncUiState.status = 'failed';
+                syncUiState.message = error.message;
+                evaluateAndRenderSyncBanner('failed', error.message);
+                alert('Failed to apply schedule change (rolled back): ' + error.message);
+                return false;
+            }
+
+            const row = Array.isArray(data) ? data[0] : data;
+            if (row && row.new_revision) {
+                policyState.revision = Number(row.new_revision);
+            } else {
+                policyState.revision = Number(policyState.revision || 1) + 1;
+            }
+
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+            return true;
+        }
+
+        async function applySelectedDateMode(mode) {
+            const dateStr = selectedInspectorDate || new Date().toLocaleDateString('en-CA');
+            const reason = (document.getElementById('inspectorReasonInput')?.value || '').trim() || null;
+            await executeBulkOverridesRpc([dateStr], mode, reason, 'manual_override', false);
+        }
+
+        async function clearSelectedDateOverride() {
+            const dateStr = selectedInspectorDate || new Date().toLocaleDateString('en-CA');
+            await executeBulkOverridesRpc([dateStr], 'normal', null, 'manual_override', true);
+        }
+
+        async function applyTodayQuickAction(actionKind) {
+            if (!isHomeAutoScheduleAuthorized()) return;
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            const curEval = evaluateDatePolicyClient(todayStr, policyState);
+            const curMode = curEval.effectiveMode;
+
+            if (actionKind === 'cancel_remaining') {
+                await executeBulkOverridesRpc([todayStr], 'full_skip', 'Quick Control: Cancel remaining actions today', 'quick_control', false);
+            } else if (actionKind === 'disable_out') {
+                const targetMode = (curMode === 'clock_out_only' || curMode === 'full_skip') ? 'full_skip' : 'clock_in_only';
+                await executeBulkOverridesRpc([todayStr], targetMode, 'Quick Control: Disabled auto clock-out', 'quick_control', false);
+            } else if (actionKind === 'disable_in') {
+                const targetMode = (curMode === 'clock_in_only' || curMode === 'full_skip') ? 'full_skip' : 'clock_out_only';
+                await executeBulkOverridesRpc([todayStr], targetMode, 'Quick Control: Disabled auto clock-in', 'quick_control', false);
+            } else if (actionKind === 'resume_normal') {
+                const baselineState = {
+                    ...policyState,
+                    date_overrides: { ...(policyState.date_overrides || {}) }
+                };
+                delete baselineState.date_overrides[todayStr];
+                baselineState.skip_days = (policyState.skip_days || []).filter(d => d !== todayStr);
+                const baselineEval = evaluateDatePolicyClient(todayStr, baselineState);
+
+                if (baselineEval.effectiveMode === 'normal') {
+                    await executeBulkOverridesRpc([todayStr], 'normal', null, 'quick_control', true);
+                } else {
+                    await executeBulkOverridesRpc([todayStr], 'normal', 'Quick Control: Resume normal schedule', 'quick_control', false);
+                }
+            }
+        }
+
+        function setBulkSelectionMode(mode) {
+            bulkSelectionMode = mode;
+            const controls = document.getElementById('bulkPanelControls');
+            const rangeInputs = document.getElementById('bulkRangeInputs');
+            const sBtn = document.getElementById('selModeSingleBtn');
+            const mBtn = document.getElementById('selModeMultipleBtn');
+            const rBtn = document.getElementById('selModeRangeBtn');
+
+            if (sBtn) sBtn.classList.toggle('active-chip', mode === 'single');
+            if (mBtn) mBtn.classList.toggle('active-chip', mode === 'multiple');
+            if (rBtn) rBtn.classList.toggle('active-chip', mode.startsWith('range_'));
+            if (controls) controls.style.display = mode === 'single' ? 'none' : 'flex';
+            if (rangeInputs) rangeInputs.style.display = mode.startsWith('range_') ? 'grid' : 'none';
+
+            if (mode === 'range_all') {
+                const filterSel = document.getElementById('bulkRangeFilter');
+                if (filterSel) filterSel.value = 'range_all';
+            }
+            updateBulkPreview();
+            renderCalendar();
+        }
+
+        function setBulkRangeFilter(filterVal) {
+            bulkSelectionMode = filterVal;
+            updateBulkPreview();
+            renderCalendar();
+        }
+
+        function getActiveBulkTargetDates() {
+            if (bulkSelectionMode === 'single') return selectedInspectorDate ? [selectedInspectorDate] : [];
+            if (bulkSelectionMode === 'multiple') return Array.from(bulkSelectedDates).sort();
+            const start = document.getElementById('bulkStartDate')?.value;
+            const end = document.getElementById('bulkEndDate')?.value;
+            return expandBulkRangeDatesClient(start, end, bulkSelectionMode);
+        }
+
+        function updateBulkPreview() {
+            const box = document.getElementById('bulkPreviewBox');
+            if (!box) return;
+            const dates = getActiveBulkTargetDates();
+            const targetMode = document.getElementById('bulkTargetMode')?.value || 'full_skip';
+            if (dates.length === 0) {
+                box.innerText = bulkSelectionMode === 'multiple'
+                    ? 'Click dates on the calendar to select multiple dates.'
+                    : 'Choose Start Date and End Date (or click two dates on the calendar).';
+                return;
+            }
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            let changeCount = 0;
+            dates.forEach(d => {
+                const cur = evaluateDatePolicyClient(d, policyState).effectiveMode;
+                if (targetMode === '__clear__' || cur !== targetMode) changeCount++;
+            });
+            const actionDesc = targetMode === '__clear__' ? 'Clear manual overrides' : `Set to ${MODE_META[targetMode].label}`;
+            const includesTodayNote = dates.includes(todayStr) ? ' (Includes TODAY — completed proof will remain untouched)' : '';
+            const sample = dates.slice(0, 6).join(', ') + (dates.length > 6 ? ` ... (+${dates.length - 6} more)` : '');
+            box.innerText = `Preview: ${dates.length} date(s) selected (${changeCount} will update) -> ${actionDesc}${includesTodayNote}.\nDates: ${sample}`;
+        }
+
+        function clearBulkSelection() {
+            bulkSelectedDates.clear();
+            const s = document.getElementById('bulkStartDate');
+            const e = document.getElementById('bulkEndDate');
+            if (s) s.value = '';
+            if (e) e.value = '';
+            updateBulkPreview();
+            renderCalendar();
+        }
+
+        async function applyBulkScheduleChanges() {
+            const dates = getActiveBulkTargetDates();
+            if (dates.length === 0) {
+                alert('Please select at least one date first.');
+                return;
+            }
+            const targetMode = document.getElementById('bulkTargetMode')?.value || 'full_skip';
+            const reason = (document.getElementById('bulkReasonInput')?.value || '').trim() || null;
+            const ok = await executeBulkOverridesRpc(
+                dates,
+                targetMode === '__clear__' ? 'normal' : targetMode,
+                reason,
+                'bulk_override',
+                targetMode === '__clear__'
+            );
+            if (ok) {
+                clearBulkSelection();
+                setBulkSelectionMode('single');
+            }
+        }
+
+        function renderWeeklyDefaultsUI() {
+            const grid = document.getElementById('weeklyDefaultsGrid');
+            if (!grid) return;
+            const order = [1, 2, 3, 4, 5, 6, 0];
+            const defaults = policyState.weekly_defaults || DEFAULT_WEEKLY_DEFAULTS;
+            grid.innerHTML = '';
+
+            order.forEach(dow => {
+                const curVal = defaults[String(dow)] || (dow === 0 || dow === 6 ? 'full_skip' : 'normal');
+                const card = document.createElement('div');
+                card.className = 'sub-panel';
+                card.style.padding = '0.65rem';
+                card.innerHTML = `
+                    <div style="font-size: 0.78rem; font-weight: 600; color: #fff; margin-bottom: 0.4rem;">${DAY_NAMES[dow]}</div>
+                    <select id="weeklyDef_${dow}" class="field-select" style="padding: 0.4rem; min-height: 36px; font-size: 0.78rem;">
+                        <option value="normal" ${curVal === 'normal' ? 'selected' : ''}>Normal</option>
+                        <option value="full_skip" ${curVal === 'full_skip' ? 'selected' : ''}>Full Skip</option>
+                        <option value="clock_in_only" ${curVal === 'clock_in_only' ? 'selected' : ''}>Clock-in Only</option>
+                        <option value="clock_out_only" ${curVal === 'clock_out_only' ? 'selected' : ''}>Clock-out Only</option>
+                    </select>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function saveWeeklyDefaultsUI() {
+            if (!isHomeAutoScheduleAuthorized() || !policyState.schema_ready) return;
+            const nextDefaults = {};
+            for (let i = 0; i <= 6; i++) {
+                const sel = document.getElementById(`weeklyDef_${i}`);
+                nextDefaults[String(i)] = sel ? sel.value : DEFAULT_WEEKLY_DEFAULTS[String(i)];
+            }
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Saving weekly working-day defaults...');
+
+            const nextRev = Number(policyState.revision || 1) + 1;
+            const payload = {
+                device_id: HOME_DEVICE_ID,
+                weekly_defaults: nextDefaults,
+                revision: nextRev,
+                last_change_source: 'weekly_defaults',
+                last_change_summary: 'Updated weekly working-day defaults',
+                updated_at: new Date().toISOString()
+            };
+            if (currentUserSession?.user?.id) payload.user_id = currentUserSession.user.id;
+
+            const { data, error } = await _supabase
+                .from('schedule_policy_state')
+                .upsert(payload, { onConflict: 'device_id' })
+                .select()
+                .maybeSingle();
+
+            if (error) {
+                syncUiState.status = 'failed';
+                syncUiState.message = error.message;
+                evaluateAndRenderSyncBanner('failed', error.message);
+                alert('Failed to save weekly defaults: ' + error.message);
+                return;
+            }
+
+            policyState.weekly_defaults = nextDefaults;
+            policyState.revision = data && data.revision ? Number(data.revision) : nextRev;
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        function updateRecurringFormFields() {
+            const type = document.getElementById('recRuleType')?.value || 'weekly';
+            const dowEl = document.getElementById('recRuleDow');
+            const nthEl = document.getElementById('recRuleNth');
+            const domEl = document.getElementById('recRuleDom');
+            if (dowEl) dowEl.style.display = (type === 'weekly' || type === 'monthly_nth_weekday') ? 'block' : 'none';
+            if (nthEl) nthEl.style.display = (type === 'monthly_nth_weekday') ? 'block' : 'none';
+            if (domEl) domEl.style.display = (type === 'monthly_day') ? 'block' : 'none';
+        }
+
+        function renderRecurringRulesUI() {
+            const list = document.getElementById('recurringRulesList');
+            const fromEl = document.getElementById('recRuleFrom');
+            if (fromEl && !fromEl.value) fromEl.value = new Date().toLocaleDateString('en-CA');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const rules = policyState.recurring_rules || [];
+            if (rules.length === 0) {
+                list.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-secondary);">No recurring rules configured.</div>';
+                return;
+            }
+
+            rules.forEach(rule => {
+                let patternDesc = '';
+                if (rule.recurrence_type === 'weekly') patternDesc = `Every ${DAY_NAMES[rule.day_of_week]}`;
+                else if (rule.recurrence_type === 'monthly_day') patternDesc = `Day ${rule.day_of_month} each month`;
+                else patternDesc = `${rule.nth_week === -1 ? 'Last' : rule.nth_week + '.'} ${DAY_NAMES[rule.day_of_week]} monthly`;
+
+                const conflict = rules.some(other =>
+                    other.id !== rule.id &&
+                    other.enabled &&
+                    rule.enabled &&
+                    other.priority === rule.priority &&
+                    other.recurrence_type === rule.recurrence_type &&
+                    String(other.day_of_week) === String(rule.day_of_week) &&
+                    String(other.day_of_month) === String(rule.day_of_month) &&
+                    String(other.nth_week) === String(rule.nth_week) &&
+                    other.mode !== rule.mode
+                );
+
+                const row = document.createElement('div');
+                row.className = 'rule-row';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-size: 0.84rem; font-weight: 600; color: #fff;">
+                            ${escapeHtml(rule.name)}
+                            <span class="mode-pill mode-pill-${rule.mode}" style="margin-left: 0.35rem;">${MODE_META[rule.mode].label}</span>
+                            ${conflict ? '<span style="color:#fcd34d; font-size:0.72rem; margin-left:0.3rem;">⚠ Priority tie</span>' : ''}
+                        </div>
+                        <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                            ${patternDesc} • Priority ${rule.priority} • From ${rule.effective_from}${rule.effective_to ? ' to ' + rule.effective_to : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.4rem;">
+                        <button type="button" class="btn-chip" style="min-height: 32px; padding: 0.25rem 0.6rem;" onclick="toggleRecurringRuleUI('${rule.id}', ${!rule.enabled})">${rule.enabled ? 'Disable' : 'Enable'}</button>
+                        <button type="button" class="btn-chip btn-chip-danger" style="min-height: 32px; padding: 0.25rem 0.6rem;" onclick="deleteRecurringRuleUI('${rule.id}')">Delete</button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        async function addRecurringRuleUI() {
+            if (!isHomeAutoScheduleAuthorized() || !policyState.schema_ready) return;
+            const name = (document.getElementById('recRuleName')?.value || '').trim();
+            const type = document.getElementById('recRuleType')?.value || 'weekly';
+            const mode = document.getElementById('recRuleMode')?.value || 'full_skip';
+            const dow = Number(document.getElementById('recRuleDow')?.value ?? 1);
+            const nth = Number(document.getElementById('recRuleNth')?.value ?? 1);
+            const dom = Number(document.getElementById('recRuleDom')?.value ?? 1);
+            const priority = Number(document.getElementById('recRulePriority')?.value ?? 50);
+            const fromDate = document.getElementById('recRuleFrom')?.value || new Date().toLocaleDateString('en-CA');
+            const toDate = document.getElementById('recRuleTo')?.value || null;
+
+            if (!name) { alert('Please enter a recurring rule name.'); return; }
+            if (toDate && toDate < fromDate) { alert('Effective To date cannot be earlier than Effective From date.'); return; }
+
+            const existingConflict = (policyState.recurring_rules || []).find(r =>
+                r.enabled &&
+                Number(r.priority) === priority &&
+                r.recurrence_type === type &&
+                (type !== 'weekly' || Number(r.day_of_week) === dow) &&
+                (type !== 'monthly_day' || Number(r.day_of_month) === dom) &&
+                (type !== 'monthly_nth_weekday' || (Number(r.day_of_week) === dow && Number(r.nth_week) === nth)) &&
+                r.mode !== mode
+            );
+            if (existingConflict && !confirm(`Priority conflict detected with active rule "${existingConflict.name}" (${existingConflict.mode}) at priority ${priority}.\n\nConsider adjusting priority so winner is explicit. Add anyway?`)) {
+                return;
+            }
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Adding recurring rule...');
+
+            const payload = {
+                device_id: HOME_DEVICE_ID,
+                name,
+                recurrence_type: type,
+                day_of_week: type === 'monthly_day' ? null : dow,
+                nth_week: type === 'monthly_nth_weekday' ? nth : null,
+                day_of_month: type === 'monthly_day' ? dom : null,
+                mode,
+                priority,
+                effective_from: fromDate,
+                effective_to: toDate,
+                enabled: true
+            };
+            if (currentUserSession?.user?.id) payload.user_id = currentUserSession.user.id;
+
+            const { error } = await _supabase.from('schedule_recurring_rules').insert(payload);
+            if (error) {
+                syncUiState.status = 'failed';
+                evaluateAndRenderSyncBanner('failed', error.message);
+                alert('Failed to add recurring rule: ' + error.message);
+                return;
+            }
+            if (document.getElementById('recRuleName')) document.getElementById('recRuleName').value = '';
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        async function toggleRecurringRuleUI(id, enabled) {
+            if (!isHomeAutoScheduleAuthorized()) return;
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Updating recurring rule...');
+            const { error } = await _supabase.from('schedule_recurring_rules').update({ enabled, updated_at: new Date().toISOString() }).eq('id', id);
+            if (error) { alert(error.message); return; }
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        async function deleteRecurringRuleUI(id) {
+            if (!isHomeAutoScheduleAuthorized()) return;
+            if (!confirm('Delete this recurring rule?')) return;
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Removing recurring rule...');
+            const { error } = await _supabase.from('schedule_recurring_rules').delete().eq('id', id);
+            if (error) { alert(error.message); return; }
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        function renderHolidaysUI() {
+            const list = document.getElementById('holidaysList');
+            if (!list) return;
+            list.innerHTML = '';
+
+            const holidays = Object.values(policyState.holidays || {}).sort((a, b) => a.date.localeCompare(b.date));
+            if (holidays.length === 0) {
+                list.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-secondary);">No holidays added or imported yet.</div>';
+                return;
+            }
+
+            holidays.forEach(h => {
+                const row = document.createElement('div');
+                row.className = 'rule-row';
+                const statusBadge = h.approved
+                    ? '<span class="action-status-pill action-status-completed">★ Approved</span>'
+                    : '<span class="action-status-pill action-status-missed_window">☆ Suggested Only</span>';
+                row.innerHTML = `
+                    <div>
+                        <div style="font-size: 0.83rem; font-weight: 600; color: #fff;">
+                            ${h.date} — ${escapeHtml(h.name)} ${statusBadge}
+                        </div>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.15rem;">
+                            Scope: ${escapeHtml(h.state_scope)} • Mode: ${MODE_META[h.mode]?.label || h.mode}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.35rem;">
+                        <button type="button" class="btn-chip ${h.approved ? '' : 'btn-chip-success'}" style="min-height: 30px; padding: 0.2rem 0.55rem;" onclick="toggleHolidayApprovalUI('${h.date}', ${!h.approved})">${h.approved ? 'Unapprove' : 'Approve'}</button>
+                        <button type="button" class="btn-chip btn-chip-danger" style="min-height: 30px; padding: 0.2rem 0.55rem;" onclick="deleteHolidayUI('${h.date}')">✕</button>
+                    </div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        async function importMalaysiaHolidayPresetUI() {
+            if (!isHomeAutoScheduleAuthorized() || !policyState.schema_ready) return;
+            const state = document.getElementById('holidayStateSelect')?.value || 'Selangor';
+            const year = document.getElementById('holidayYearSelect')?.value || '2026';
+            const preset = MALAYSIA_HOLIDAY_PRESETS[year] || [];
+            const filtered = preset.filter(h => h.scope === 'National' || (state !== 'National' && h.scope.split(',').includes(state)));
+
+            if (filtered.length === 0) { alert('No preset holidays found for that selection.'); return; }
+
+            const rows = filtered.map(h => {
+                const existing = policyState.holidays ? policyState.holidays[h.date] : null;
+                const row = {
+                    date: h.date,
+                    device_id: HOME_DEVICE_ID,
+                    name: h.name,
+                    state_scope: state,
+                    mode: existing ? existing.mode : 'full_skip',
+                    source: 'preset_malaysia',
+                    approved: existing ? existing.approved : false,
+                    updated_at: new Date().toISOString()
+                };
+                if (currentUserSession?.user?.id) row.user_id = currentUserSession.user.id;
+                return row;
+            });
+
+            const { error } = await _supabase.from('schedule_holidays').upsert(rows, { onConflict: 'date, device_id' });
+            if (error) { alert('Failed to load suggested holidays: ' + error.message); return; }
+
+            await fetchConfig();
+            alert(`Loaded ${rows.length} Malaysian suggested holiday(s) for ${state} (${year}).\n\nThey are marked "Suggested Only" and will NOT affect your schedule until you review and approve them.`);
+        }
+
+        async function approveAllSuggestedHolidaysUI() {
+            if (!isHomeAutoScheduleAuthorized() || !policyState.schema_ready) return;
+            const pending = Object.values(policyState.holidays || {}).filter(h => !h.approved);
+            if (pending.length === 0) { alert('There are no unapproved suggested holidays.'); return; }
+            if (!confirm(`Confirm approval of ${pending.length} suggested holiday(s)?\n\nApproved holidays will apply to your schedule and immediately synchronize to your desktop scheduler.`)) return;
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Approving selected holidays...');
+
+            const nowIso = new Date().toISOString();
+            const updates = pending.map(h => ({
+                date: h.date,
+                device_id: HOME_DEVICE_ID,
+                user_id: currentUserSession?.user?.id,
+                name: h.name,
+                state_scope: h.state_scope,
+                mode: h.mode || 'full_skip',
+                source: h.source || 'preset_malaysia',
+                approved: true,
+                approved_at: nowIso,
+                updated_at: nowIso
+            }));
+            const { error } = await _supabase.from('schedule_holidays').upsert(updates, { onConflict: 'date, device_id' });
+            if (error) { alert('Failed to approve holidays: ' + error.message); return; }
+
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        async function addManualHolidayUI() {
+            if (!isHomeAutoScheduleAuthorized() || !policyState.schema_ready) return;
+            const name = (document.getElementById('manualHolidayName')?.value || '').trim();
+            const start = document.getElementById('manualHolidayStart')?.value;
+            const end = document.getElementById('manualHolidayEnd')?.value || start;
+            const mode = document.getElementById('manualHolidayMode')?.value || 'full_skip';
+            const state = document.getElementById('holidayStateSelect')?.value || 'Manual';
+            const approved = Boolean(document.getElementById('manualHolidayApproved')?.checked);
+
+            if (!name || !start) { alert('Please enter both holiday name and start date.'); return; }
+            if (end < start) { alert('End date cannot be earlier than start date.'); return; }
+
+            const dates = expandBulkRangeDatesClient(start, end, 'range_all');
+            if (dates.length === 0) return;
+            if (approved && !confirm(`Confirm applying "${name}" (${dates.length} day(s), ${MODE_META[mode].label}) directly to your active schedule?`)) return;
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Saving holiday entry...');
+
+            const nowIso = new Date().toISOString();
+            const rows = dates.map(d => {
+                const row = {
+                    date: d,
+                    device_id: HOME_DEVICE_ID,
+                    name,
+                    state_scope: state,
+                    mode,
+                    source: 'manual',
+                    approved,
+                    approved_at: approved ? nowIso : null,
+                    updated_at: nowIso
+                };
+                if (currentUserSession?.user?.id) row.user_id = currentUserSession.user.id;
+                return row;
+            });
+
+            const { error } = await _supabase.from('schedule_holidays').upsert(rows, { onConflict: 'date, device_id' });
+            if (error) { alert('Failed to add holiday: ' + error.message); return; }
+
+            if (document.getElementById('manualHolidayName')) document.getElementById('manualHolidayName').value = '';
+            await fetchConfig();
+            if (approved) beginAwaitingAck(policyState.revision);
+        }
+
+        async function toggleHolidayApprovalUI(dateStr, approved) {
+            if (!isHomeAutoScheduleAuthorized()) return;
+            const h = policyState.holidays ? policyState.holidays[dateStr] : null;
+            if (!h) return;
+            if (approved && !confirm(`Approve holiday "${h.name}" on ${dateStr} (${MODE_META[h.mode]?.label || 'Full Skip'}) and apply to active schedule?`)) return;
+
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Updating holiday approval...');
+
+            const { error } = await _supabase
+                .from('schedule_holidays')
+                .update({ approved, approved_at: approved ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+                .eq('date', dateStr)
+                .eq('device_id', HOME_DEVICE_ID);
+            if (error) { alert(error.message); return; }
+
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        async function deleteHolidayUI(dateStr) {
+            if (!isHomeAutoScheduleAuthorized()) return;
+            syncUiState.status = 'saving';
+            evaluateAndRenderSyncBanner('saving', 'Removing holiday...');
+            const { error } = await _supabase.from('schedule_holidays').delete().eq('date', dateStr).eq('device_id', HOME_DEVICE_ID);
+            if (error) { alert(error.message); return; }
+            await fetchConfig();
+            beginAwaitingAck(policyState.revision);
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
         }
 
         // ==========================================
@@ -1693,6 +3349,9 @@
                 if (proofRes.error) console.error('[FETCH] Proof Error:', proofRes.error);
                 if (schedRes.error) console.error('[FETCH] Sched Error:', schedRes.error);
 
+                currentTodayProof = proofRes.data || null;
+                currentTodaySchedule = schedRes.data || null;
+
                 if (proofRes.data) updateProofUI(proofRes.data);
                 else updateProofUI(null);
 
@@ -1707,6 +3366,7 @@
         }
 
         function updateProofUI(proof) {
+            currentTodayProof = proof ? { ...proof } : null;
             window.currentProofData = proof ? { ...proof } : null;
 
             if (!proof) {
@@ -1721,6 +3381,7 @@
                     thumbImg.src = '';
                 }
                 triggerAttendanceModalSuccess(null);
+                updateScheduleUI(currentTodaySchedule);
                 return;
             }
             proofDate.innerText = proof.date || '--:--';
@@ -1742,6 +3403,8 @@
             }
 
             triggerAttendanceModalSuccess(proof);
+            updateScheduleUI(currentTodaySchedule);
+            renderDateInspector();
         }
 
         function openProofLightboxWeb() {
@@ -1761,32 +3424,54 @@
             }
         }
 
+        function setBadgeStatus(el, statusStr) {
+            if (!el) return;
+            el.className = `action-status-pill action-status-${statusStr}`;
+            el.innerText = formatActionStatusLabel(statusStr);
+        }
+
         function updateScheduleUI(sched) {
-            if (!sched) {
-                const d = new Date();
-                const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                const dateObj = new Date(todayStr + "T12:00:00");
-                const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-                schedDate.innerText = dateObj.toLocaleDateString('en-US', options) + ' (Pending)';
-                schedIn.innerText = '--:--';
-                schedOut.innerText = '--:--';
-                schedSkippedTag.style.display = 'none';
-                return;
-            }
-
-            const dateObj = new Date(sched.date + "T12:00:00");
+            currentTodaySchedule = sched ? { ...sched } : null;
+            const d = new Date();
+            const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const dateObj = new Date(((sched && sched.date) || todayStr) + "T12:00:00");
             const options = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
-            schedDate.innerText = dateObj.toLocaleDateString('en-US', options);
+            schedDate.innerText = dateObj.toLocaleDateString('en-US', options) + (!sched ? ' (Pending)' : '');
 
-            if (sched.skipped) {
-                schedIn.innerText = '--:--';
-                schedOut.innerText = '--:--';
-                schedSkippedTag.style.display = 'block';
-            } else {
-                schedIn.innerText = sched.scheduled_clock_in || '--:--';
-                schedOut.innerText = sched.scheduled_clock_out || '--:--';
-                schedSkippedTag.style.display = 'none';
+            const evalToday = evaluateDatePolicyClient(todayStr, policyState);
+            const effectiveMode = (sched && MODE_META[sched.effective_mode]) ? sched.effective_mode : evalToday.effectiveMode;
+            const modeInfo = MODE_META[effectiveMode] || MODE_META.normal;
+
+            const modePill = document.getElementById('schedModePill');
+            if (modePill) {
+                modePill.className = `mode-pill mode-pill-${effectiveMode}`;
+                modePill.innerText = modeInfo.label;
             }
+
+            const ruleLabel = document.getElementById('schedRuleSourceLabel');
+            if (ruleLabel) {
+                ruleLabel.innerText = `Rule: ${evalToday.ruleLabel}`;
+            }
+
+            const proof = currentTodayProof;
+            const inDone = Boolean((sched && sched.clock_in_done) || (proof && proof.clock_in && proof.clock_in !== '?' && proof.clock_in !== '--:--'));
+            const outDone = Boolean((sched && sched.clock_out_done) || (proof && proof.clock_out && proof.clock_out !== '?' && proof.clock_out !== '--:--'));
+
+            const inStatus = inDone ? 'completed' : ((sched && sched.clock_in_status) || (modeInfo.caps.clockIn ? 'pending' : 'disabled'));
+            const outStatus = outDone ? 'completed' : ((sched && sched.clock_out_status) || (modeInfo.caps.clockOut ? 'pending' : 'disabled'));
+
+            schedIn.innerText = (sched && (sched.scheduled_clock_in || (inDone ? sched.planned_clock_in : null))) || (inDone && proof?.clock_in ? proof.clock_in : '--:--');
+            schedOut.innerText = (sched && (sched.scheduled_clock_out || (outDone ? sched.planned_clock_out : null))) || (outDone && proof?.clock_out ? proof.clock_out : '--:--');
+
+            setBadgeStatus(document.getElementById('schedInStatusBadge'), inStatus);
+            setBadgeStatus(document.getElementById('schedOutStatusBadge'), outStatus);
+
+            schedSkippedTag.style.display = effectiveMode === 'full_skip' ? 'block' : 'none';
+            const pastNotice = document.getElementById('schedPastWindowNotice');
+            if (pastNotice) {
+                pastNotice.style.display = (inStatus === 'missed_window' || outStatus === 'missed_window') ? 'block' : 'none';
+            }
+            renderDateInspector();
         }
 
         // ==========================================
@@ -2179,6 +3864,7 @@
 
         async function checkSession() {
             const { data: { session }, error } = await _supabase.auth.getSession();
+            currentUserSession = session || null;
 
             if (session) {
                 const urlParamDeviceId = new URLSearchParams(window.location.search).get('device_id');
@@ -2195,17 +3881,7 @@
                     }));
                 }
 
-                // Hide System Status card and Skips Tab for non-admin users
-                const systemStatusPanel = document.getElementById('systemStatusPanel');
-                const skipTabBtn = document.querySelector('.tab-btn[onclick="switchTab(\'skips\')"]');
-
-                if (session.user.email !== 'muhammadafif@upm.edu.my') {
-                    if (systemStatusPanel) systemStatusPanel.style.display = 'none';
-                    if (skipTabBtn) skipTabBtn.style.display = 'none';
-                } else {
-                    if (systemStatusPanel) systemStatusPanel.style.display = 'block';
-                    if (skipTabBtn) skipTabBtn.style.display = 'flex';
-                }
+                updateSchedulingVisibility();
 
                 loginOverlay.style.display = 'none';
                 appContainer.style.display = 'block';
@@ -2302,11 +3978,34 @@
                 })
                 .subscribe();
 
-            _supabase.channel(`skip-${activeDeviceId}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, payload => {
-                    fetchConfig();
-                })
-                .subscribe();
+            if (isHomeAutoScheduleAuthorized()) {
+                _supabase.channel(`adv-policy-${HOME_DEVICE_ID}`)
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_policy_state' }, payload => {
+                        if (payload.new && payload.new.device_id === HOME_DEVICE_ID) {
+                            policyState.revision = Number(payload.new.revision || policyState.revision);
+                            policyState.applied_revision = Number(payload.new.applied_revision || 0);
+                            policyState.applied_at = payload.new.applied_at || null;
+                            policyState.ack_status = payload.new.ack_status || 'pending';
+                            policyState.ack_message = payload.new.ack_message || null;
+                            policyState.scheduler_version = payload.new.scheduler_version || null;
+                            if (payload.new.weekly_defaults) policyState.weekly_defaults = payload.new.weekly_defaults;
+                            if (policyState.applied_revision >= policyState.revision) {
+                                syncUiState.status = 'applied';
+                                if (syncUiState.timerId) { clearTimeout(syncUiState.timerId); syncUiState.timerId = null; }
+                            }
+                            evaluateAndRenderSyncBanner();
+                            renderCalendar();
+                            renderWeeklyDefaultsUI();
+                            renderDateInspector();
+                            updateScheduleUI(currentTodaySchedule);
+                        }
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_date_overrides' }, () => fetchConfig())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_recurring_rules' }, () => fetchConfig())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_holidays' }, () => fetchConfig())
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'skip_days' }, () => fetchConfig())
+                    .subscribe();
+            }
         }
 
         function initializeApp() {

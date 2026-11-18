@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAppVersion: () => ipcRenderer.invoke('get-app-version'),
     testTelegramAlert: (credentials) => ipcRenderer.invoke('test-telegram-alert', credentials),
     getProofImage: () => ipcRenderer.invoke('get-proof-image'),
+    getSchedulePolicy: () => ipcRenderer.invoke('get-schedule-policy'),
+    reconcileSchedule: (options) => ipcRenderer.invoke('reconcile-schedule', options),
 
     // Modular Hot-Update APIs
     checkModuleUpdates: () => ipcRenderer.invoke('check-module-updates'),

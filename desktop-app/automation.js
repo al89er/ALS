@@ -407,7 +407,7 @@ async function getSystemConfig(supabase) {
   }
 }
 
-async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
+async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000, shouldAbort = null) {
   if (!targetAt) return;
   const targetTime = new Date(targetAt).getTime();
   
@@ -416,6 +416,10 @@ async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
   }
   
   while (true) {
+    if (typeof shouldAbort === 'function' && shouldAbort()) {
+      throw new Error('ACTION_CANCELLED_BY_POLICY');
+    }
+
     const now = Date.now();
     const remainingMs = targetTime - now;
 
@@ -428,6 +432,10 @@ async function waitUntilTarget(page, targetAt, maxLateMs = 5 * 60 * 1000) {
 
     const waitMs = Math.min(remainingMs, 5000); // Check every 5 seconds
     await page.waitForTimeout(waitMs);
+
+    if (typeof shouldAbort === 'function' && shouldAbort()) {
+      throw new Error('ACTION_CANCELLED_BY_POLICY');
+    }
   }
 }
 
@@ -437,6 +445,7 @@ function isRetryableGatewayError(error) {
 
   // Explicit non-retryable errors
   if (msg.includes('captive_portal')) return false;
+  if (msg.includes('action_cancelled_by_policy') || msg.includes('cancelled_by_policy')) return false;
   if (msg.includes('target time has already passed')) return false;
   if (msg.includes('expired')) return false;
   if (msg.includes('invalid target time')) return false;
@@ -468,9 +477,16 @@ function isRetryableGatewayError(error) {
 
 async function executeClockActionSingleAttempt(actionType, supabase, options = {}) {
   const targetDeviceId = options && options.hubAccount ? options.hubAccount.device_id : cacheManager.getDeviceConfig().device_id;
+  const checkAbort = () => {
+    if (options && typeof options.shouldAbort === 'function' && options.shouldAbort()) {
+      throw new Error('ACTION_CANCELLED_BY_POLICY');
+    }
+  };
   let context;
   try {
+    checkAbort();
     const config = await getSystemConfig(supabase);
+    checkAbort();
 
     // 1. Network / Captive Portal Check
     console.log('[PLAYWRIGHT] Checking network route via neverssl.com...');
@@ -632,8 +648,9 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
     
     if (options.targetAt) {
       console.log(`[PLAYWRIGHT] Pre-Flight cleared. Waiting dynamically for exact target time: ${options.targetAt}...`);
-      await waitUntilTarget(page, options.targetAt);
+      await waitUntilTarget(page, options.targetAt, 5 * 60 * 1000, options.shouldAbort);
 
+      checkAbort();
       console.log('[PLAYWRIGHT] Target time reached. Running final pre-flight check...');
       isAlreadyDone = await checkDashboardStatus(page, actionType, supabase, targetDeviceId);
       if (isAlreadyDone) {
@@ -646,6 +663,8 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
     } else {
       console.log('[PLAYWRIGHT] Pre-Flight cleared. Executing immediately (no target time provided)...');
     }
+
+    checkAbort();
 
     // 5. Trigger
     console.log(`[PLAYWRIGHT] Executing smart element trigger for action: ${actionType}`);
@@ -691,6 +710,12 @@ async function executeClockActionSingleAttempt(actionType, supabase, options = {
 
     await new Promise(r => setTimeout(r, 1000));
     await targetFrame.waitForSelector(selector, { state: 'visible', timeout: 15000 });
+
+    // Final execution gate immediately before portal button click
+    checkAbort();
+    if (options && typeof options.onActiveClickStart === 'function') {
+      options.onActiveClickStart();
+    }
 
     const actualClickAt = new Date();
     const targetMs = options.targetAt
@@ -934,6 +959,12 @@ async function executeClockAction(actionType, supabase, options = {}) {
 
         await new Promise(res => setTimeout(res, retryDelayMs));
         continue;
+      }
+
+      if (String(error.message || '').includes('ACTION_CANCELLED_BY_POLICY')) {
+        console.warn(`[PLAYWRIGHT] Execution of ${actionType} aborted cleanly prior to click: scheduling policy cancelled this action.`);
+        await remoteLog(supabase, actionType, 'cancelled', `Automated ${actionType} was cancelled before portal click due to updated scheduling policy.`, targetDeviceId);
+        throw error;
       }
 
       console.error(`[PLAYWRIGHT] Execution failed (attempt ${attempt}/${maxAttempts}): ${error.message}`);
@@ -1235,7 +1266,7 @@ async function manualFetchProof(supabase, options = {}) {
   }
 }
 
-const VERSION = '1.6.14';
+const VERSION = '1.7.0';
 
 module.exports = {
   VERSION,

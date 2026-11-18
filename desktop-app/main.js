@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const envPath = fs.existsSync(path.join(__dirname, 'bundled.env')) ? path.join(__dirname, 'bundled.env') : path.join(__dirname, '.env');
 require('dotenv').config({ path: envPath });
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, powerMonitor } = require('electron');
 
 // Isolate user data between Full, Lite, and Hub editions to prevent settings crossover
 let edition = 'full';
@@ -399,6 +399,35 @@ app.whenReady().then(() => {
     return moduleLoader.getLoadedModuleInfo();
   });
 
+  ipcMain.handle('get-schedule-policy', () => {
+    const policy = typeof cacheManager.getSchedulePolicy === 'function'
+      ? cacheManager.getSchedulePolicy()
+      : null;
+    const runtime = typeof scheduler.getRuntimeSnapshot === 'function'
+      ? scheduler.getRuntimeSnapshot()
+      : null;
+    return { policy, runtime };
+  });
+
+  ipcMain.handle('reconcile-schedule', async (event, options = {}) => {
+    if (edition === 'hub') {
+      return { skipped: true, reason: 'Hub edition does not use auto scheduling' };
+    }
+    try {
+      if (typeof scheduler.reconcileSchedule === 'function') {
+        return await scheduler.reconcileSchedule(supabase, {
+          triggerSource: (options && options.triggerSource) || 'desktop_ui_ipc',
+          eventRevision: options && options.eventRevision,
+          force: true
+        });
+      }
+      await scheduler.init(supabase);
+      return { legacyFallback: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+
   ipcMain.handle('relaunch-app', () => {
     return moduleUpdater.relaunchApp();
   });
@@ -417,7 +446,25 @@ app.whenReady().then(() => {
     hubClient.initHubAccounts();
   } else {
     initSupabase();
-    scheduler.init(supabase);
+    if (typeof scheduler.reconcileSchedule === 'function') {
+      scheduler.init(supabase);
+    } else {
+      scheduler.init(supabase);
+    }
+    if (powerMonitor && typeof powerMonitor.on === 'function') {
+      powerMonitor.on('resume', () => {
+        console.log('[POWER] Windows system resumed from sleep. Triggering schedule & connectivity reconciliation...');
+        if (typeof scheduler.reconcileSchedule === 'function') {
+          scheduler.reconcileSchedule(supabase, {
+            triggerSource: 'os_power_resume',
+            checkMissed: true,
+            force: true
+          });
+        } else {
+          scheduler.init(supabase);
+        }
+      });
+    }
   }
 
   // Setup System Tray with modular manager

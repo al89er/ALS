@@ -25,6 +25,39 @@ function resolveCacheFile() {
 
 const CACHE_FILE = resolveCacheFile();
 
+function getActiveCacheFile() {
+  if (process.env.ALS_CACHE_FILE) {
+    return path.resolve(process.env.ALS_CACHE_FILE);
+  }
+  return CACHE_FILE;
+}
+
+const DEFAULT_WEEKLY_DEFAULTS = {
+  '0': 'full_skip',
+  '1': 'normal',
+  '2': 'normal',
+  '3': 'normal',
+  '4': 'normal',
+  '5': 'normal',
+  '6': 'full_skip'
+};
+
+function createDefaultSchedulePolicy() {
+  return {
+    revision: 1,
+    applied_revision: 0,
+    applied_at: null,
+    ack_status: 'pending',
+    ack_message: null,
+    weekly_defaults: { ...DEFAULT_WEEKLY_DEFAULTS },
+    date_overrides: {},
+    recurring_rules: [],
+    holidays: {},
+    schema_ready: true,
+    synced: true
+  };
+}
+
 // Attempt to migrate old 'desktop-app' cache if we are in 'ALS-Full' and it's empty
 try {
   const { app } = require('electron');
@@ -47,27 +80,35 @@ const DEFAULT_CACHE = {
   },
   daily_schedule: null,
   skip_days: [],
+  schedule_policy: createDefaultSchedulePolicy(),
   todays_proof: null,
   offline_logs: []
 };
 
+function cloneDefaultCache() {
+  return JSON.parse(JSON.stringify(DEFAULT_CACHE));
+}
+
 function readCache() {
-  if (!fs.existsSync(CACHE_FILE)) {
-    writeCache(DEFAULT_CACHE);
-    return DEFAULT_CACHE;
+  const activeFile = getActiveCacheFile();
+  if (!fs.existsSync(activeFile)) {
+    const initial = cloneDefaultCache();
+    writeCache(initial);
+    return initial;
   }
   try {
-    const data = fs.readFileSync(CACHE_FILE, 'utf8');
+    const data = fs.readFileSync(activeFile, 'utf8');
     return JSON.parse(data);
   } catch (err) {
     console.error('[CACHE] Failed to read local cache, reverting to default:', err.message);
-    return DEFAULT_CACHE;
+    return cloneDefaultCache();
   }
 }
 
 function writeCache(data) {
+  const activeFile = getActiveCacheFile();
   try {
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+    fs.writeFileSync(activeFile, JSON.stringify(data, null, 2));
   } catch (err) {
     console.error('[CACHE] Failed to write local cache:', err.message);
   }
@@ -87,12 +128,135 @@ function mergeSystemConfig(payload, synced = true) {
 
 function mergeDailySchedule(payload, synced = true) {
   const cache = readCache();
-  cache.daily_schedule = { ...cache.daily_schedule, ...payload, synced };
+  const cleanPayload = { ...(payload || {}) };
+  const allowResetDone = cleanPayload._allowResetDone === true;
+  delete cleanPayload._allowResetDone;
+
+  const existing = cache.daily_schedule;
+  const sameDay = existing && (!cleanPayload.date || existing.date === cleanPayload.date);
+
+  const merged = sameDay ? { ...existing, ...cleanPayload, synced } : { ...cleanPayload, synced };
+
+  if (sameDay && !allowResetDone) {
+    if (existing.clock_in_done === true) merged.clock_in_done = true;
+    if (existing.clock_out_done === true) merged.clock_out_done = true;
+    if (existing.planned_clock_in && !merged.planned_clock_in) merged.planned_clock_in = existing.planned_clock_in;
+    if (existing.planned_clock_out && !merged.planned_clock_out) merged.planned_clock_out = existing.planned_clock_out;
+  }
+
+  cache.daily_schedule = merged;
   writeCache(cache);
+  return merged;
+}
+
+function normalizeWeeklyDefaults(rawDefaults) {
+  const normalized = { ...DEFAULT_WEEKLY_DEFAULTS };
+  if (rawDefaults && typeof rawDefaults === 'object') {
+    for (let i = 0; i <= 6; i++) {
+      const k = String(i);
+      const val = rawDefaults[k] !== undefined ? rawDefaults[k] : rawDefaults[i];
+      if (val === 'normal' || val === 'full_skip' || val === 'clock_in_only' || val === 'clock_out_only') {
+        normalized[k] = val;
+      }
+    }
+  }
+  return normalized;
+}
+
+function getSchedulePolicy() {
+  const cache = readCache();
+  const base = createDefaultSchedulePolicy();
+  const stored = (cache && cache.schedule_policy && typeof cache.schedule_policy === 'object')
+    ? cache.schedule_policy
+    : {};
+
+  const overrides = {};
+  if (stored.date_overrides && typeof stored.date_overrides === 'object') {
+    for (const [dateStr, entry] of Object.entries(stored.date_overrides)) {
+      if (entry && typeof entry === 'object' && entry.mode) {
+        overrides[dateStr] = { ...entry, date: entry.date || dateStr };
+      }
+    }
+  }
+
+  if (Array.isArray(cache.skip_days)) {
+    for (const skipDate of cache.skip_days) {
+      if (typeof skipDate === 'string' && skipDate && !overrides[skipDate]) {
+        overrides[skipDate] = {
+          date: skipDate,
+          mode: 'full_skip',
+          source: 'legacy_skip_day',
+          reason: 'Migrated from legacy skip_days'
+        };
+      }
+    }
+  }
+
+  return {
+    ...base,
+    ...stored,
+    revision: Number(stored.revision || base.revision) || 1,
+    applied_revision: Number(stored.applied_revision || 0) || 0,
+    weekly_defaults: normalizeWeeklyDefaults(stored.weekly_defaults),
+    date_overrides: overrides,
+    recurring_rules: Array.isArray(stored.recurring_rules) ? stored.recurring_rules.map(r => ({ ...r })) : [],
+    holidays: (stored.holidays && typeof stored.holidays === 'object') ? { ...stored.holidays } : {}
+  };
+}
+
+function saveSchedulePolicy(patch = {}, synced = true) {
+  const cache = readCache();
+  const current = getSchedulePolicy();
+  const next = {
+    ...current,
+    ...patch,
+    weekly_defaults: normalizeWeeklyDefaults(patch.weekly_defaults || current.weekly_defaults),
+    date_overrides: patch.date_overrides ? { ...patch.date_overrides } : { ...current.date_overrides },
+    recurring_rules: Array.isArray(patch.recurring_rules) ? patch.recurring_rules.map(r => ({ ...r })) : current.recurring_rules,
+    holidays: patch.holidays ? { ...patch.holidays } : { ...current.holidays },
+    synced
+  };
+
+  cache.schedule_policy = next;
+
+  // Keep legacy skip_days aligned with full_skip overrides (including approved full_skip holidays)
+  if (patch.date_overrides !== undefined || patch.holidays !== undefined || patch._syncSkipDays === true) {
+    const legacySkips = new Set();
+    for (const [dateStr, entry] of Object.entries(next.date_overrides)) {
+      if (entry && entry.mode === 'full_skip') legacySkips.add(dateStr);
+    }
+    cache.skip_days = Array.from(legacySkips).sort();
+  }
+
+  writeCache(cache);
+  return next;
 }
 
 function updateSkipDays(daysArray) {
-  updateCache('skip_days', daysArray);
+  const cache = readCache();
+  const normalizedList = Array.isArray(daysArray) ? [...daysArray] : [];
+  cache.skip_days = normalizedList;
+
+  const policy = getSchedulePolicy();
+  const nextOverrides = {};
+  for (const [dateStr, entry] of Object.entries(policy.date_overrides)) {
+    if (entry && entry.source !== 'legacy_skip_day') {
+      nextOverrides[dateStr] = entry;
+    }
+  }
+  for (const d of normalizedList) {
+    if (typeof d === 'string' && d && !nextOverrides[d]) {
+      nextOverrides[d] = {
+        date: d,
+        mode: 'full_skip',
+        source: 'legacy_skip_day',
+        reason: 'Synced from skip_days'
+      };
+    }
+  }
+  policy.date_overrides = nextOverrides;
+  cache.schedule_policy = policy;
+  writeCache(cache);
 }
 
 function queueOfflineProof(proofPayload) {
@@ -185,6 +349,13 @@ function createDeviceConfig(parsed = {}, env = process.env, edition = getAppEdit
 
 const SETTINGS_FILE = resolveDeviceSettingsFile();
 
+function getActiveSettingsFile() {
+  if (process.env.ALS_SETTINGS_FILE) {
+    return path.resolve(process.env.ALS_SETTINGS_FILE);
+  }
+  return SETTINGS_FILE;
+}
+
 // Attempt to migrate old 'desktop-app' config if we are in 'ALS-Full' and it's empty
 try {
   const { app } = require('electron');
@@ -203,17 +374,18 @@ const DEFAULT_DEVICE_CONFIG = createDeviceConfig();
 
 function getDeviceConfig() {
   const edition = getAppEdition();
-  if (!fs.existsSync(SETTINGS_FILE)) {
-    return { ...DEFAULT_DEVICE_CONFIG, edition };
+  const activeSettingsFile = getActiveSettingsFile();
+  if (!fs.existsSync(activeSettingsFile)) {
+    return { ...createDeviceConfig({}, process.env, edition), edition };
   }
   try {
-    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const raw = fs.readFileSync(activeSettingsFile, 'utf8');
     const parsed = JSON.parse(raw);
     const resolved = createDeviceConfig(parsed, process.env, edition);
 
     if (parsed.supabase_key && !isSupabasePublishableKey(parsed.supabase_key)) {
       try {
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify({
+        fs.writeFileSync(activeSettingsFile, JSON.stringify({
           ...parsed,
           supabase_key: resolved.supabase_key
         }, null, 2));
@@ -225,19 +397,20 @@ function getDeviceConfig() {
 
     return resolved;
   } catch (err) {
-    return { ...DEFAULT_DEVICE_CONFIG, edition };
+    return { ...createDeviceConfig({}, process.env, edition), edition };
   }
 }
 
 function saveDeviceConfig(config) {
   try {
+    const activeSettingsFile = getActiveSettingsFile();
     const current = getDeviceConfig();
     const merged = { ...current, ...config };
     const updated = {
       ...merged,
       ...createDeviceConfig(merged, process.env, getAppEdition())
     };
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(updated, null, 2));
+    fs.writeFileSync(activeSettingsFile, JSON.stringify(updated, null, 2));
 
     if (config && config._triggerTelegramTest) {
       try {
@@ -389,16 +562,19 @@ function getLatestProofImage(dateStr) {
   return null;
 }
 
-const VERSION = '1.6.14';
+const VERSION = '1.7.0';
 
 module.exports = {
   VERSION,
+  DEFAULT_WEEKLY_DEFAULTS,
   readCache,
   writeCache,
   updateCache,
   mergeSystemConfig,
   mergeDailySchedule,
   updateSkipDays,
+  getSchedulePolicy,
+  saveSchedulePolicy,
   queueOfflineProof,
   clearProofIfSynced,
   logOffline,
@@ -415,6 +591,7 @@ module.exports = {
   saveHubAccount,
   removeHubAccount,
   __test: {
-    createDeviceConfig
+    createDeviceConfig,
+    normalizeWeeklyDefaults
   }
 };

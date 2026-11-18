@@ -1,14 +1,14 @@
 {
-  "version": "1.6.14",
+  "version": "1.7.0",
   "name": "ALS Modular Engine",
-  "updatedAt": "2026-10-15T09:51:16.524Z",
+  "updatedAt": "2026-11-18T02:27:39.897Z",
   "modules": {
     "automation": {
       "file": "automation.js",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "engine",
-      "sizeBytes": 52616,
-      "sha256": "098e13b24b050c68a6576393bf5b89fdf4e1c8d26a1b76ce039740a8f1d47670",
+      "sizeBytes": 53893,
+      "sha256": "ef406c2dc5bd431edd2cb7bf7f262a69ef9d3558fbefe34adaacd4607e2b71f6",
       "description": "Playwright automation engine, multi-device clocking, and proof capture"
     },
     "hub-client": {
@@ -21,34 +21,34 @@
     },
     "scheduler": {
       "file": "scheduler.js",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "engine",
-      "sizeBytes": 23853,
-      "sha256": "95435cf69dc1ff53caa8f83d1835f748e9b0648164d595dce097d3dbdef04a61",
+      "sizeBytes": 58910,
+      "sha256": "8bceb6bd1c06b7da573a0a270dffafced3f1dc12380f42c6f892300df38df0cc",
       "description": "Daily schedule generator, node-cron triggers, and missed action recovery"
     },
     "supabase-client": {
       "file": "supabase-client.js",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "network",
-      "sizeBytes": 14260,
-      "sha256": "3eac2b862a6de8f5739fee7d3aa7b8759dd7dc5c1b4069164f5795e9229276f6",
+      "sizeBytes": 21566,
+      "sha256": "8be85494e7f0a3e269e8cc82a683786ee4e18761a29f81c766ec66941eca4a4a",
       "description": "Supabase client, realtime WebSocket listener, and offline queue reconciler"
     },
     "cache-manager": {
       "file": "cache-manager.js",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "storage",
-      "sizeBytes": 13266,
-      "sha256": "3d5f81dfcff66f60f9de11b7f08703a7aa2566fc61cc34ab8ad5ccba5313b86f",
+      "sizeBytes": 19112,
+      "sha256": "66a04e8f3abbb2520d88b30341a5d44839cf56883f3bf9ec4a1d4e8112788c9b",
       "description": "Local JSON cache, settings persistence, and hub accounts manager"
     },
     "tray-manager": {
       "file": "tray-manager.js",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "ui",
-      "sizeBytes": 3289,
-      "sha256": "8a60529c12d912690a8b020f5bf354514a6845ecc55fc04578315b67e3eb0d0e",
+      "sizeBytes": 3977,
+      "sha256": "fa72b0b245ea73e41f2461ff9a1aa9d7b0403be8bd954143a69f57560a63be7c",
       "description": "Modular Windows system tray tooltip and context menu formatter"
     },
     "hub-ui": {
@@ -61,10 +61,10 @@
     },
     "desktop-ui": {
       "file": "desktop-ui.html",
-      "version": "1.6.14",
+      "version": "1.7.0",
       "type": "ui",
-      "sizeBytes": 96213,
-      "sha256": "ffc7f13f8a65f9edb6b8bb9771ad96f76b58147a06d521b8bff26a1e1aaa04e5",
+      "sizeBytes": 181377,
+      "sha256": "9f76a8525bea058d52df35d1b3eb24f9fe54c7200b99a531d1acfe53062abf6a",
       "description": "ALS Single Agent desktop interface"
     }
   }

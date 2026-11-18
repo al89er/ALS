@@ -53,8 +53,22 @@ if (!activeConfig.url) {
 const supabase = createClient(activeConfig.url, activeConfig.key);
 
 const PENDING_COMMAND_MAX_AGE_MS = 15 * 60 * 1000;
+const HOME_DEVICE_ID = 'home_desktop_agent';
 let isRecovering = false;
 let processingPromise = Promise.resolve();
+let schedulingChannel = null;
+let commandChannel = null;
+let heartbeatTimer = null;
+
+function isHomeAutoScheduleAgent() {
+  const config = cacheManager.getDeviceConfig ? cacheManager.getDeviceConfig() : {};
+  const edition = (
+    process.env.ALS_EDITION ||
+    config.edition ||
+    (cacheManager.getAppEdition ? cacheManager.getAppEdition() : 'full')
+  ).toLowerCase();
+  return getDeviceId() === HOME_DEVICE_ID && edition === 'full';
+}
 
 async function processCommandById(commandId, source = 'unknown') {
   return new Promise((resolve) => {
@@ -223,8 +237,34 @@ async function reconcileCache() {
     console.log('[SUPABASE] Reconciling offline daily_schedule to cloud...');
     const payload = { ...cache.daily_schedule, device_id: deviceId };
     delete payload.synced;
-    
-    const { error } = await supabase.from('daily_schedules').upsert(payload);
+
+    // Preserve any existing cloud completed flags before upserting offline state
+    try {
+      const { data: existingCloud } = await supabase
+        .from('daily_schedules')
+        .select('clock_in_done, clock_out_done')
+        .eq('date', payload.date)
+        .eq('device_id', deviceId)
+        .maybeSingle();
+      if (existingCloud) {
+        if (existingCloud.clock_in_done === true) payload.clock_in_done = true;
+        if (existingCloud.clock_out_done === true) payload.clock_out_done = true;
+      }
+    } catch (_) {}
+
+    let { error } = await supabase.from('daily_schedules').upsert(payload, { onConflict: 'date, device_id' });
+    if (error && /column|does not exist|PGRST/i.test(error.message || '')) {
+      const legacyPayload = {
+        date: payload.date,
+        device_id: deviceId,
+        skipped: !!payload.skipped,
+        scheduled_clock_in: payload.scheduled_clock_in || null,
+        scheduled_clock_out: payload.scheduled_clock_out || null,
+        clock_in_done: !!payload.clock_in_done,
+        clock_out_done: !!payload.clock_out_done
+      };
+      ({ error } = await supabase.from('daily_schedules').upsert(legacyPayload));
+    }
     if (!error) {
       console.log('[SUPABASE] daily_schedules reconciliation successful.');
       cacheManager.mergeDailySchedule({}, true);
@@ -267,51 +307,152 @@ async function reconcileCache() {
   }
 }
 
-function startHeartbeat() {
-  const ping = async () => {
-    try {
-      const deviceId = getDeviceId();
-      const deviceName = getDeviceName();
+async function checkAndReconcileScheduleRevision(wasOffline = false) {
+  if (!isHomeAutoScheduleAgent()) return null;
+  const scheduler = require('./scheduler');
+  const snap = typeof scheduler.getRuntimeSnapshot === 'function' ? scheduler.getRuntimeSnapshot() : { currentAppliedRevision: 0 };
 
-      const { error } = await supabase
-        .from('device_status')
-        .upsert({ 
-          id: deviceId, 
-          device_id: deviceId,
-          device_name: deviceName,
-          current_status: 'ONLINE', 
-          last_seen: new Date().toISOString() 
-        });
+  let remoteRevision = null;
+  try {
+    const { data, error } = await supabase
+      .from('schedule_policy_state')
+      .select('revision, applied_revision')
+      .eq('device_id', HOME_DEVICE_ID)
+      .maybeSingle();
 
-      if (error) {
-        console.error('[SUPABASE] Heartbeat error (Offline?):', error.message);
-        global.connectivityState = 'Offline';
-        if (global.updateTrayTooltip) global.updateTrayTooltip();
-      } else {
-        const wasOffline = global.connectivityState !== 'Connected to Supabase';
-        global.connectivityState = 'Connected to Supabase';
-        if (global.updateTrayTooltip) global.updateTrayTooltip();
-        // Connection alive, try resolving offline queue
-        await reconcileCache();
-        
-        if (wasOffline) {
-          await recoverPendingCommands();
-        }
+    if (!error && data && data.revision !== undefined) {
+      remoteRevision = Number(data.revision) || 0;
+      if (typeof scheduler.notifyIncomingRevision === 'function') {
+        scheduler.notifyIncomingRevision(remoteRevision);
       }
-    } catch (err) {
-      console.error('[SUPABASE] Heartbeat exception (Network drop?):', err.message);
+    }
+  } catch (_) {}
+
+  if (wasOffline || (remoteRevision !== null && remoteRevision > (snap.currentAppliedRevision || 0))) {
+    const triggerSource = wasOffline ? 'heartbeat_reconnect' : 'heartbeat_revision_poll';
+    console.log(`[SUPABASE] Triggering schedule reconciliation (source=${triggerSource}, remoteRev=${remoteRevision}, appliedRev=${snap.currentAppliedRevision})...`);
+    return await scheduler.reconcileSchedule(supabase, {
+      triggerSource,
+      eventRevision: remoteRevision,
+      force: true,
+      checkMissed: wasOffline
+    });
+  }
+  return null;
+}
+
+async function pingHeartbeatOnce() {
+  try {
+    const deviceId = getDeviceId();
+    const deviceName = getDeviceName();
+
+    const { error } = await supabase
+      .from('device_status')
+      .upsert({
+        id: deviceId,
+        device_id: deviceId,
+        device_name: deviceName,
+        current_status: 'ONLINE',
+        last_seen: new Date().toISOString()
+      });
+
+    if (error) {
+      console.error('[SUPABASE] Heartbeat error (Offline?):', error.message);
       global.connectivityState = 'Offline';
       if (global.updateTrayTooltip) global.updateTrayTooltip();
+      return { online: false, error: error.message };
     }
-  };
 
-  ping(); // Fire immediately on startup
-  setInterval(ping, 30000);
+    const wasOffline = global.connectivityState !== 'Connected to Supabase';
+    global.connectivityState = 'Connected to Supabase';
+    if (global.updateTrayTooltip) global.updateTrayTooltip();
+
+    // Connection alive, try resolving offline queue
+    await reconcileCache();
+
+    if (wasOffline) {
+      await recoverPendingCommands();
+    }
+
+    // Self-heal degraded realtime listeners after sleep / network drops
+    if (commandChannel && (commandChannel.state === 'closed' || commandChannel.state === 'errored')) {
+      console.log('[SUPABASE] Re-subscribing degraded command listener channel...');
+      startCommandListener();
+    } else if (schedulingChannel && (schedulingChannel.state === 'closed' || schedulingChannel.state === 'errored')) {
+      console.log('[SUPABASE] Re-subscribing degraded scheduling listener channel...');
+      startCommandListener();
+    }
+
+    await checkAndReconcileScheduleRevision(wasOffline);
+    return { online: true, wasOffline };
+  } catch (err) {
+    console.error('[SUPABASE] Heartbeat exception (Network drop?):', err.message);
+    global.connectivityState = 'Offline';
+    if (global.updateTrayTooltip) global.updateTrayTooltip();
+    return { online: false, error: err.message };
+  }
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+  }
+  pingHeartbeatOnce(); // Fire immediately on startup
+  heartbeatTimer = setInterval(pingHeartbeatOnce, 30000);
+  if (typeof heartbeatTimer.unref === 'function') {
+    heartbeatTimer.unref();
+  }
+}
+
+async function handleScheduleRealtimeEvent(tableName, payload) {
+  if (!isHomeAutoScheduleAgent()) return null;
+  const deviceId = getDeviceId();
+  const row = (payload && (payload.new || payload.old)) || {};
+  if (row.device_id && row.device_id !== deviceId && row.device_id !== HOME_DEVICE_ID) {
+    return null;
+  }
+
+  // Ignore self-acknowledgement updates on schedule_policy_state unless revision increased
+  const scheduler = require('./scheduler');
+  const snap = typeof scheduler.getRuntimeSnapshot === 'function'
+    ? scheduler.getRuntimeSnapshot()
+    : { currentAppliedRevision: 0 };
+
+  if (tableName === 'schedule_policy_state' && payload && payload.new) {
+    const incomingRev = Number(payload.new.revision) || 0;
+    const appliedRev = Number(payload.new.applied_revision) || 0;
+    if (incomingRev <= snap.currentAppliedRevision && appliedRev >= incomingRev) {
+      return null;
+    }
+    if (typeof scheduler.notifyIncomingRevision === 'function') {
+      scheduler.notifyIncomingRevision(incomingRev);
+    }
+    console.log(`[SUPABASE] Realtime schedule_policy_state rev #${incomingRev} detected. Reconciling...`);
+    return await scheduler.reconcileSchedule(supabase, {
+      triggerSource: `realtime:${tableName}`,
+      eventRevision: incomingRev,
+      force: true
+    });
+  }
+
+  console.log(`[SUPABASE] ${tableName} changed (${payload ? payload.eventType : 'change'}). Reconciling schedule...`);
+  return await scheduler.reconcileSchedule(supabase, {
+    triggerSource: `realtime:${tableName}`,
+    force: true
+  });
 }
 
 function startCommandListener() {
   const deviceId = getDeviceId();
-  supabase
+
+  if (commandChannel && typeof supabase.removeChannel === 'function') {
+    try { supabase.removeChannel(commandChannel); } catch (_) {}
+  }
+  if (schedulingChannel && typeof supabase.removeChannel === 'function') {
+    try { supabase.removeChannel(schedulingChannel); } catch (_) {}
+  }
+
+  commandChannel = supabase
     .channel(`public:commands:${deviceId}`)
     .on(
       'postgres_changes',
@@ -322,7 +463,7 @@ function startCommandListener() {
         filter: 'status=eq.pending'
       },
       (payload) => {
-        if (!payload.new.device_id || payload.new.device_id === deviceId || payload.new.device_id === 'home_desktop_agent') {
+        if (!payload.new.device_id || payload.new.device_id === deviceId || payload.new.device_id === HOME_DEVICE_ID) {
           console.log(`[SUPABASE] Received remote command payload for ${deviceId}. Initiating process...`);
           processCommandById(payload.new.id, 'realtime');
         }
@@ -335,28 +476,64 @@ function startCommandListener() {
       }
     });
 
-  supabase
-    .channel(`public:skip_days:${deviceId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'skip_days' },
-      async (payload) => {
-        if (!payload.new || !payload.new.device_id || payload.new.device_id === deviceId) {
-          console.log(`[SUPABASE] skip_days table changed (${payload.eventType}). Re-evaluating schedule...`);
+  if (isHomeAutoScheduleAgent()) {
+    schedulingChannel = supabase
+      .channel(`public:scheduling:${deviceId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'schedule_policy_state' },
+        (payload) => handleScheduleRealtimeEvent('schedule_policy_state', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'schedule_date_overrides' },
+        (payload) => handleScheduleRealtimeEvent('schedule_date_overrides', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'schedule_recurring_rules' },
+        (payload) => handleScheduleRealtimeEvent('schedule_recurring_rules', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'schedule_holidays' },
+        (payload) => handleScheduleRealtimeEvent('schedule_holidays', payload)
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'skip_days' },
+        (payload) => handleScheduleRealtimeEvent('skip_days', payload)
+      )
+      .subscribe((status) => {
+        console.log(`[SUPABASE] Scheduling policy listener subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
           const scheduler = require('./scheduler');
-          await scheduler.init(supabase);
-          if (global.updateTrayTooltip) global.updateTrayTooltip();
+          scheduler.reconcileSchedule(supabase, {
+            triggerSource: 'realtime_subscribed',
+            force: true
+          });
         }
-      }
-    )
-    .subscribe((status) => {
-      console.log(`[SUPABASE] skip_days listener subscription status: ${status}`);
-    });
+      });
+  } else {
+    schedulingChannel = null;
+  }
 }
 
 async function initSupabase() {
   console.log('[SUPABASE] Initializing Supabase client with Multi-Device support...');
-  
+
+  if (supabase.auth && typeof supabase.auth.onAuthStateChange === 'function') {
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session && session.access_token && supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
+        try {
+          supabase.realtime.setAuth(session.access_token);
+        } catch (authErr) {
+          console.warn('[SUPABASE] Failed to sync realtime auth token:', authErr.message);
+        }
+      }
+    });
+  }
+
   const config = cacheManager.getDeviceConfig();
   if (config.supabase_email && config.supabase_password) {
     console.log(`[SUPABASE] Authenticating as ${config.supabase_email}...`);
@@ -369,6 +546,9 @@ async function initSupabase() {
       console.error('[SUPABASE] Authentication failed! Check your credentials in Settings.', error.message);
     } else {
       console.log('[SUPABASE] Authentication successful.');
+      if (data && data.session && data.session.access_token && supabase.realtime && typeof supabase.realtime.setAuth === 'function') {
+        try { supabase.realtime.setAuth(data.session.access_token); } catch (_) {}
+      }
     }
   } else {
     console.warn('[SUPABASE] No Supabase email/password configured. Unauthenticated requests may be blocked by RLS.');
@@ -378,7 +558,7 @@ async function initSupabase() {
   startCommandListener();
 }
 
-const VERSION = '1.6.14';
+const VERSION = '1.7.0';
 
 module.exports = {
   VERSION,
@@ -386,9 +566,15 @@ module.exports = {
   initSupabase,
   getDeviceId,
   getDeviceName,
+  isHomeAutoScheduleAgent,
   __test: {
     processCommandById,
     recoverPendingCommands,
+    reconcileCache,
+    pingHeartbeatOnce,
+    checkAndReconcileScheduleRevision,
+    handleScheduleRealtimeEvent,
+    startCommandListener,
     setRuntimeDependenciesForTest,
     resetRuntimeDependencies
   }

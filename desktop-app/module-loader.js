@@ -10,6 +10,7 @@ let activeModulesDir = null;
 let activeBaseDir = __dirname;
 const loadedModulesInfo = {};
 const moduleCache = new Map();
+const compilingExportsCache = new Map();
 
 /**
  * Resolves the default modules directory based on runtime environment.
@@ -107,6 +108,10 @@ function resolveUIPath(fileName, fallbackPath) {
  * @returns {Object} Exported module contents
  */
 function compileAndRequireDynamicModule(filePath, baseDir) {
+  if (compilingExportsCache.has(filePath)) {
+    return compilingExportsCache.get(filePath);
+  }
+
   const code = fs.readFileSync(filePath, 'utf8');
 
   // Syntax validation pass
@@ -115,36 +120,41 @@ function compileAndRequireDynamicModule(filePath, baseDir) {
     displayErrors: true
   });
 
+  const knownModules = [
+    'automation',
+    'scheduler',
+    'hub-client',
+    'cache-manager',
+    'supabase-client',
+    'supabase-config',
+    'tray-manager',
+    'module-loader',
+    'module-updater'
+  ];
+
+  const resolveInternalModule = (moduleName, fallbackId) => {
+    if (moduleCache.has(moduleName)) {
+      return moduleCache.get(moduleName);
+    }
+    const factoryTarget = fallbackId ? path.resolve(baseDir, fallbackId) : path.join(baseDir, moduleName);
+    return loadModuleInternal(moduleName, () => require(factoryTarget), path.dirname(filePath));
+  };
+
   const customRequire = function(id) {
     // 1. Sibling relative require
     if (id.startsWith('./') || id.startsWith('../')) {
+      const ext = path.extname(id);
       const baseName = path.basename(id, '.js');
-      const dynamicSibling = path.join(path.dirname(filePath), baseName + '.js');
-      if (fs.existsSync(dynamicSibling)) {
-        return compileAndRequireDynamicModule(dynamicSibling, baseDir);
+      if (!ext || ext === '.js') {
+        return resolveInternalModule(baseName, id);
       }
       const factoryPath = path.resolve(baseDir, id);
       return require(factoryPath);
     }
 
     // 2. Known internal modules without relative syntax
-    const knownModules = [
-      'automation',
-      'scheduler',
-      'hub-client',
-      'cache-manager',
-      'supabase-client',
-      'supabase-config',
-      'tray-manager',
-      'module-loader',
-      'module-updater'
-    ];
     if (knownModules.includes(id)) {
-      const dynamicSibling = path.join(path.dirname(filePath), id + '.js');
-      if (fs.existsSync(dynamicSibling)) {
-        return compileAndRequireDynamicModule(dynamicSibling, baseDir);
-      }
-      return require(path.join(baseDir, id));
+      return resolveInternalModule(id, null);
     }
 
     // 3. Bundled dependencies (playwright, dotenv, etc.)
@@ -164,41 +174,34 @@ function compileAndRequireDynamicModule(filePath, baseDir) {
     paths: Module._nodeModulePaths(path.dirname(filePath))
   };
 
-  const compiledWrapper = script.runInThisContext();
-  compiledWrapper(
-    moduleObj.exports,
-    customRequire,
-    moduleObj,
-    filePath,
-    path.dirname(filePath)
-  );
-  moduleObj.loaded = true;
-
-  return moduleObj.exports;
+  compilingExportsCache.set(filePath, moduleObj.exports);
+  try {
+    const compiledWrapper = script.runInThisContext();
+    compiledWrapper(
+      moduleObj.exports,
+      customRequire,
+      moduleObj,
+      filePath,
+      path.dirname(filePath)
+    );
+    moduleObj.loaded = true;
+    return moduleObj.exports;
+  } finally {
+    compilingExportsCache.delete(filePath);
+  }
 }
 
-/**
- * Loads a module dynamically from the user modules directory if present.
- * Seamlessly falls back to factory-bundled export if file does not exist,
- * has syntax errors, or throws an error during evaluation.
- *
- * @param {string} name - Module name without extension (e.g. 'automation', 'hub-client')
- * @param {Object} fallbackExport - Bundled module instance (e.g. require('./automation'))
- * @returns {Object} The resolved module
- */
-function loadModule(name, fallbackExport) {
+function loadModuleInternal(name, fallbackProvider, dynamicDirOverride = null) {
   if (moduleCache.has(name)) {
     return moduleCache.get(name);
   }
 
-  const dynamicPath = path.join(getModulesDir(), `${name}.js`);
+  const dynamicPath = path.join(dynamicDirOverride || getModulesDir(), `${name}.js`);
 
   if (fs.existsSync(dynamicPath)) {
     try {
       const dynamicExport = compileAndRequireDynamicModule(dynamicPath, activeBaseDir);
-      
-      // Determine version if exported
-      const version = dynamicExport.VERSION || dynamicExport.version || 'custom';
+      const version = (dynamicExport && (dynamicExport.VERSION || dynamicExport.version)) || 'custom';
 
       loadedModulesInfo[name] = {
         source: 'dynamic',
@@ -211,7 +214,7 @@ function loadModule(name, fallbackExport) {
       return dynamicExport;
     } catch (err) {
       console.error(`[MODULE-LOADER] Dynamic module "${name}" failed to initialize (${err.message}). Safe rollback triggered.`);
-      
+
       // Quarantine / remove corrupted file to prevent recurrent startup failure
       try {
         const quarantinePath = `${dynamicPath}.corrupt-${Date.now()}`;
@@ -224,8 +227,9 @@ function loadModule(name, fallbackExport) {
   }
 
   // Fallback to factory-bundled module
-  const factoryVersion = fallbackExport && (fallbackExport.VERSION || fallbackExport.version) 
-    ? (fallbackExport.VERSION || fallbackExport.version) 
+  const fallbackExport = fallbackProvider();
+  const factoryVersion = fallbackExport && (fallbackExport.VERSION || fallbackExport.version)
+    ? (fallbackExport.VERSION || fallbackExport.version)
     : 'factory';
 
   loadedModulesInfo[name] = {
@@ -236,6 +240,19 @@ function loadModule(name, fallbackExport) {
 
   moduleCache.set(name, fallbackExport);
   return fallbackExport;
+}
+
+/**
+ * Loads a module dynamically from the user modules directory if present.
+ * Seamlessly falls back to factory-bundled export if file does not exist,
+ * has syntax errors, or throws an error during evaluation.
+ *
+ * @param {string} name - Module name without extension (e.g. 'automation', 'hub-client')
+ * @param {Object} fallbackExport - Bundled module instance (e.g. require('./automation'))
+ * @returns {Object} The resolved module
+ */
+function loadModule(name, fallbackExport) {
+  return loadModuleInternal(name, () => fallbackExport);
 }
 
 function extractVersionFromFile(filePath) {
